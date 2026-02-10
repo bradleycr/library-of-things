@@ -15,7 +15,7 @@ export function BookCover({ src, title, className = "" }: BookCoverProps) {
   if (!src || hasError) {
     return (
       <div
-        className={`flex items-center justify-center bg-muted p-4 ${className}`}
+        className={`flex h-full w-full items-center justify-center bg-muted p-4 ${className}`}
       >
         <div className="flex flex-col items-center gap-2 text-center">
           <BookOpen className="h-6 w-6 text-muted-foreground/60" />

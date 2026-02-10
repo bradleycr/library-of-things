@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { BookCard } from "@/components/book-card"
+import { BookCover } from "@/components/book-cover"
 import { mockBooks, mockNodes } from "@/lib/mock-data"
 
 export default function ExplorePage() {

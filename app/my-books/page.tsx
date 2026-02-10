@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
+import { BookCover } from "@/components/book-cover"
 import { mockBooks, mockLoanEvents, mockUsers, mockNodes } from "@/lib/mock-data"
 
 const currentUser = mockUsers[0] // CleverRaven88
@@ -129,19 +130,7 @@ export default function MyBooksPage() {
                       <CardContent className="flex gap-4 p-4">
                         <Link href={`/book/${book.id}`} className="shrink-0">
                           <div className="h-28 w-20 overflow-hidden rounded bg-muted">
-                            {book.cover_image_url ? (
-                              <img
-                                src={book.cover_image_url || "/placeholder.svg"}
-                                alt={`Cover of ${book.title}`}
-                                className="h-full w-full object-cover"
-                              />
-                            ) : (
-                              <div className="flex h-full items-center justify-center p-2">
-                                <span className="text-center text-[10px] text-muted-foreground">
-                                  {book.title}
-                                </span>
-                              </div>
-                            )}
+                            <BookCover src={book.cover_image_url} title={book.title} />
                           </div>
                         </Link>
                         <div className="flex flex-1 flex-col">

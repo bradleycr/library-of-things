@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { BookCover } from "@/components/book-cover"
 import { mockUsers, mockBooks, mockLoanEvents } from "@/lib/mock-data"
 
 function getTrustBadge(score: number) {
@@ -167,19 +168,7 @@ export default function ProfilePage({
                     className="flex items-center gap-3 rounded-lg p-2 transition-colors hover:bg-muted"
                   >
                     <div className="h-14 w-10 shrink-0 overflow-hidden rounded bg-muted">
-                      {book.cover_image_url ? (
-                        <img
-                          src={book.cover_image_url || "/placeholder.svg"}
-                          alt={`Cover of ${book.title}`}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-full items-center justify-center">
-                          <span className="text-[8px] text-muted-foreground">
-                            {book.title}
-                          </span>
-                        </div>
-                      )}
+                      <BookCover src={book.cover_image_url} title={book.title} />
                     </div>
                     <div>
                       <p className="text-sm font-medium text-foreground">
