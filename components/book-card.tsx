@@ -1,7 +1,10 @@
+"use client"
+
 import Link from "next/link"
 import { MapPin } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { BookCover } from "@/components/book-cover"
 import type { Book } from "@/lib/types"
 
 const statusConfig = {
@@ -18,19 +21,11 @@ export function BookCard({ book }: { book: Book }) {
     <Link href={`/book/${book.id}`} className="group">
       <Card className="h-full overflow-hidden border-border transition-shadow hover:shadow-md">
         <div className="relative aspect-[2/3] overflow-hidden bg-muted">
-          {book.cover_image_url ? (
-            <img
-              src={book.cover_image_url || "/placeholder.svg"}
-              alt={`Cover of ${book.title}`}
-              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-            />
-          ) : (
-            <div className="flex h-full items-center justify-center p-4">
-              <span className="text-center text-sm font-medium text-muted-foreground">
-                {book.title}
-              </span>
-            </div>
-          )}
+          <BookCover
+            src={book.cover_image_url}
+            title={book.title}
+            className="transition-transform duration-300 group-hover:scale-105"
+          />
           <Badge className={`absolute right-2 top-2 ${status.className}`} variant={status.variant}>
             {status.label}
           </Badge>

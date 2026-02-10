@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { BookCover } from "@/components/book-cover"
 import { mockBooks, mockLoanEvents } from "@/lib/mock-data"
 
 function formatDate(dateStr: string) {
@@ -111,19 +112,7 @@ export default function BookDetailPage({
         <div className="grid gap-8 md:grid-cols-[280px_1fr]">
           {/* Cover */}
           <div className="aspect-[2/3] overflow-hidden rounded-lg bg-muted shadow-md">
-            {book.cover_image_url ? (
-              <img
-                src={book.cover_image_url || "/placeholder.svg"}
-                alt={`Cover of ${book.title}`}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <div className="flex h-full items-center justify-center p-6">
-                <span className="text-center text-lg font-medium text-muted-foreground">
-                  {book.title}
-                </span>
-              </div>
-            )}
+            <BookCover src={book.cover_image_url} title={book.title} />
           </div>
 
           {/* Details */}
