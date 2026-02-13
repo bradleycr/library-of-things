@@ -6,77 +6,106 @@
   .text-balance {
     text-wrap: balance;
   }
+
+  /* Shared page container: aligns with header, responsive padding, mobile-first */
+  .page-container {
+    @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+  }
 }
 
 @layer base {
   :root {
-    --background: 40 20% 98%;
+    /* Foresight Institute brand — clean white with pastel gradients */
+    --background: 0 0% 100%;
     --foreground: 220 20% 10%;
     --card: 0 0% 100%;
     --card-foreground: 220 20% 10%;
     --popover: 0 0% 100%;
     --popover-foreground: 220 20% 10%;
-    --primary: 24 80% 50%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 40 15% 94%;
-    --secondary-foreground: 220 20% 15%;
-    --muted: 40 10% 93%;
-    --muted-foreground: 220 10% 45%;
-    --accent: 160 45% 40%;
-    --accent-foreground: 0 0% 100%;
+    /* Pastel sage (soft, not bright green) for rings, focus, accents */
+    --primary: 165 30% 72%;
+    --primary-foreground: 220 20% 12%;
+    --secondary: 220 15% 96%;
+    --secondary-foreground: 220 20% 10%;
+    --muted: 220 10% 97%;
+    --muted-foreground: 220 15% 40%;
+    --accent: 340 60% 90%;
+    --accent-foreground: 220 20% 10%;
     --destructive: 0 72% 51%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 40 15% 88%;
-    --input: 40 15% 88%;
-    --ring: 24 80% 50%;
-    --chart-1: 24 80% 50%;
-    --chart-2: 160 45% 40%;
-    --chart-3: 220 20% 25%;
-    --chart-4: 40 70% 55%;
-    --chart-5: 0 72% 51%;
-    --radius: 0.625rem;
-    --sidebar-background: 40 20% 97%;
-    --sidebar-foreground: 220 20% 15%;
-    --sidebar-primary: 24 80% 50%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 40 15% 94%;
-    --sidebar-accent-foreground: 220 20% 15%;
-    --sidebar-border: 40 15% 88%;
-    --sidebar-ring: 24 80% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 15% 92%;
+    --input: 220 15% 92%;
+    --ring: 165 30% 72%;
+    --chart-1: 250 50% 75%;
+    --chart-2: 200 50% 75%;
+    --chart-3: 340 60% 85%;
+    --chart-4: 60 55% 85%;
+    --chart-5: 30 60% 85%;
+    --radius: 0.75rem;
+    /* Pastel gradient for primary buttons — Foresight-aligned */
+    --button-gradient: linear-gradient(
+      135deg,
+      hsl(165 38% 88%),
+      hsl(200 45% 88%)
+    );
+    --button-gradient-hover: linear-gradient(
+      135deg,
+      hsl(165 38% 82%),
+      hsl(200 45% 82%)
+    );
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 220 20% 10%;
+    --sidebar-primary: 165 30% 72%;
+    --sidebar-primary-foreground: 220 20% 12%;
+    --sidebar-accent: 220 15% 96%;
+    --sidebar-accent-foreground: 220 20% 10%;
+    --sidebar-border: 220 15% 92%;
+    --sidebar-ring: 165 30% 72%;
   }
   .dark {
-    --background: 220 20% 7%;
-    --foreground: 40 15% 95%;
-    --card: 220 18% 10%;
-    --card-foreground: 40 15% 95%;
-    --popover: 220 18% 10%;
-    --popover-foreground: 40 15% 95%;
-    --primary: 24 80% 55%;
-    --primary-foreground: 0 0% 100%;
+    /* Foresight dark mode — subtle pastels */
+    --background: 220 20% 8%;
+    --foreground: 220 15% 95%;
+    --card: 220 18% 12%;
+    --card-foreground: 220 15% 95%;
+    --popover: 220 18% 12%;
+    --popover-foreground: 220 15% 95%;
+    --primary: 165 28% 42%;
+    --primary-foreground: 220 15% 98%;
     --secondary: 220 15% 15%;
-    --secondary-foreground: 40 15% 90%;
-    --muted: 220 12% 15%;
-    --muted-foreground: 220 10% 55%;
-    --accent: 160 45% 45%;
+    --secondary-foreground: 220 15% 90%;
+    --muted: 220 12% 18%;
+    --muted-foreground: 220 15% 55%;
+    --accent: 340 40% 65%;
     --accent-foreground: 0 0% 100%;
-    --destructive: 0 62% 40%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 220 12% 18%;
-    --input: 220 12% 18%;
-    --ring: 24 80% 55%;
-    --chart-1: 24 80% 55%;
-    --chart-2: 160 45% 45%;
-    --chart-3: 40 70% 55%;
-    --chart-4: 220 30% 50%;
-    --chart-5: 0 72% 55%;
-    --sidebar-background: 220 20% 8%;
-    --sidebar-foreground: 40 15% 90%;
-    --sidebar-primary: 24 80% 55%;
-    --sidebar-primary-foreground: 0 0% 100%;
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 12% 20%;
+    --input: 220 12% 20%;
+    --ring: 165 28% 42%;
+    --chart-1: 250 50% 70%;
+    --chart-2: 200 50% 70%;
+    --chart-3: 340 50% 70%;
+    --chart-4: 60 50% 70%;
+    --chart-5: 30 55% 70%;
+    --button-gradient: linear-gradient(
+      135deg,
+      hsl(165 32% 28%),
+      hsl(200 35% 28%)
+    );
+    --button-gradient-hover: linear-gradient(
+      135deg,
+      hsl(165 32% 34%),
+      hsl(200 35% 34%)
+    );
+    --sidebar-background: 220 20% 10%;
+    --sidebar-foreground: 220 15% 90%;
+    --sidebar-primary: 165 28% 42%;
+    --sidebar-primary-foreground: 220 15% 98%;
     --sidebar-accent: 220 15% 15%;
-    --sidebar-accent-foreground: 40 15% 90%;
-    --sidebar-border: 220 12% 18%;
-    --sidebar-ring: 24 80% 55%;
+    --sidebar-accent-foreground: 220 15% 90%;
+    --sidebar-border: 220 12% 20%;
+    --sidebar-ring: 165 28% 42%;
   }
 }
 
@@ -86,5 +115,16 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+/* Primary buttons: pastel gradient (Foresight-aligned) */
+@layer components {
+  .btn-pastel {
+    background-image: var(--button-gradient);
+    color: hsl(var(--primary-foreground));
+  }
+  .btn-pastel:hover:not(:disabled) {
+    background-image: var(--button-gradient-hover);
   }
 }

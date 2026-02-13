@@ -1,6 +1,6 @@
 import React from "react"
 import type { Metadata, Viewport } from "next"
-import { Inter, Libre_Baskerville } from "next/font/google"
+import { Inter, Libre_Baskerville, DM_Serif_Text, JetBrains_Mono } from "next/font/google"
 import { SiteHeader } from "@/components/site-header"
 import { SiteFooter } from "@/components/site-footer"
 
@@ -12,9 +12,18 @@ const libreBaskerville = Libre_Baskerville({
   weight: ["400", "700"],
   variable: "--font-libre",
 })
+const dmSerifText = DM_Serif_Text({
+  subsets: ["latin"],
+  weight: ["400"],
+  variable: "--font-flybrary",
+})
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono",
+})
 
 export const metadata: Metadata = {
-  title: "Flybrary - Decentralized Physical Book Lending",
+  title: "Library of Things - Decentralized Physical Book Lending",
   description:
     "Discover, borrow, and share physical books across communities. Trust-based, transparent, pseudonymous.",
 }
@@ -23,6 +32,7 @@ export const viewport: Viewport = {
   themeColor: "#e07a24",
   width: "device-width",
   initialScale: 1,
+  viewportFit: "cover",
 }
 
 export default function RootLayout({
@@ -31,7 +41,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} ${libreBaskerville.variable}`}>
+    <html lang="en" className={`${inter.variable} ${libreBaskerville.variable} ${dmSerifText.variable} ${jetbrainsMono.variable}`}>
       <body className="font-sans antialiased">
         <div className="flex min-h-screen flex-col">
           <SiteHeader />

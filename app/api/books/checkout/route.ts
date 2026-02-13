@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { checkoutBook } from "@/lib/server/repositories"
 
 export async function POST(request: NextRequest) {
   const body = await request.json()
@@ -14,20 +15,13 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  // TODO: Implement with Supabase
-  // 1. Check if book is available
-  // 2. Update books.current_holder_id = user_id
-  // 3. Update books.availability_status = 'checked_out'
-  // 4. Insert event to loan_events (event_type: 'checkout')
-  // 5. Send confirmation email via Resend
-
-  const loan_event = {
-    id: crypto.randomUUID(),
-    event_type: "checkout",
-    book_id,
-    user_id,
-    timestamp: new Date().toISOString(),
+  try {
+    await checkoutBook({ bookId: book_id, userId: user_id })
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Checkout failed" },
+      { status: 400 }
+    )
   }
-
-  return NextResponse.json({ success: true, loan_event })
 }

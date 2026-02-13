@@ -8,6 +8,7 @@ import {
   PlusCircle,
   Edit,
   Trash2,
+  LogOut,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -31,62 +32,63 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts"
-import { mockBooks, mockLoanEvents, mockNodes } from "@/lib/mock-data"
-
-// Steward manages node n1 (Foresight Berlin Flybrary)
-const stewardNode = mockNodes[0]
-const nodeBooks = mockBooks.filter(
-  (b) => b.current_node_id === stewardNode.id || b.current_holder_id
-)
-
-const checkedOut = mockBooks.filter(
-  (b) => b.availability_status === "checked_out"
-).length
-const overdueBooks = mockBooks.filter((b) => {
-  if (!b.expected_return_date) return false
-  return new Date(b.expected_return_date) < new Date()
-}).length
-
-// Most borrowed books (count events per book)
-const bookEventCounts = mockLoanEvents.reduce(
-  (acc, e) => {
-    if (e.event_type === "checkout") {
-      acc[e.book_title || ""] = (acc[e.book_title || ""] || 0) + 1
-    }
-    return acc
-  },
-  {} as Record<string, number>
-)
-
-const mostBorrowedData = Object.entries(bookEventCounts)
-  .sort(([, a], [, b]) => b - a)
-  .slice(0, 6)
-  .map(([name, count]) => ({
-    name: name.length > 18 ? `${name.slice(0, 18)}...` : name,
-    checkouts: count,
-  }))
-
-// Loan activity over time (by month)
-const activityByMonth = mockLoanEvents.reduce(
-  (acc, e) => {
-    const month = new Date(e.timestamp).toLocaleDateString("en-US", {
-      month: "short",
-      year: "2-digit",
-    })
-    acc[month] = (acc[month] || 0) + 1
-    return acc
-  },
-  {} as Record<string, number>
-)
-
-const activityData = Object.entries(activityByMonth)
-  .map(([month, events]) => ({ month, events }))
-  .reverse()
+import { useBootstrapData } from "@/hooks/use-bootstrap-data"
 
 export default function StewardDashboardPage() {
+  const { data } = useBootstrapData()
+  const books = data?.books ?? []
+  const loanEvents = data?.loanEvents ?? []
+  const nodes = data?.nodes ?? []
+  const stewardNode = nodes[0]
+  const checkedOut = books.filter(
+    (b) => b.availability_status === "checked_out"
+  ).length
+  const overdueBooks = books.filter((b) => {
+    if (!b.expected_return_date) return false
+    return new Date(b.expected_return_date) < new Date()
+  }).length
+  const bookEventCounts = loanEvents.reduce(
+    (acc, e) => {
+      if (e.event_type === "checkout") {
+        acc[e.book_title || ""] = (acc[e.book_title || ""] || 0) + 1
+      }
+      return acc
+    },
+    {} as Record<string, number>
+  )
+  const mostBorrowedData = Object.entries(bookEventCounts)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 6)
+    .map(([name, count]) => ({
+      name: name.length > 18 ? `${name.slice(0, 18)}...` : name,
+      checkouts: count,
+    }))
+  const activityByMonth = loanEvents.reduce(
+    (acc, e) => {
+      const month = new Date(e.timestamp).toLocaleDateString("en-US", {
+        month: "short",
+        year: "2-digit",
+      })
+      acc[month] = (acc[month] || 0) + 1
+      return acc
+    },
+    {} as Record<string, number>
+  )
+  const activityData = Object.entries(activityByMonth)
+    .map(([month, events]) => ({ month, events }))
+    .reverse()
+
+  if (!stewardNode) {
+    return (
+      <div className="py-6 sm:py-8">
+        <div className="page-container text-sm text-muted-foreground">No node data found.</div>
+      </div>
+    )
+  }
+
   return (
-    <div className="px-4 py-8">
-      <div className="mx-auto max-w-7xl">
+    <div className="py-6 sm:py-8">
+      <div className="page-container">
         {/* Header */}
         <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
@@ -97,12 +99,30 @@ export default function StewardDashboardPage() {
               Managing: {stewardNode.name}
             </p>
           </div>
-          <Link href="/steward/add-book">
-            <Button className="gap-2">
-              <PlusCircle className="h-4 w-4" />
-              Add New Book
+          <div className="flex flex-wrap items-center gap-2">
+            <Link href="/steward/add-book">
+              <Button className="gap-2">
+                <PlusCircle className="h-4 w-4" />
+                Add New Book
+              </Button>
+            </Link>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="gap-2 text-muted-foreground"
+              onClick={async () => {
+                await fetch("/api/steward/auth", {
+                  method: "DELETE",
+                  credentials: "include",
+                })
+                window.location.href = "/steward/login"
+              }}
+            >
+              <LogOut className="h-4 w-4" />
+              Log out
             </Button>
-          </Link>
+          </div>
         </div>
 
         {/* Stats */}
@@ -111,7 +131,7 @@ export default function StewardDashboardPage() {
             <CardContent className="flex flex-col items-center p-4">
               <BookOpen className="h-5 w-5 text-primary" />
               <span className="mt-2 text-2xl font-bold text-foreground">
-                {mockBooks.length}
+                {books.length}
               </span>
               <span className="text-xs text-muted-foreground">Total Books</span>
             </CardContent>
@@ -138,7 +158,7 @@ export default function StewardDashboardPage() {
             <CardContent className="flex flex-col items-center p-4">
               <BookOpen className="h-5 w-5 text-muted-foreground" />
               <span className="mt-2 text-2xl font-bold text-foreground">
-                {mockBooks.length - checkedOut}
+                {books.length - checkedOut}
               </span>
               <span className="text-xs text-muted-foreground">Available</span>
             </CardContent>
@@ -187,11 +207,11 @@ export default function StewardDashboardPage() {
             </CardContent>
           </Card>
 
-          {/* Loan Activity */}
+          {/* Sharing activity */}
           <Card className="border-border">
             <CardHeader>
               <CardTitle className="text-card-foreground">
-                Loan Activity Over Time
+                Sharing activity over time
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -247,7 +267,7 @@ export default function StewardDashboardPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {mockBooks.slice(0, 15).map((book) => (
+                  {books.slice(0, 15).map((book) => (
                     <TableRow key={book.id}>
                       <TableCell>
                         <Link

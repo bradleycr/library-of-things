@@ -17,9 +17,13 @@ import {
 } from "@/components/ui/select"
 import { BookCard } from "@/components/book-card"
 import { BookCover } from "@/components/book-cover"
-import { mockBooks, mockNodes } from "@/lib/mock-data"
+import { getBookCoverUrl } from "@/lib/book-cover-generator"
+import { useBootstrapData } from "@/hooks/use-bootstrap-data"
 
 export default function ExplorePage() {
+  const { data } = useBootstrapData()
+  const books = data?.books ?? []
+  const nodes = data?.nodes ?? []
   const [query, setQuery] = useState("")
   const [showFilters, setShowFilters] = useState(false)
   const [availableOnly, setAvailableOnly] = useState(false)
@@ -29,7 +33,7 @@ export default function ExplorePage() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
 
   const filteredBooks = useMemo(() => {
-    return mockBooks.filter((book) => {
+    return books.filter((book) => {
       const q = query.toLowerCase()
       const matchesQuery =
         !query ||
@@ -49,7 +53,7 @@ export default function ExplorePage() {
 
       return matchesQuery && matchesAvailability && matchesNode && matchesLending
     })
-  }, [query, availableOnly, selectedNode, lendingType, distance])
+  }, [books, query, availableOnly, selectedNode, lendingType, distance])
 
   const activeFilterCount = [
     availableOnly,
@@ -72,16 +76,16 @@ export default function ExplorePage() {
   }
 
   return (
-    <div className="px-4 py-8">
-      <div className="mx-auto max-w-7xl">
+    <div className="py-6 sm:py-8">
+      <div className="page-container">
         {/* Header */}
         <div className="mb-8">
           <h1 className="font-serif text-3xl font-bold text-foreground md:text-4xl">
             Explore Books
           </h1>
           <p className="mt-2 text-muted-foreground">
-            Search and browse {mockBooks.length} books across{" "}
-            {mockNodes.length} community nodes
+            Search and browse {books.length} books across{" "}
+            {nodes.length} community nodes
           </p>
         </div>
 
@@ -189,7 +193,7 @@ export default function ExplorePage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All nodes</SelectItem>
-                    {mockNodes.map((node) => (
+                    {nodes.map((node) => (
                       <SelectItem key={node.id} value={node.id}>
                         {node.name}
                       </SelectItem>
@@ -279,19 +283,11 @@ export default function ExplorePage() {
                 className="flex items-center gap-4 rounded-lg border border-border bg-card p-4 transition-shadow hover:shadow-md"
               >
                 <div className="h-16 w-12 shrink-0 overflow-hidden rounded bg-muted">
-                  {book.cover_image_url ? (
-                    <img
-                      src={book.cover_image_url || "/placeholder.svg"}
-                      alt={`Cover of ${book.title}`}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full items-center justify-center">
-                      <span className="text-[8px] text-muted-foreground">
-                        {book.title}
-                      </span>
-                    </div>
-                  )}
+                  <BookCover
+                    src={getBookCoverUrl(book)}
+                    title={book.title}
+                    className="h-full w-full object-cover"
+                  />
                 </div>
                 <div className="flex-1">
                   <h3 className="font-semibold text-card-foreground">{book.title}</h3>

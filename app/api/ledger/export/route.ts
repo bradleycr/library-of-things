@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
-import { mockLoanEvents } from "@/lib/mock-data"
+import { listLoanEvents } from "@/lib/server/repositories"
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const format = searchParams.get("format") || "json"
 
-  // TODO: Connect to Supabase and query loan_events with filters
-
-  const data = mockLoanEvents.map((e) => ({
+  const events = await listLoanEvents()
+  const data = events.map((e) => ({
     timestamp: e.timestamp,
     event_type: e.event_type,
     book_id: e.book_id,
@@ -30,7 +29,7 @@ export async function GET(request: NextRequest) {
     return new NextResponse(csv, {
       headers: {
         "Content-Type": "text/csv",
-        "Content-Disposition": "attachment; filename=flybrary-ledger.csv",
+        "Content-Disposition": "attachment; filename=library-of-things-ledger.csv",
       },
     })
   }

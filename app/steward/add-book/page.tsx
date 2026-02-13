@@ -2,12 +2,13 @@
 
 import type React from "react"
 import { useState } from "react"
+import Link from "next/link"
 import {
   BookOpen,
   Search,
-  QrCode,
-  Upload,
   Check,
+  CreditCard,
+  ArrowRight,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -21,47 +22,167 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { mockNodes } from "@/lib/mock-data"
+import { useBootstrapData } from "@/hooks/use-bootstrap-data"
+import { useLibraryCard } from "@/hooks/use-library-card"
+import { GetLibraryCardModal } from "@/components/get-library-card-modal"
 
 export default function AddBookPage() {
+  const { data } = useBootstrapData()
+  const { card, mounted } = useLibraryCard()
+  const [libraryCardModalOpen, setLibraryCardModalOpen] = useState(false)
+  const nodes = data?.nodes ?? []
   const [isbn, setIsbn] = useState("")
   const [title, setTitle] = useState("")
   const [author, setAuthor] = useState("")
   const [edition, setEdition] = useState("")
   const [nodeId, setNodeId] = useState("")
-  const [loanDays, setLoanDays] = useState("21")
-  const [depositRequired, setDepositRequired] = useState(false)
-  const [depositAmount, setDepositAmount] = useState("")
-  const [shippingAllowed, setShippingAllowed] = useState(false)
-  const [memberOnly, setMemberOnly] = useState(false)
+  const [contactRequired, setContactRequired] = useState(false)
   const [contactOptIn, setContactOptIn] = useState(true)
+  const [coverImageUrl, setCoverImageUrl] = useState("")
   const [isbnLookedUp, setIsbnLookedUp] = useState(false)
-  const [qrGenerated, setQrGenerated] = useState(false)
+  const [bookCreated, setBookCreated] = useState(false)
+  const [createdBookId, setCreatedBookId] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [lookupError, setLookupError] = useState<string | null>(null)
+  const [addAnonymously, setAddAnonymously] = useState(false)
 
-  const lookupIsbn = () => {
-    // Mock ISBN lookup
-    if (isbn) {
-      setTitle("Example Book Title")
-      setAuthor("Example Author")
+  const lookupIsbn = async () => {
+    if (!isbn) return
+    setLookupError(null)
+    try {
+      const response = await fetch(
+        `https://openlibrary.org/isbn/${encodeURIComponent(isbn.trim())}.json`
+      )
+      if (!response.ok) {
+        throw new Error("No book metadata found for this ISBN")
+      }
+      const payload = (await response.json()) as {
+        title?: string
+        by_statement?: string
+        edition_name?: string
+        publish_date?: string
+        authors?: { key: string }[]
+      }
+      setTitle(payload.title || title)
+      if (payload.by_statement) {
+        setAuthor(payload.by_statement)
+      } else if (payload.authors?.[0]?.key) {
+        try {
+          const authorRes = await fetch(
+            `https://openlibrary.org${payload.authors[0].key}.json`
+          )
+          if (authorRes.ok) {
+            const authorData = (await authorRes.json()) as { name?: string }
+            if (authorData.name) setAuthor(authorData.name)
+          }
+        } catch {
+          // keep existing author if fetch fails
+        }
+      }
+      if (payload.edition_name) {
+        setEdition(payload.edition_name)
+      } else if (payload.publish_date) {
+        setEdition(payload.publish_date)
+      }
+      setCoverImageUrl(
+        `https://covers.openlibrary.org/b/isbn/${encodeURIComponent(isbn.trim())}-L.jpg`
+      )
       setIsbnLookedUp(true)
+    } catch (error) {
+      setLookupError(
+        error instanceof Error ? error.message : "ISBN lookup failed"
+      )
+      setIsbnLookedUp(false)
     }
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setQrGenerated(true)
+    setIsSubmitting(true)
+    try {
+      const response = await fetch("/api/books/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          isbn: isbn || undefined,
+          title,
+          author: author || undefined,
+          edition: edition || undefined,
+          node_id: nodeId,
+          cover_image_url: coverImageUrl.trim() || undefined,
+          lending_terms: {
+            type: "borrow",
+            shipping_allowed: false,
+            local_only: true,
+            contact_required: contactRequired,
+            contact_opt_in: contactOptIn,
+          },
+          // Attach current user so the catalog shows who added this book (unless anonymous)
+          ...(card?.user_id && !addAnonymously && {
+            added_by_user_id: card.user_id,
+            added_by_display_name: card.pseudonym ?? undefined,
+          }),
+        }),
+      })
+      if (!response.ok) {
+        throw new Error("Could not create book")
+      }
+      const result = (await response.json()) as { id?: string }
+      setBookCreated(true)
+      if (result?.id) setCreatedBookId(result.id)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  if (mounted && !card) {
+    return (
+      <div className="py-6 sm:py-8">
+        <div className="page-container">
+        <div className="mx-auto max-w-2xl">
+          <Card className="border-border">
+            <CardContent className="flex flex-col items-center gap-6 p-12 text-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+                <CreditCard className="h-8 w-8 text-primary" />
+              </div>
+              <div>
+                <h2 className="font-serif text-xl font-semibold text-foreground">
+                  Get your library card first
+                </h2>
+                <p className="mt-2 text-muted-foreground">
+                  You need a Library of Things library card before adding books to the network.
+                  It&apos;s free and pseudonymous—no email required.
+                </p>
+              </div>
+              <Button onClick={() => setLibraryCardModalOpen(true)} className="gap-2">
+                <CreditCard className="h-4 w-4" />
+                Get Your Card
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+        <GetLibraryCardModal
+          open={libraryCardModalOpen}
+          onOpenChange={setLibraryCardModalOpen}
+        />
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="px-4 py-8">
+    <div className="py-6 sm:py-8">
+      <div className="page-container">
       <div className="mx-auto max-w-2xl">
         <div className="mb-8">
           <h1 className="font-serif text-3xl font-bold text-foreground">
             Add a Book
           </h1>
           <p className="mt-2 text-muted-foreground">
-            Add a new book to the Flybrary network. A QR code will be generated
-            for the physical tag.
+            Add a new book to the Library of Things network. You can attach a physical NFC/QR
+            tag to the book later (print from the book page when available).
           </p>
         </div>
 
@@ -82,6 +203,7 @@ export default function AddBookPage() {
                   onChange={(e) => {
                     setIsbn(e.target.value)
                     setIsbnLookedUp(false)
+                    setCoverImageUrl("")
                   }}
                 />
                 <Button
@@ -99,6 +221,9 @@ export default function AddBookPage() {
                   <Check className="h-4 w-4" />
                   Found! Fields auto-populated.
                 </p>
+              )}
+              {lookupError && (
+                <p className="mt-2 text-xs text-destructive">{lookupError}</p>
               )}
               <p className="mt-2 text-xs text-muted-foreground">
                 Uses the Open Library API to auto-populate title and author.
@@ -149,15 +274,50 @@ export default function AddBookPage() {
                 />
               </div>
               <div>
-                <Label>Cover Image</Label>
-                <div className="mt-1 flex h-32 cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-border bg-muted/50 transition-colors hover:border-primary/50">
-                  <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                    <Upload className="h-6 w-6" />
-                    <span className="text-sm">
-                      Click or drag to upload cover image
-                    </span>
+                <Label>Cover</Label>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  From ISBN lookup, paste a URL, or leave empty for a generated pastel cover with the book title.
+                </p>
+                {coverImageUrl ? (
+                  <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-start">
+                    <div className="h-32 w-24 shrink-0 overflow-hidden rounded-lg border border-border bg-muted">
+                      <img
+                        src={coverImageUrl}
+                        alt="Cover preview"
+                        className="h-full w-full object-cover"
+                        onError={() => setCoverImageUrl("")}
+                      />
+                    </div>
+                    <div className="flex flex-1 flex-col gap-2">
+                      <Input
+                        placeholder="Cover image URL"
+                        value={coverImageUrl}
+                        onChange={(e) => setCoverImageUrl(e.target.value)}
+                        className="text-sm"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCoverImageUrl("")}
+                      >
+                        Use generated pastel cover instead
+                      </Button>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="mt-2 flex flex-col gap-2">
+                    <Input
+                      placeholder="Paste cover image URL (optional)"
+                      value={coverImageUrl}
+                      onChange={(e) => setCoverImageUrl(e.target.value)}
+                      className="text-sm"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      A pastel pixel-art cover with the book title will be generated when you add the book.
+                    </p>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -179,7 +339,7 @@ export default function AddBookPage() {
                     <SelectValue placeholder="Select a node" />
                   </SelectTrigger>
                   <SelectContent>
-                    {mockNodes.map((node) => (
+                    {nodes.map((node) => (
                       <SelectItem key={node.id} value={node.id}>
                         {node.name}
                       </SelectItem>
@@ -198,67 +358,24 @@ export default function AddBookPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
-              <div>
-                <Label htmlFor="loan-days">Loan Period (days)</Label>
-                <Input
-                  id="loan-days"
-                  type="number"
-                  min="1"
-                  max="365"
-                  value={loanDays}
-                  onChange={(e) => setLoanDays(e.target.value)}
-                  className="mt-1 w-32"
-                />
-              </div>
+              <p className="text-sm text-muted-foreground">
+                Suggested return period is 3 weeks (21 days). Borrowers see this as a guideline, not a strict due date.
+              </p>
 
               <div className="flex flex-col gap-3">
                 <div className="flex items-center gap-2">
                   <Checkbox
-                    id="deposit"
-                    checked={depositRequired}
-                    onCheckedChange={(c) => setDepositRequired(c === true)}
+                    id="contact-required"
+                    checked={contactRequired}
+                    onCheckedChange={(c) => setContactRequired(c === true)}
                   />
-                  <Label htmlFor="deposit" className="text-sm text-card-foreground">
-                    Require deposit
+                  <Label htmlFor="contact-required" className="text-sm text-card-foreground">
+                    Require contact info to borrow
                   </Label>
                 </div>
-                {depositRequired && (
-                  <div className="ml-6">
-                    <Label htmlFor="deposit-amount">Deposit amount ($)</Label>
-                    <Input
-                      id="deposit-amount"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={depositAmount}
-                      onChange={(e) => setDepositAmount(e.target.value)}
-                      className="mt-1 w-32"
-                      placeholder="10.00"
-                    />
-                  </div>
-                )}
-
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="shipping"
-                    checked={shippingAllowed}
-                    onCheckedChange={(c) => setShippingAllowed(c === true)}
-                  />
-                  <Label htmlFor="shipping" className="text-sm text-card-foreground">
-                    Allow shipping
-                  </Label>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="member-only"
-                    checked={memberOnly}
-                    onCheckedChange={(c) => setMemberOnly(c === true)}
-                  />
-                  <Label htmlFor="member-only" className="text-sm text-card-foreground">
-                    Members only
-                  </Label>
-                </div>
+                <p className="ml-6 text-xs text-muted-foreground">
+                  Only borrowers who have added email, phone, or a social link to their profile can check out this book. Still trust-based.
+                </p>
 
                 <div className="flex items-center gap-2">
                   <Checkbox
@@ -270,48 +387,62 @@ export default function AddBookPage() {
                     Allow others to contact me about this book
                   </Label>
                 </div>
+
+                <div className="flex flex-col gap-2 pt-2 border-t border-border">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="add-anonymously"
+                      checked={addAnonymously}
+                      onCheckedChange={(c) => setAddAnonymously(c === true)}
+                    />
+                    <Label htmlFor="add-anonymously" className="text-sm text-card-foreground">
+                      Add this book anonymously
+                    </Label>
+                  </div>
+                  <p className="ml-6 text-xs text-muted-foreground">
+                    Don&apos;t show my name as the person who added this book. The sharing history will still record that it was added (attributed to the node steward).
+                  </p>
+                </div>
               </div>
             </CardContent>
           </Card>
 
           {/* Submit */}
           <div className="flex flex-col gap-3 md:flex-row">
-            <Button type="submit" size="lg" className="gap-2" disabled={!title}>
-              <BookOpen className="h-5 w-5" />
-              Add Book to Flybrary
-            </Button>
             <Button
-              type="button"
+              type="submit"
               size="lg"
-              variant="outline"
-              className="gap-2 text-foreground bg-transparent"
-              disabled={!title}
-              onClick={() => setQrGenerated(true)}
+              className="gap-2"
+              disabled={!title || !nodeId || isSubmitting}
             >
-              <QrCode className="h-5 w-5" />
-              Generate QR Code
+              <BookOpen className="h-5 w-5" />
+              {isSubmitting ? "Adding..." : "Add Book to Library of Things"}
             </Button>
           </div>
 
-          {qrGenerated && (
-            <Card className="border-accent bg-accent/5">
-              <CardContent className="flex flex-col items-center p-6">
-                <div className="flex h-40 w-40 items-center justify-center rounded-lg bg-card shadow-sm">
-                  <QrCode className="h-28 w-28 text-foreground" />
+          {bookCreated && (
+            <Card className="border-primary/30 bg-primary/5">
+              <CardContent className="flex flex-col items-center p-6 text-center">
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
+                  <Check className="h-7 w-7 text-primary" />
                 </div>
-                <p className="mt-4 text-sm font-medium text-foreground">
-                  QR Code Generated
+                <p className="mt-4 font-medium text-foreground">Book added to the catalog</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  You can attach a physical NFC/QR tag from the book page when that feature is available.
                 </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Print this and attach it to the book
-                </p>
-                <Button variant="outline" size="sm" className="mt-3 text-foreground bg-transparent">
-                  Download PNG
-                </Button>
+                {createdBookId && (
+                  <Link href={`/book/${createdBookId}`}>
+                    <Button className="mt-4 gap-2">
+                      View book
+                      <ArrowRight className="h-4 w-4" />
+                    </Button>
+                  </Link>
+                )}
               </CardContent>
             </Card>
           )}
         </form>
+      </div>
       </div>
     </div>
   )
