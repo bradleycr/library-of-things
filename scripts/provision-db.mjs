@@ -305,27 +305,28 @@ async function main() {
       );
     `)
 
-    // Optional contact fields (migration: add if not exist)
+    // Optional contact fields (migration: add if not exist).
+    // Scope to table_schema='public' — Supabase has auth.users with overlapping column names (e.g. phone).
     await client.query(`
       DO $$
       BEGIN
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'contact_opt_in') THEN
-          ALTER TABLE users ADD COLUMN contact_opt_in boolean not null default true;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'contact_opt_in') THEN
+          ALTER TABLE public.users ADD COLUMN contact_opt_in boolean not null default true;
         END IF;
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'contact_email') THEN
-          ALTER TABLE users ADD COLUMN contact_email text;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'contact_email') THEN
+          ALTER TABLE public.users ADD COLUMN contact_email text;
         END IF;
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'phone') THEN
-          ALTER TABLE users ADD COLUMN phone text;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'phone') THEN
+          ALTER TABLE public.users ADD COLUMN phone text;
         END IF;
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'twitter_url') THEN
-          ALTER TABLE users ADD COLUMN twitter_url text;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'twitter_url') THEN
+          ALTER TABLE public.users ADD COLUMN twitter_url text;
         END IF;
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'linkedin_url') THEN
-          ALTER TABLE users ADD COLUMN linkedin_url text;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'linkedin_url') THEN
+          ALTER TABLE public.users ADD COLUMN linkedin_url text;
         END IF;
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'website_url') THEN
-          ALTER TABLE users ADD COLUMN website_url text;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'website_url') THEN
+          ALTER TABLE public.users ADD COLUMN website_url text;
         END IF;
       END $$;
     `)

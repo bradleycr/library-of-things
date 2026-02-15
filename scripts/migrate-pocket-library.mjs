@@ -20,14 +20,15 @@ async function main() {
     console.log("Adding Pocket Library support columns to books table...")
     
     // Add owner_contact_email column for floating books
+    // Scope to table_schema='public' to avoid Supabase auth schema collisions
     await client.query(`
       DO $$
       BEGIN
         IF NOT EXISTS (
           SELECT 1 FROM information_schema.columns
-          WHERE table_name = 'books' AND column_name = 'owner_contact_email'
+          WHERE table_schema = 'public' AND table_name = 'books' AND column_name = 'owner_contact_email'
         ) THEN
-          ALTER TABLE books ADD COLUMN owner_contact_email text;
+          ALTER TABLE public.books ADD COLUMN owner_contact_email text;
         END IF;
       END $$;
     `)
@@ -38,9 +39,9 @@ async function main() {
       BEGIN
         IF NOT EXISTS (
           SELECT 1 FROM information_schema.columns
-          WHERE table_name = 'books' AND column_name = 'is_pocket_library'
+          WHERE table_schema = 'public' AND table_name = 'books' AND column_name = 'is_pocket_library'
         ) THEN
-          ALTER TABLE books ADD COLUMN is_pocket_library boolean not null default false;
+          ALTER TABLE public.books ADD COLUMN is_pocket_library boolean not null default false;
         END IF;
       END $$;
     `)

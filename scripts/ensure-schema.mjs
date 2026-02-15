@@ -40,26 +40,28 @@ async function main() {
       );
     `)
 
+    // Scope all column checks to table_schema='public' — Supabase also has auth.users
+    // which can cause false positives (e.g. auth.users.phone exists, public.users.phone does not).
     await client.query(`
       DO $$
       BEGIN
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'contact_opt_in') THEN
-          ALTER TABLE users ADD COLUMN contact_opt_in boolean not null default true;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'contact_opt_in') THEN
+          ALTER TABLE public.users ADD COLUMN contact_opt_in boolean not null default true;
         END IF;
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'contact_email') THEN
-          ALTER TABLE users ADD COLUMN contact_email text;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'contact_email') THEN
+          ALTER TABLE public.users ADD COLUMN contact_email text;
         END IF;
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'phone') THEN
-          ALTER TABLE users ADD COLUMN phone text;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'phone') THEN
+          ALTER TABLE public.users ADD COLUMN phone text;
         END IF;
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'twitter_url') THEN
-          ALTER TABLE users ADD COLUMN twitter_url text;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'twitter_url') THEN
+          ALTER TABLE public.users ADD COLUMN twitter_url text;
         END IF;
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'linkedin_url') THEN
-          ALTER TABLE users ADD COLUMN linkedin_url text;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'linkedin_url') THEN
+          ALTER TABLE public.users ADD COLUMN linkedin_url text;
         END IF;
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'website_url') THEN
-          ALTER TABLE users ADD COLUMN website_url text;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'website_url') THEN
+          ALTER TABLE public.users ADD COLUMN website_url text;
         END IF;
       END $$;
     `)
@@ -109,14 +111,14 @@ async function main() {
     await client.query(`
       DO $$
       BEGIN
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'books' AND column_name = 'checkout_url') THEN
-          ALTER TABLE books ADD COLUMN checkout_url text;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'books' AND column_name = 'checkout_url') THEN
+          ALTER TABLE public.books ADD COLUMN checkout_url text;
         END IF;
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'books' AND column_name = 'added_by_user_id') THEN
-          ALTER TABLE books ADD COLUMN added_by_user_id text REFERENCES users(id) ON DELETE SET NULL;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'books' AND column_name = 'added_by_user_id') THEN
+          ALTER TABLE public.books ADD COLUMN added_by_user_id text REFERENCES public.users(id) ON DELETE SET NULL;
         END IF;
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'books' AND column_name = 'added_by_display_name') THEN
-          ALTER TABLE books ADD COLUMN added_by_display_name text;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'books' AND column_name = 'added_by_display_name') THEN
+          ALTER TABLE public.books ADD COLUMN added_by_display_name text;
         END IF;
       END $$;
     `)
