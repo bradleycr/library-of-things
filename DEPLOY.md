@@ -81,6 +81,18 @@ pnpm db:ensure-schema
 pnpm db:provision   # optional
 ```
 
+### If profile/contact updates fail on the live site
+
+If users see *"Profile or contact settings couldn't be saved — the database may need an update"* when changing display name or contact info, the **production** database is missing columns. Run the schema updater against the **same** `DATABASE_URL` that Vercel uses:
+
+1. Copy the Production `DATABASE_URL` from [Vercel → Environment Variables](https://vercel.com/bradley-royes-projects/library-of-things/settings/environment-variables) (or use your Supabase connection string; it must be the **pooler** URL on port **6543**).
+2. From the repo root, run once:
+   ```bash
+   DATABASE_URL="postgresql://postgres.[ref]:[PASSWORD]@aws-0-[region].pooler.supabase.com:6543/postgres" pnpm db:ensure-schema
+   ```
+3. You should see: `Schema ensured. Tables: users, nodes, books, library_cards, loan_events.`
+4. Try saving profile/settings again on the live site.
+
 ## 4. Deploy (sync this code)
 
 Push the branch that Vercel is watching:

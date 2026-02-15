@@ -260,7 +260,10 @@ export default function SettingsPage() {
                 <div>
                   <p className="text-sm font-medium text-foreground">Your pixel art avatar</p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Unique design generated from your profile
+                    Unique design generated from your profile.
+                  </p>
+                  <p className="mt-1.5 text-xs text-muted-foreground italic">
+                    We may introduce ways to customise your profile image soon — hang tight.
                   </p>
                 </div>
               </div>
