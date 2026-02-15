@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { MapPin } from "lucide-react"
+import { MapPin, Package, Building2 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { BookCover } from "@/components/book-cover"
@@ -27,9 +27,17 @@ export function BookCard({ book }: { book: Book }) {
             title={book.title}
             className="transition-transform duration-300 group-hover:scale-105"
           />
-          <Badge className={`absolute right-2 top-2 ${status.className}`} variant={status.variant}>
-            {status.label}
-          </Badge>
+          <div className="absolute right-2 top-2 flex flex-col gap-1.5">
+            <Badge className={status.className} variant={status.variant}>
+              {status.label}
+            </Badge>
+            {book.is_pocket_library && (
+              <Badge className="bg-primary/90 text-primary-foreground text-xs">
+                <Package className="mr-1 h-2.5 w-2.5" />
+                Pocket
+              </Badge>
+            )}
+          </div>
         </div>
         <CardContent className="p-3">
           <h3 className="line-clamp-1 text-sm font-semibold text-card-foreground group-hover:text-primary">
@@ -40,7 +48,11 @@ export function BookCard({ book }: { book: Book }) {
           )}
           {book.current_location_text && (
             <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
-              <MapPin className="h-3 w-3 shrink-0" />
+              {book.is_pocket_library ? (
+                <Package className="h-3 w-3 shrink-0" />
+              ) : (
+                <Building2 className="h-3 w-3 shrink-0" />
+              )}
               <span className="line-clamp-1">{book.current_location_text}</span>
             </div>
           )}

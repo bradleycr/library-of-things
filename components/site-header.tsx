@@ -29,13 +29,14 @@ import { useLibraryCard } from "@/hooks/use-library-card"
 /** Main nav: Explore, Add a Book, Sharing history. Members linked from footer + ledger. */
 const navLinks = [
   { href: "/explore", label: "Explore", icon: Search },
-  { href: "/steward/add-book", label: "Add a Book", icon: PlusCircle },
+  { href: "/add-book", label: "Add a Book", icon: PlusCircle },
   { href: "/ledger", label: "Sharing history", icon: ScrollText },
 ]
 
-/** Admin: password-protected steward dashboard only. */
+/** Admin: password-protected steward dashboard and book management. */
 const adminLinks = [
   { href: "/steward/dashboard", label: "Steward Dashboard", icon: LayoutDashboard },
+  { href: "/steward/add-book", label: "Add Book (Steward)", icon: PlusCircle },
 ]
 
 export function SiteHeader() {
@@ -99,46 +100,28 @@ export function SiteHeader() {
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
-          {/* Library card: "View" when signed in, "Get" / "Log in" when not */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="gap-2 text-foreground">
-                <CreditCard className="h-4 w-4" />
-                {card ? "Library Card" : "Account"}
-                <ChevronDown className="h-4 w-4 opacity-60" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              {card ? (
-                <>
-                  <DropdownMenuItem onClick={() => openLibraryCardModal("view")}>
-                    <CreditCard className="h-4 w-4" />
-                    View library card
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      clearCard()
-                      setMobileOpen(false)
-                    }}
-                    className="text-muted-foreground"
-                  >
-                    <LogOut className="h-4 w-4" />
-                    Remove card from this device
-                  </DropdownMenuItem>
-                </>
-              ) : (
-                <>
-                  <DropdownMenuItem onClick={() => openLibraryCardModal("generate")}>
-                    <CreditCard className="h-4 w-4" />
-                    Get library card
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setLoginModalOpen(true)}>
-                    Log in with card
-                  </DropdownMenuItem>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {/* Account section: Only show for brand new users without a library card.
+              Once a card is connected, the Profile button provides all necessary access. */}
+          {!card && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="gap-2 text-foreground">
+                  <CreditCard className="h-4 w-4" />
+                  Account
+                  <ChevronDown className="h-4 w-4 opacity-60" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem onClick={() => openLibraryCardModal("generate")}>
+                  <CreditCard className="h-4 w-4" />
+                  Get library card
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setLoginModalOpen(true)}>
+                  Log in with card
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="text-foreground">
@@ -159,6 +142,24 @@ export function SiteHeader() {
                   Settings
                 </Link>
               </DropdownMenuItem>
+              {card && (
+                <>
+                  <DropdownMenuItem onClick={() => openLibraryCardModal("view")}>
+                    <CreditCard className="h-4 w-4" />
+                    View library card
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      clearCard()
+                      setMobileOpen(false)
+                    }}
+                    className="text-muted-foreground"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    Remove card from this device
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </nav>
@@ -187,41 +188,32 @@ export function SiteHeader() {
       {mobileOpen && (
         <nav className="border-t border-border bg-background px-4 pb-4 pt-2 md:hidden">
           <div className="flex flex-col gap-1">
-            <Button
-              variant="ghost"
-              className="w-full justify-start gap-3 text-foreground"
-              onClick={() => {
-                openLibraryCardModal(card ? "view" : "generate")
-                setMobileOpen(false)
-              }}
-            >
-              <CreditCard className="h-5 w-5" />
-              {card ? "View library card" : "Get library card"}
-            </Button>
-            {card && (
-              <Button
-                variant="ghost"
-                className="w-full justify-start gap-3 text-muted-foreground"
-                onClick={() => {
-                  clearCard()
-                  setMobileOpen(false)
-                }}
-              >
-                <LogOut className="h-5 w-5" />
-                Remove card from this device
-              </Button>
-            )}
+            {/* Account section: Only show for brand new users without a library card.
+                Once a card is connected, the Profile section provides all necessary access. */}
             {!card && (
-              <Button
-                variant="ghost"
-                className="w-full justify-start gap-3 text-foreground"
-                onClick={() => {
-                  setLoginModalOpen(true)
-                  setMobileOpen(false)
-                }}
-              >
-                Log in with card
-              </Button>
+              <>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start gap-3 text-foreground"
+                  onClick={() => {
+                    openLibraryCardModal("generate")
+                    setMobileOpen(false)
+                  }}
+                >
+                  <CreditCard className="h-5 w-5" />
+                  Get library card
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start gap-3 text-foreground"
+                  onClick={() => {
+                    setLoginModalOpen(true)
+                    setMobileOpen(false)
+                  }}
+                >
+                  Log in with card
+                </Button>
+              </>
             )}
             {navLinks.map((link) => (
               <Link key={link.href} href={link.href} onClick={() => setMobileOpen(false)}>
@@ -257,6 +249,32 @@ export function SiteHeader() {
                   Settings
                 </Button>
               </Link>
+              {card && (
+                <>
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start gap-3 text-foreground"
+                    onClick={() => {
+                      openLibraryCardModal("view")
+                      setMobileOpen(false)
+                    }}
+                  >
+                    <CreditCard className="h-5 w-5" />
+                    View library card
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start gap-3 text-muted-foreground"
+                    onClick={() => {
+                      clearCard()
+                      setMobileOpen(false)
+                    }}
+                  >
+                    <LogOut className="h-5 w-5" />
+                    Remove card from this device
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </nav>

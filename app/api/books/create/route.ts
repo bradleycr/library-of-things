@@ -14,21 +14,28 @@ export async function POST(request: NextRequest) {
     lending_terms,
     added_by_user_id,
     added_by_display_name,
+    is_pocket_library,
+    owner_contact_email,
+    current_location_text,
   } = body as {
     isbn?: string
     title: string
     author?: string
     edition?: string
-    node_id: string
+    node_id?: string
     cover_image_url?: string
     lending_terms?: Record<string, unknown>
     added_by_user_id?: string
     added_by_display_name?: string
+    is_pocket_library?: boolean
+    owner_contact_email?: string
+    current_location_text?: string
   }
 
-  if (!title || typeof title !== "string" || !node_id || typeof node_id !== "string") {
+  // Validate title
+  if (!title || typeof title !== "string") {
     return NextResponse.json(
-      { error: "title and node_id are required" },
+      { error: "title is required" },
       { status: 400 }
     )
   }
@@ -42,6 +49,30 @@ export async function POST(request: NextRequest) {
   if (trimmedTitle.length > 1000) {
     return NextResponse.json(
       { error: "title is too long" },
+      { status: 400 }
+    )
+  }
+
+  // Validate location: either node_id OR is_pocket_library must be provided
+  if (!node_id && !is_pocket_library) {
+    return NextResponse.json(
+      { error: "Either node_id or is_pocket_library must be provided" },
+      { status: 400 }
+    )
+  }
+
+  // For Pocket Library books, require owner contact email
+  if (is_pocket_library && !owner_contact_email) {
+    return NextResponse.json(
+      { error: "owner_contact_email is required for Pocket Library books" },
+      { status: 400 }
+    )
+  }
+
+  // For node-based books, node_id is required
+  if (!is_pocket_library && (!node_id || typeof node_id !== "string")) {
+    return NextResponse.json(
+      { error: "node_id is required for node-based books" },
       { status: 400 }
     )
   }
@@ -75,6 +106,9 @@ export async function POST(request: NextRequest) {
     coverImageUrl: typeof cover_image_url === "string" ? cover_image_url.trim().slice(0, 2048) || undefined : undefined,
     addedByUserId: added_by_user_id,
     addedByDisplayName: added_by_display_name,
+    isPocketLibrary: is_pocket_library ?? false,
+    ownerContactEmail: typeof owner_contact_email === "string" ? owner_contact_email.trim() || undefined : undefined,
+    currentLocationText: typeof current_location_text === "string" ? current_location_text.trim() || undefined : undefined,
   })
 
   return NextResponse.json({ success: true, ...created })

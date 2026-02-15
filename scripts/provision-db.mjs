@@ -378,6 +378,8 @@ async function main() {
         current_node_name text,
         added_by_user_id text references users(id) on delete set null,
         added_by_display_name text,
+        owner_contact_email text,
+        is_pocket_library boolean not null default false,
         availability_status text not null check (availability_status in ('available','checked_out','in_transit','retired')),
         lending_terms jsonb not null,
         created_at timestamptz not null default now(),
@@ -459,8 +461,8 @@ async function main() {
 
     for (const b of books) {
       await client.query(
-        `insert into books (id,isbn,title,author,edition,qr_tag_id,checkout_url,cover_image_url,current_holder_id,current_holder_name,current_location_lat,current_location_lng,current_location_text,current_node_id,current_node_name,added_by_user_id,added_by_display_name,availability_status,lending_terms,created_at,expected_return_date)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19::jsonb,$20,$21)`,
+        `insert into books (id,isbn,title,author,edition,qr_tag_id,checkout_url,cover_image_url,current_holder_id,current_holder_name,current_location_lat,current_location_lng,current_location_text,current_node_id,current_node_name,added_by_user_id,added_by_display_name,owner_contact_email,is_pocket_library,availability_status,lending_terms,created_at,expected_return_date)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21::jsonb,$22,$23)`,
         [
           b.id,
           b.isbn,
@@ -479,6 +481,8 @@ async function main() {
           b.current_node_name,
           b.added_by_user_id ?? null,
           b.added_by_display_name ?? null,
+          b.owner_contact_email ?? null,
+          b.is_pocket_library ?? false,
           b.availability_status,
           JSON.stringify(b.lending_terms),
           b.created_at,
@@ -510,6 +514,9 @@ async function main() {
     )
     await client.query(
       "create index if not exists idx_books_current_node_id on books(current_node_id)"
+    )
+    await client.query(
+      "create index if not exists idx_books_is_pocket_library on books(is_pocket_library)"
     )
     await client.query(
       "create index if not exists idx_loan_events_book_timestamp on loan_events(book_id, timestamp desc)"

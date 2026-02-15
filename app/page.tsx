@@ -40,7 +40,7 @@ export default async function HomePage() {
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
-            <Link href="/steward/add-book">
+            <Link href="/add-book">
               <Button variant="outline" size="default" className="gap-2 min-h-11 min-w-[44px] sm:min-w-0">
                 <BookOpen className="h-4 w-4" />
                 Add a book
@@ -148,7 +148,7 @@ export default async function HomePage() {
       <section className="border-t border-border/60 py-10 sm:py-12">
         <div className="page-container flex flex-wrap items-center gap-4 sm:gap-6 text-sm">
           <Link
-            href="/steward/add-book"
+            href="/add-book"
             className="text-muted-foreground hover:text-foreground"
           >
             Add a book

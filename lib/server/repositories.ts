@@ -6,6 +6,8 @@ import { db } from "@/lib/server/db"
 type DbBook = Omit<Book, "created_at" | "expected_return_date"> & {
   created_at: string | Date
   expected_return_date?: string | Date | null
+  owner_contact_email?: string | null
+  is_pocket_library?: boolean
 }
 
 type DbLoanEvent = Omit<LoanEvent, "timestamp"> & {
@@ -30,6 +32,8 @@ function mapBook(row: DbBook): Book {
     ...row,
     created_at: asIso(row.created_at)!,
     expected_return_date: asIso(row.expected_return_date),
+    owner_contact_email: row.owner_contact_email ?? undefined,
+    is_pocket_library: row.is_pocket_library ?? false,
   }
 }
 
@@ -508,12 +512,19 @@ export async function createBook(input: {
   title: string
   author?: string
   edition?: string
-  nodeId: string
+  /** For node-based books, the node ID. For Pocket Library books, this should be undefined/null. */
+  nodeId?: string
   lendingTerms: Book["lending_terms"]
   coverImageUrl?: string | null
   /** User id and display name for "who added this book" attribution. */
   addedByUserId?: string
   addedByDisplayName?: string
+  /** For Pocket Library (floating) books, the current location text (captured when adding). */
+  currentLocationText?: string
+  /** For Pocket Library books, the owner's contact email for arranging pickup/return. */
+  ownerContactEmail?: string
+  /** Whether this is a Pocket Library (floating) book not tied to a specific node. */
+  isPocketLibrary?: boolean
 }) {
   const id = crypto.randomUUID()
   const qrTagId = `qr-${Date.now()}`
@@ -524,18 +535,41 @@ export async function createBook(input: {
   try {
     await client.query("begin")
 
-    const { rows: nodes } = await client.query<DbNode>(
-      "select * from nodes where id = $1",
-      [input.nodeId]
-    )
-    const node = nodes[0]
-    if (!node) throw new Error("Node not found")
+    let nodeId = input.nodeId
+    let nodeName: string | null = null
+    let locationText: string | null = input.currentLocationText ?? null
+    let addedByUserId = input.addedByUserId ?? null
+
+    // For node-based books, fetch node details
+    if (nodeId) {
+      const { rows: nodes } = await client.query<DbNode>(
+        "select * from nodes where id = $1",
+        [nodeId]
+      )
+      const node = nodes[0]
+      if (!node) throw new Error("Node not found")
+      nodeName = node.name
+      locationText = node.location_address ?? node.name
+      // If no user specified, attribute to node steward
+      if (!addedByUserId) addedByUserId = node.steward_id
+    } else if (!input.isPocketLibrary) {
+      // If no node and not explicitly marked as pocket library, this is an error
+      throw new Error("Either nodeId must be provided or isPocketLibrary must be true")
+    }
+
+    // For Pocket Library books, require owner contact email
+    if (input.isPocketLibrary && !input.ownerContactEmail) {
+      throw new Error("Pocket Library books require an owner contact email")
+    }
 
     await client.query(
       `insert into books
-        (id, isbn, title, author, edition, qr_tag_id, checkout_url, cover_image_url, current_node_id, current_node_name, current_location_text, availability_status, lending_terms, added_by_user_id, added_by_display_name, created_at)
+        (id, isbn, title, author, edition, qr_tag_id, checkout_url, cover_image_url, 
+         current_node_id, current_node_name, current_location_text, 
+         availability_status, lending_terms, added_by_user_id, added_by_display_name, 
+         owner_contact_email, is_pocket_library, created_at)
        values
-        ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'available', $12::jsonb, $13, $14, now())`,
+        ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'available', $12::jsonb, $13, $14, $15, $16, now())`,
       [
         id,
         input.isbn ?? null,
@@ -545,17 +579,18 @@ export async function createBook(input: {
         qrTagId,
         checkoutUrl,
         input.coverImageUrl?.trim() || null,
-        node.id,
-        node.name,
-        node.location_address ?? node.name,
+        nodeId ?? null,
+        nodeName ?? null,
+        locationText ?? null,
         JSON.stringify(input.lendingTerms),
-        input.addedByUserId ?? null,
+        addedByUserId ?? null,
         input.addedByDisplayName ?? null,
+        input.ownerContactEmail ?? null,
+        input.isPocketLibrary ?? false,
       ]
     )
 
     // Ledger: record "added" so every new book appears in the sharing history
-    const addedByUserId = input.addedByUserId ?? node.steward_id
     const { rows: userRows } = await client.query<DbUser>(
       "select display_name from users where id = $1",
       [addedByUserId]
@@ -574,7 +609,7 @@ export async function createBook(input: {
         input.title,
         addedByUserId,
         addedByDisplayName,
-        node.name,
+        locationText ?? (input.isPocketLibrary ? "Pocket Library" : "Unknown"),
       ]
     )
 

@@ -13,6 +13,8 @@ import {
   Users,
   UserPlus,
   MessageSquare,
+  Mail,
+  Building2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -114,15 +116,23 @@ export default function BookDetailPage({
 
           {/* Details */}
           <div>
-            <Badge
-              className={
-                isAvailable
-                  ? "bg-accent text-accent-foreground"
-                  : "bg-secondary text-secondary-foreground"
-              }
-            >
-              {isAvailable ? "Available" : "Checked Out"}
-            </Badge>
+            <div className="flex flex-wrap gap-2">
+              <Badge
+                className={
+                  isAvailable
+                    ? "bg-accent text-accent-foreground"
+                    : "bg-secondary text-secondary-foreground"
+                }
+              >
+                {isAvailable ? "Available" : "Checked Out"}
+              </Badge>
+              {book.is_pocket_library && (
+                <Badge className="bg-primary/10 text-primary border-primary/20">
+                  <Package className="mr-1 h-3 w-3" />
+                  Pocket Library
+                </Badge>
+              )}
+            </div>
 
             <h1 className="mt-3 font-serif text-3xl font-bold text-foreground md:text-4xl">
               {book.title}
@@ -159,8 +169,25 @@ export default function BookDetailPage({
             {/* Location */}
             {book.current_location_text && (
               <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
-                <MapPin className="h-4 w-4 text-primary" />
+                {book.is_pocket_library ? (
+                  <Package className="h-4 w-4 text-primary" />
+                ) : (
+                  <Building2 className="h-4 w-4 text-primary" />
+                )}
                 <span>{book.current_location_text}</span>
+              </div>
+            )}
+
+            {/* Owner Contact for Pocket Library Books */}
+            {book.is_pocket_library && book.owner_contact_email && (
+              <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+                <Mail className="h-4 w-4 text-primary" />
+                <a
+                  href={`mailto:${book.owner_contact_email}`}
+                  className="text-primary hover:underline"
+                >
+                  {book.owner_contact_email}
+                </a>
               </div>
             )}
 
@@ -169,21 +196,51 @@ export default function BookDetailPage({
               <Card className="mt-6 border-primary/20 bg-primary/5">
                 <CardContent className="p-6">
                   <h3 className="flex items-center gap-2 font-semibold text-foreground">
-                    <MapPin className="h-5 w-5 text-primary" />
+                    {book.is_pocket_library ? (
+                      <Mail className="h-5 w-5 text-primary" />
+                    ) : (
+                      <MapPin className="h-5 w-5 text-primary" />
+                    )}
                     How to Borrow This Book
                   </h3>
-                  <p className="mt-3 text-sm text-foreground/80">
-                    Visit the location above and scan the NFC or QR code on the physical book
-                    to check it out. This is a trust-based system - no web checkout required!
-                  </p>
-                  <div className="mt-4 flex flex-wrap gap-3">
-                    <Button variant="outline" className="gap-2" asChild>
-                      <Link href={`https://www.google.com/maps/search/${encodeURIComponent(book.current_location_text || '')}`} target="_blank">
-                        <MapPin className="h-4 w-4" />
-                        Get Directions
-                      </Link>
-                    </Button>
-                  </div>
+                  {book.is_pocket_library ? (
+                    <>
+                      <p className="mt-3 text-sm text-foreground/80">
+                        This is a Pocket Library book kept by a community member. Contact the owner
+                        using the email above to arrange pickup. When you meet, scan the NFC or QR
+                        code on the book to check it out.
+                      </p>
+                      {book.owner_contact_email && (
+                        <div className="mt-4 flex flex-wrap gap-3">
+                          <Button variant="outline" className="gap-2" asChild>
+                            <a href={`mailto:${book.owner_contact_email}?subject=Borrowing "${book.title}" from Pocket Library`}>
+                              <Mail className="h-4 w-4" />
+                              Contact Owner
+                            </a>
+                          </Button>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <p className="mt-3 text-sm text-foreground/80">
+                        Visit the library node above and scan the NFC or QR code on the physical
+                        book to check it out. This is a trust-based system - no web checkout
+                        required!
+                      </p>
+                      <div className="mt-4 flex flex-wrap gap-3">
+                        <Button variant="outline" className="gap-2" asChild>
+                          <Link
+                            href={`https://www.google.com/maps/search/${encodeURIComponent(book.current_location_text || "")}`}
+                            target="_blank"
+                          >
+                            <MapPin className="h-4 w-4" />
+                            Get Directions
+                          </Link>
+                        </Button>
+                      </div>
+                    </>
+                  )}
                 </CardContent>
               </Card>
             ) : (
@@ -233,8 +290,17 @@ export default function BookDetailPage({
                     </span>
                   </div>
                   <div className="flex items-center gap-2 text-card-foreground">
-                    <Package className="h-4 w-4 text-muted-foreground" />
-                    <span>Pick up at location only — visit the node to check out</span>
+                    {book.is_pocket_library ? (
+                      <>
+                        <Mail className="h-4 w-4 text-muted-foreground" />
+                        <span>Contact owner to arrange pickup</span>
+                      </>
+                    ) : (
+                      <>
+                        <Building2 className="h-4 w-4 text-muted-foreground" />
+                        <span>Pick up at library node</span>
+                      </>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 text-card-foreground">
                     <MessageSquare className="h-4 w-4 text-muted-foreground" />

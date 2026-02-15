@@ -28,12 +28,26 @@ export interface Book {
   current_location_lat?: number
   current_location_lng?: number
   current_location_text?: string
+  /** 
+   * For node-based books, this is the library node where the book is housed.
+   * For Pocket Library (floating) books, this is null - the book is kept by the owner.
+   */
   current_node_id?: string
   current_node_name?: string
   /** User who added this book to the library; enables "Added by" attribution. */
   added_by_user_id?: string
   /** Display name of the user who added the book (denormalized for listing). */
   added_by_display_name?: string
+  /**
+   * For Pocket Library (floating) books without a node, the owner's contact email
+   * so borrowers can reach out to arrange pickup/return.
+   */
+  owner_contact_email?: string
+  /**
+   * Whether this is a Pocket Library book (floating, not at a node).
+   * When true, the book is kept by the owner and borrowers contact them directly.
+   */
+  is_pocket_library?: boolean
   availability_status: "available" | "checked_out" | "in_transit" | "retired"
   lending_terms: LendingTerms
   created_at: string
