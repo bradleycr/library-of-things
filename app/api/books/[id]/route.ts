@@ -1,0 +1,94 @@
+import { NextRequest, NextResponse } from "next/server"
+import type { LendingTerms } from "@/lib/types"
+import { updateBook } from "@/lib/server/repositories"
+
+/**
+ * PATCH /api/books/[id]
+ * Steward-only: update book metadata (title, author, edition, isbn, cover, node, lending_terms).
+ */
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params
+  if (!id) {
+    return NextResponse.json({ error: "Book id required" }, { status: 400 })
+  }
+
+  let body: unknown
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json(
+      { error: "Invalid JSON body" },
+      { status: 400 }
+    )
+  }
+
+  const {
+    title,
+    author,
+    edition,
+    isbn,
+    cover_image_url,
+    node_id,
+    lending_terms,
+  } = body as {
+    title?: string
+    author?: string | null
+    edition?: string | null
+    isbn?: string | null
+    cover_image_url?: string | null
+    node_id?: string
+    lending_terms?: Record<string, unknown>
+  }
+
+  const trimmedTitle =
+    title !== undefined && typeof title === "string" ? title.trim() : undefined
+  if (trimmedTitle !== undefined && !trimmedTitle) {
+    return NextResponse.json(
+      { error: "Title cannot be empty" },
+      { status: 400 }
+    )
+  }
+
+  let parsedTerms: LendingTerms | undefined
+  if (lending_terms != null && typeof lending_terms === "object") {
+    parsedTerms = lending_terms as unknown as LendingTerms
+  }
+
+  try {
+    const updated = await updateBook(id, {
+      title: trimmedTitle,
+      author:
+        author === undefined
+          ? undefined
+          : (typeof author === "string" ? author : null),
+      edition:
+        edition === undefined
+          ? undefined
+          : (typeof edition === "string" ? edition : null),
+      isbn:
+        isbn === undefined
+          ? undefined
+          : (typeof isbn === "string" ? isbn : null),
+      cover_image_url:
+        cover_image_url === undefined
+          ? undefined
+          : (typeof cover_image_url === "string" ? cover_image_url : null),
+      node_id: typeof node_id === "string" && node_id ? node_id : undefined,
+      lending_terms: parsedTerms,
+    })
+
+    if (!updated) {
+      return NextResponse.json({ error: "Book not found" }, { status: 404 })
+    }
+    return NextResponse.json(updated)
+  } catch (error) {
+    console.error("Book update error:", error)
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Update failed" },
+      { status: 500 }
+    )
+  }
+}

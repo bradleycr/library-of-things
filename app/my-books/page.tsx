@@ -8,6 +8,8 @@ import {
   Shield,
   BookOpen,
   ArrowRight,
+  Library,
+  Plus,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -31,9 +33,9 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { BookCover } from "@/components/book-cover"
-import { mockBooks, mockLoanEvents, mockUsers, mockNodes } from "@/lib/mock-data"
-
-const currentUser = mockUsers[0] // CleverRaven88
+import { getBookCoverUrl } from "@/lib/book-cover-generator"
+import { useBootstrapData } from "@/hooks/use-bootstrap-data"
+import { useLibraryCard } from "@/hooks/use-library-card"
 
 function daysRemaining(dateStr?: string) {
   if (!dateStr) return null
@@ -42,13 +44,57 @@ function daysRemaining(dateStr?: string) {
 }
 
 export default function MyBooksPage() {
-  const borrowedBooks = mockBooks.filter(
+  const { data } = useBootstrapData()
+  const { card } = useLibraryCard()
+  const books = data?.books ?? []
+  const loanEvents = data?.loanEvents ?? []
+  const users = data?.users ?? []
+  const nodes = data?.nodes ?? []
+  const currentUser = card?.user_id ? users.find((u) => u.id === card.user_id) ?? null : null
+
+  if (!card) {
+    return (
+      <div className="py-6 sm:py-8">
+        <div className="page-container">
+          <p className="text-muted-foreground">Get a library card or log in with your card to see your books.</p>
+        </div>
+      </div>
+    )
+  }
+  if (card && !card.user_id) {
+    return (
+      <div className="py-6 sm:py-8">
+        <div className="page-container">
+        <p className="text-muted-foreground">
+          Your card ({card.pseudonym}) is on this device. Link it to see your books — go to Settings and enter your PIN to link.
+        </p>
+        <Link href="/settings">
+          <Button className="mt-4">Go to Settings</Button>
+        </Link>
+        </div>
+      </div>
+    )
+  }
+  if (!currentUser) {
+    return (
+      <div className="py-6 sm:py-8">
+        <div className="page-container text-sm text-muted-foreground">User not found.</div>
+      </div>
+    )
+  }
+
+  const borrowedBooks = books.filter(
     (b) =>
       b.current_holder_id === currentUser.id &&
       b.availability_status === "checked_out"
   )
 
-  const pastEvents = mockLoanEvents
+  /** Books this user added to the library; stays in sync with Supabase via bootstrap. */
+  const addedByMeBooks = books.filter(
+    (b) => b.added_by_user_id === currentUser.id
+  )
+
+  const pastEvents = loanEvents
     .filter((e) => e.user_id === currentUser.id)
     .sort(
       (a, b) =>
@@ -56,7 +102,8 @@ export default function MyBooksPage() {
     )
 
   return (
-    <div className="px-4 py-8">
+    <div className="py-6 sm:py-8">
+      <div className="page-container">
       <div className="mx-auto max-w-5xl">
         {/* Header */}
         <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -65,7 +112,7 @@ export default function MyBooksPage() {
               My Books
             </h1>
             <p className="mt-1 text-muted-foreground">
-              Manage your borrowed books and lending history
+              Borrowed books, titles you’ve added, and lending history
             </p>
           </div>
 
@@ -87,7 +134,7 @@ export default function MyBooksPage() {
         </div>
 
         <Tabs defaultValue="borrowed" className="w-full">
-          <TabsList className="mb-6 w-full md:w-auto">
+          <TabsList className="mb-6 flex w-full flex-wrap gap-1 md:w-auto">
             <TabsTrigger value="borrowed" className="flex-1 gap-2 md:flex-none">
               <BookOpen className="h-4 w-4" />
               Currently Borrowed
@@ -97,9 +144,18 @@ export default function MyBooksPage() {
                 </Badge>
               )}
             </TabsTrigger>
+            <TabsTrigger value="added" className="flex-1 gap-2 md:flex-none">
+              <Library className="h-4 w-4" />
+              Books I’ve Added
+              {addedByMeBooks.length > 0 && (
+                <Badge variant="secondary" className="ml-1">
+                  {addedByMeBooks.length}
+                </Badge>
+              )}
+            </TabsTrigger>
             <TabsTrigger value="history" className="flex-1 gap-2 md:flex-none">
               <Clock className="h-4 w-4" />
-              Loan History
+              Sharing History
             </TabsTrigger>
           </TabsList>
 
@@ -130,7 +186,7 @@ export default function MyBooksPage() {
                       <CardContent className="flex gap-4 p-4">
                         <Link href={`/book/${book.id}`} className="shrink-0">
                           <div className="h-28 w-20 overflow-hidden rounded bg-muted">
-                            <BookCover src={book.cover_image_url} title={book.title} />
+                            <BookCover src={getBookCoverUrl(book)} title={book.title} />
                           </div>
                         </Link>
                         <div className="flex flex-1 flex-col">
@@ -183,7 +239,7 @@ export default function MyBooksPage() {
                                         <SelectValue placeholder="Select node" />
                                       </SelectTrigger>
                                       <SelectContent>
-                                        {mockNodes.map((node) => (
+                                        {nodes.map((node) => (
                                           <SelectItem
                                             key={node.id}
                                             value={node.id}
@@ -231,13 +287,83 @@ export default function MyBooksPage() {
             )}
           </TabsContent>
 
-          {/* Loan History */}
+          {/* Books I've Added */}
+          <TabsContent value="added">
+            {addedByMeBooks.length === 0 ? (
+              <div className="flex flex-col items-center justify-center rounded-lg border border-border bg-card py-16">
+                <Library className="h-10 w-10 text-muted-foreground/40" />
+                <h3 className="mt-4 font-semibold text-card-foreground">
+                  No books added yet
+                </h3>
+                <p className="mt-1 text-center text-sm text-muted-foreground">
+                  Add a book from your shelf to share with the community
+                </p>
+                <Link href="/steward/add-book">
+                  <Button className="mt-4 gap-2">
+                    <Plus className="h-4 w-4" />
+                    Add a Book
+                  </Button>
+                </Link>
+              </div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2">
+                {addedByMeBooks.map((book) => (
+                  <Card key={book.id} className="border-border">
+                    <CardContent className="flex gap-4 p-4">
+                      <Link href={`/book/${book.id}`} className="shrink-0">
+                        <div className="h-28 w-20 overflow-hidden rounded bg-muted">
+                          <BookCover src={getBookCoverUrl(book)} title={book.title} />
+                        </div>
+                      </Link>
+                      <div className="flex flex-1 flex-col">
+                        <Link
+                          href={`/book/${book.id}`}
+                          className="font-semibold text-card-foreground hover:text-primary"
+                        >
+                          {book.title}
+                        </Link>
+                        {book.author && (
+                          <p className="text-sm text-muted-foreground">
+                            {book.author}
+                          </p>
+                        )}
+                        <div className="mt-2">
+                          <Badge
+                            variant={
+                              book.availability_status === "available"
+                                ? "default"
+                                : book.availability_status === "checked_out"
+                                  ? "secondary"
+                                  : "outline"
+                            }
+                            className="text-xs"
+                          >
+                            {book.availability_status.replace("_", " ")}
+                          </Badge>
+                        </div>
+                        <div className="mt-auto pt-3">
+                          <Link href={`/book/${book.id}`}>
+                            <Button size="sm" variant="ghost" className="gap-1.5 text-foreground">
+                              View book
+                              <ArrowRight className="h-3.5 w-3.5" />
+                            </Button>
+                          </Link>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          {/* Sharing History */}
           <TabsContent value="history">
             {pastEvents.length === 0 ? (
               <div className="flex flex-col items-center justify-center rounded-lg border border-border bg-card py-16">
                 <Clock className="h-10 w-10 text-muted-foreground/40" />
                 <h3 className="mt-4 font-semibold text-card-foreground">
-                  No loan history yet
+                  No sharing history yet
                 </h3>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Your lending activity will appear here
@@ -303,6 +429,7 @@ export default function MyBooksPage() {
             )}
           </TabsContent>
         </Tabs>
+      </div>
       </div>
     </div>
   )

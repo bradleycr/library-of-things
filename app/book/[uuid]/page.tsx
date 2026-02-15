@@ -11,8 +11,8 @@ import {
   BookOpen,
   Package,
   Users,
+  UserPlus,
   MessageSquare,
-  DollarSign,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -25,18 +25,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { BookCover } from "@/components/book-cover"
-import { mockBooks, mockLoanEvents } from "@/lib/mock-data"
+import { getBookCoverUrl } from "@/lib/book-cover-generator"
+import { useBootstrapData } from "@/hooks/use-bootstrap-data"
 
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("en-US", {
@@ -69,15 +60,19 @@ export default function BookDetailPage({
 }: {
   params: Promise<{ uuid: string }>
 }) {
+  const { data } = useBootstrapData()
+  const books = data?.books ?? []
+  const loanEvents = data?.loanEvents ?? []
   const { uuid } = use(params)
-  const book = mockBooks.find((b) => b.id === uuid)
-  const bookEvents = mockLoanEvents
+  const book = books.find((b) => b.id === uuid)
+  const bookEvents = loanEvents
     .filter((e) => e.book_id === uuid)
     .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
 
   if (!book) {
     return (
-      <div className="flex flex-col items-center justify-center px-4 py-20">
+      <div className="flex flex-col items-center justify-center py-16 sm:py-20">
+        <div className="page-container flex flex-col items-center justify-center text-center">
         <BookOpen className="h-12 w-12 text-muted-foreground/40" />
         <h1 className="mt-4 text-xl font-semibold text-foreground">
           Book not found
@@ -86,11 +81,12 @@ export default function BookDetailPage({
           This book may have been removed or the link is incorrect.
         </p>
         <Link href="/explore">
-          <Button className="mt-6 gap-2">
+          <Button className="mt-6 gap-2 min-h-11">
             <ArrowLeft className="h-4 w-4" />
             Browse Books
           </Button>
         </Link>
+        </div>
       </div>
     )
   }
@@ -98,7 +94,8 @@ export default function BookDetailPage({
   const isAvailable = book.availability_status === "available"
 
   return (
-    <div className="px-4 py-8">
+    <div className="py-6 sm:py-8">
+      <div className="page-container">
       <div className="mx-auto max-w-5xl">
         {/* Back */}
         <Link href="/explore">
@@ -112,7 +109,7 @@ export default function BookDetailPage({
         <div className="grid gap-8 md:grid-cols-[280px_1fr]">
           {/* Cover */}
           <div className="aspect-[2/3] overflow-hidden rounded-lg bg-muted shadow-md">
-            <BookCover src={book.cover_image_url} title={book.title} />
+            <BookCover src={getBookCoverUrl(book)} title={book.title} />
           </div>
 
           {/* Details */}
@@ -139,6 +136,26 @@ export default function BookDetailPage({
               {book.isbn && <span>ISBN: {book.isbn}</span>}
             </div>
 
+            {/* Added by — who contributed this book to the library */}
+            {(book.added_by_user_id || book.added_by_display_name) && (
+              <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+                <UserPlus className="h-4 w-4 text-primary" />
+                <span>
+                  Added by{" "}
+                  {book.added_by_user_id ? (
+                    <Link
+                      href={`/profile/${book.added_by_user_id}`}
+                      className="font-medium text-primary hover:underline"
+                    >
+                      {book.added_by_display_name || "a community member"}
+                    </Link>
+                  ) : (
+                    book.added_by_display_name || "a community member"
+                  )}
+                </span>
+              </div>
+            )}
+
             {/* Location */}
             {book.current_location_text && (
               <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
@@ -147,47 +164,28 @@ export default function BookDetailPage({
               </div>
             )}
 
-            {/* Action */}
+            {/* How to Get This Book */}
             {isAvailable ? (
-              <div className="mt-6">
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button size="lg" className="gap-2">
-                      <BookOpen className="h-5 w-5" />
-                      Check Out This Book
+              <Card className="mt-6 border-primary/20 bg-primary/5">
+                <CardContent className="p-6">
+                  <h3 className="flex items-center gap-2 font-semibold text-foreground">
+                    <MapPin className="h-5 w-5 text-primary" />
+                    How to Borrow This Book
+                  </h3>
+                  <p className="mt-3 text-sm text-foreground/80">
+                    Visit the location above and scan the NFC or QR code on the physical book
+                    to check it out. This is a trust-based system - no web checkout required!
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    <Button variant="outline" className="gap-2" asChild>
+                      <Link href={`https://www.google.com/maps/search/${encodeURIComponent(book.current_location_text || '')}`} target="_blank">
+                        <MapPin className="h-4 w-4" />
+                        Get Directions
+                      </Link>
                     </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle className="text-foreground">
-                        Check Out: {book.title}
-                      </DialogTitle>
-                      <DialogDescription>
-                        Enter your email or sign in to check out this book. A
-                        pseudonym will be generated for you.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="mt-4 flex flex-col gap-4">
-                      <div>
-                        <Label htmlFor="checkout-email">Email</Label>
-                        <Input
-                          id="checkout-email"
-                          type="email"
-                          placeholder="your@email.com"
-                          className="mt-1"
-                        />
-                      </div>
-                      <Button className="gap-2">
-                        <BookOpen className="h-4 w-4" />
-                        Confirm Checkout
-                      </Button>
-                      <p className="text-center text-xs text-muted-foreground">
-                        Loan period: {book.lending_terms.loan_period_days} days
-                      </p>
-                    </div>
-                  </DialogContent>
-                </Dialog>
-              </div>
+                  </div>
+                </CardContent>
+              </Card>
             ) : (
               <div className="mt-6 flex flex-col gap-3">
                 {book.expected_return_date && (
@@ -231,24 +229,12 @@ export default function BookDetailPage({
                   <div className="flex items-center gap-2 text-card-foreground">
                     <Clock className="h-4 w-4 text-muted-foreground" />
                     <span>
-                      {book.lending_terms.loan_period_days} day loan period
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 text-card-foreground">
-                    <DollarSign className="h-4 w-4 text-muted-foreground" />
-                    <span>
-                      {book.lending_terms.deposit_required
-                        ? `$${book.lending_terms.deposit_amount} deposit`
-                        : "No deposit"}
+                      {book.lending_terms.loan_period_days} day borrow period (suggested)
                     </span>
                   </div>
                   <div className="flex items-center gap-2 text-card-foreground">
                     <Package className="h-4 w-4 text-muted-foreground" />
-                    <span>
-                      {book.lending_terms.shipping_allowed
-                        ? "Shipping allowed"
-                        : "Local pickup only"}
-                    </span>
+                    <span>Pick up at location only — visit the node to check out</span>
                   </div>
                   <div className="flex items-center gap-2 text-card-foreground">
                     <MessageSquare className="h-4 w-4 text-muted-foreground" />
@@ -258,10 +244,10 @@ export default function BookDetailPage({
                         : "No contact"}
                     </span>
                   </div>
-                  {book.lending_terms.member_only && (
+                  {book.lending_terms.contact_required && (
                     <div className="flex items-center gap-2 text-card-foreground">
-                      <Users className="h-4 w-4 text-muted-foreground" />
-                      <span>Members only</span>
+                      <UserPlus className="h-4 w-4 text-muted-foreground" />
+                      <span>Contact info required to borrow</span>
                     </div>
                   )}
                 </div>
@@ -270,15 +256,15 @@ export default function BookDetailPage({
           </div>
         </div>
 
-        {/* Loan History */}
+        {/* Sharing History */}
         <Card className="mt-10 border-border">
           <CardHeader>
-            <CardTitle className="text-card-foreground">Loan History</CardTitle>
+            <CardTitle className="text-card-foreground">Sharing History</CardTitle>
           </CardHeader>
           <CardContent>
             {bookEvents.length === 0 ? (
               <p className="py-8 text-center text-sm text-muted-foreground">
-                No loan history yet for this book.
+                No sharing history yet for this book.
               </p>
             ) : (
               <div className="overflow-x-auto">
@@ -327,6 +313,7 @@ export default function BookDetailPage({
             )}
           </CardContent>
         </Card>
+      </div>
       </div>
     </div>
   )

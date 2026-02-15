@@ -1,217 +1,131 @@
 import Link from "next/link"
-import {
-  BookOpen,
-  Shield,
-  Eye,
-  Users,
-  ArrowRight,
-  MapPin,
-  Fingerprint,
-} from "lucide-react"
+import { BookOpen, ArrowRight, MapPin } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { BookCard } from "@/components/book-card"
-import { mockBooks, mockLoanEvents, mockNodes } from "@/lib/mock-data"
+import type { Book, LoanEvent, Node } from "@/lib/types"
+import { listBooks, listLoanEvents, listNodes } from "@/lib/server/repositories"
 
-const features = [
-  {
-    icon: Shield,
-    title: "Trust-Based",
-    description:
-      "No penalties, no late fees. Built on community trust and gentle reminders.",
-  },
-  {
-    icon: Fingerprint,
-    title: "Pseudonymous",
-    description:
-      "Your identity stays private. Participate with auto-generated pseudonyms.",
-  },
-  {
-    icon: Eye,
-    title: "Transparent",
-    description:
-      "Every loan is recorded in a public, append-only ledger anyone can audit.",
-  },
-  {
-    icon: Users,
-    title: "Community-Driven",
-    description:
-      "Books flow between homes, cafes, coworking spaces, and little free libraries.",
-  },
-]
+export const dynamic = "force-dynamic"
 
-export default function HomePage() {
-  const availableBooks = mockBooks.filter(
-    (b) => b.availability_status === "available"
-  )
+export default async function HomePage() {
+  const [books, loanEvents, nodes] = await Promise.all([
+    listBooks(),
+    listLoanEvents(),
+    listNodes(),
+  ]) as [Book[], LoanEvent[], Node[]]
+  const availableBooks = books.filter((b) => b.availability_status === "available")
   const featuredBooks = availableBooks.slice(0, 4)
-  const totalBooks = mockBooks.length
-  const totalLoans = mockLoanEvents.length
-  const totalNodes = mockNodes.length
+  const totalBooks = books.length
+  const totalLoans = loanEvents.length
+  const totalNodes = nodes.length
 
   return (
-    <div>
-      {/* Hero */}
-      <section className="relative overflow-hidden bg-foreground px-4 py-20 md:py-32">
-        <div className="mx-auto max-w-7xl">
-          <div className="relative z-10 max-w-2xl">
-            <p className="mb-4 text-sm font-medium uppercase tracking-widest text-primary">
-              Decentralized Book Lending
-            </p>
-            <h1 className="font-serif text-4xl font-bold leading-tight text-background md:text-6xl">
-              <span className="text-balance">
-                Discover, Borrow, Share Physical Books
-              </span>
-            </h1>
-            <p className="mt-6 text-lg leading-relaxed text-background/60 md:text-xl">
-              Tap a QR code on any tagged book to check it out. A transparent,
-              trust-based system connecting readers across communities.
-            </p>
-            <div className="mt-8 flex flex-wrap gap-4">
-              <Link href="/explore">
-                <Button size="lg" className="gap-2">
-                  Browse Books
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-              </Link>
-              <Link href="/steward/add-book">
-                <Button
-                  size="lg"
-                  variant="outline"
-                  className="gap-2 border-background/20 text-background hover:bg-background/10 hover:text-background bg-transparent"
-                >
-                  <BookOpen className="h-4 w-4" />
-                  Add Your Book
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </div>
-        <div className="absolute inset-0 opacity-[0.07]">
-          <div className="h-full w-full bg-[radial-gradient(circle_at_70%_50%,hsl(var(--primary)),transparent_70%)]" />
-        </div>
-      </section>
-
-      {/* Stats */}
-      <section className="-mt-8 px-4">
-        <div className="mx-auto max-w-7xl">
-          <div className="grid grid-cols-3 gap-4">
-            {[
-              { label: "Books Shared", value: totalBooks },
-              { label: "Loan Events", value: totalLoans },
-              { label: "Active Nodes", value: totalNodes },
-            ].map((stat) => (
-              <Card key={stat.label} className="border-border bg-card shadow-sm">
-                <CardContent className="flex flex-col items-center p-6">
-                  <span className="text-3xl font-bold text-primary md:text-4xl">
-                    {stat.value}
-                  </span>
-                  <span className="mt-1 text-xs text-muted-foreground md:text-sm">
-                    {stat.label}
-                  </span>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Features */}
-      <section className="px-4 py-20">
-        <div className="mx-auto max-w-7xl">
-          <h2 className="text-center font-serif text-3xl font-bold text-foreground">
-            <span className="text-balance">How Flybrary Works</span>
-          </h2>
-          <p className="mx-auto mt-3 max-w-xl text-center text-muted-foreground">
-            Physical books with QR/NFC tags. Tap to check out. Return when
-            ready. Everything is tracked transparently.
+    <div className="bg-background">
+      {/* Hero — simple, internal-facing */}
+      <section className="border-b border-border/60 py-12 sm:py-16 md:py-20 lg:py-24">
+        <div className="page-container">
+          <div className="max-w-3xl">
+            <h1 className="font-serif text-3xl font-semibold text-foreground sm:text-4xl md:text-[2.5rem]">
+            Decentralized. Sharing.
+          </h1>
+            <p className="mt-4 text-muted-foreground sm:text-lg">
+            Tag books with NFC/QR codes, check them out, return when you’re done.
+            Trust-based and pseudonymous — no late fees, just the sharing history.
           </p>
-          <div className="mt-12 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-            {features.map((feature) => (
-              <Card
-                key={feature.title}
-                className="border-border bg-card transition-shadow hover:shadow-md"
-              >
-                <CardContent className="p-6">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                    <feature.icon className="h-5 w-5 text-primary" />
-                  </div>
-                  <h3 className="mt-4 font-semibold text-card-foreground">
-                    {feature.title}
-                  </h3>
-                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                    {feature.description}
-                  </p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Featured Books */}
-      <section className="bg-muted/50 px-4 py-20">
-        <div className="mx-auto max-w-7xl">
-          <div className="flex items-end justify-between">
-            <div>
-              <h2 className="font-serif text-3xl font-bold text-foreground">
-                Available Now
-              </h2>
-              <p className="mt-2 text-muted-foreground">
-                Ready to be picked up at a node near you
-              </p>
-            </div>
+          <div className="mt-6 flex flex-wrap gap-3 sm:mt-8">
             <Link href="/explore">
-              <Button variant="ghost" className="hidden gap-2 text-foreground md:flex">
-                View all
+              <Button size="default" className="gap-2 min-h-11 min-w-[44px] sm:min-w-0">
+                Find a book
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
+            <Link href="/steward/add-book">
+              <Button variant="outline" size="default" className="gap-2 min-h-11 min-w-[44px] sm:min-w-0">
+                <BookOpen className="h-4 w-4" />
+                Add a book
+              </Button>
+            </Link>
           </div>
-          <div className="mt-8 grid grid-cols-2 gap-4 md:grid-cols-4">
+          <div className="mt-8 flex flex-wrap gap-4 gap-y-1 text-sm text-muted-foreground sm:mt-10 sm:gap-6">
+            <span>{totalBooks} in catalog</span>
+            <span>{totalLoans} sharing events</span>
+            <span>{totalNodes} nodes</span>
+          </div>
+          </div>
+        </div>
+      </section>
+
+      {/* How it works */}
+      <section className="py-12 md:py-16">
+        <div className="page-container">
+          <div className="max-w-3xl">
+          <h2 className="text-lg font-semibold text-foreground">
+            How it works
+          </h2>
+          <p className="mt-2 text-muted-foreground">
+            Physical books with QR/NFC tags. Tap to check out, return when
+            you’re ready. Fully trust-based — we keep a public ledger so anyone
+            can see what’s where. Pseudonymous by default.
+          </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Books */}
+      <section className="border-t border-border/60 py-12 md:py-16">
+        <div className="page-container">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-baseline sm:justify-between">
+            <h2 className="text-lg font-semibold text-foreground">
+              Available now
+            </h2>
+            <Link
+              href="/explore"
+              className="text-sm text-muted-foreground hover:text-foreground"
+            >
+              View all →
+            </Link>
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:mt-6 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
             {featuredBooks.map((book) => (
               <BookCard key={book.id} book={book} />
             ))}
-          </div>
-          <div className="mt-6 flex justify-center md:hidden">
-            <Link href="/explore">
-              <Button variant="ghost" className="gap-2 text-foreground">
-                View all books
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
           </div>
         </div>
       </section>
 
       {/* Nodes */}
-      <section className="px-4 py-20">
-        <div className="mx-auto max-w-7xl">
-          <h2 className="text-center font-serif text-3xl font-bold text-foreground">
-            <span className="text-balance">Community Nodes</span>
-          </h2>
-          <p className="mx-auto mt-3 max-w-xl text-center text-muted-foreground">
-            Physical locations where books live and travel between
-          </p>
-          <div className="mt-10 grid gap-6 md:grid-cols-3">
-            {mockNodes.map((node) => (
+      <section className="border-t border-border/60 py-12 md:py-16">
+        <div className="page-container">
+          <h2 className="text-lg font-semibold text-foreground">Nodes</h2>
+          <div className="mt-4 grid gap-3 sm:mt-6 sm:gap-4 md:grid-cols-2">
+            {nodes.map((node) => (
               <Card key={node.id} className="border-border bg-card">
-                <CardContent className="p-6">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h3 className="font-semibold text-card-foreground">
+                <CardContent className="p-4 sm:p-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3 className="font-medium text-card-foreground">
                         {node.name}
                       </h3>
-                      <span className="mt-1 inline-block rounded-full bg-secondary px-2.5 py-0.5 text-xs capitalize text-secondary-foreground">
+                      <span className="mt-0.5 inline-block text-xs capitalize text-muted-foreground">
                         {node.type.replace("_", " ")}
                       </span>
                     </div>
-                    <MapPin className="h-5 w-5 shrink-0 text-primary" />
+                    <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
                   </div>
                   {node.location_address && (
-                    <p className="mt-3 text-sm text-muted-foreground">
+                    <a
+                      href={
+                        node.location_lat != null && node.location_lng != null
+                          ? `https://www.google.com/maps/search/?api=1&query=${node.location_lat},${node.location_lng}`
+                          : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(node.location_address)}`
+                      }
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-2 block truncate text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                    >
                       {node.location_address}
-                    </p>
+                    </a>
                   )}
                   {node.operating_hours && (
                     <p className="mt-1 text-xs text-muted-foreground">
@@ -219,8 +133,8 @@ export default function HomePage() {
                     </p>
                   )}
                   {node.capacity && (
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      Capacity: {node.capacity} books
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {node.capacity} books
                     </p>
                   )}
                 </CardContent>
@@ -230,36 +144,21 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* CTA */}
-      <section className="bg-primary px-4 py-16">
-        <div className="mx-auto max-w-3xl text-center">
-          <h2 className="font-serif text-3xl font-bold text-primary-foreground">
-            <span className="text-balance">
-              Have books collecting dust? Share them.
-            </span>
-          </h2>
-          <p className="mx-auto mt-4 max-w-lg text-primary-foreground/80">
-            Add your books to the network. Set your own lending terms. Watch
-            them travel through the community.
-          </p>
-          <div className="mt-8 flex flex-wrap justify-center gap-4">
-            <Link href="/steward/add-book">
-              <Button size="lg" variant="secondary" className="gap-2">
-                Add a Book
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
-            <Link href="/ledger">
-              <Button
-                size="lg"
-                variant="outline"
-                className="gap-2 border-primary-foreground/30 text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground bg-transparent"
-              >
-                <Eye className="h-4 w-4" />
-                View the Ledger
-              </Button>
-            </Link>
-          </div>
+      {/* Bottom — links only */}
+      <section className="border-t border-border/60 py-10 sm:py-12">
+        <div className="page-container flex flex-wrap items-center gap-4 sm:gap-6 text-sm">
+          <Link
+            href="/steward/add-book"
+            className="text-muted-foreground hover:text-foreground"
+          >
+            Add a book
+          </Link>
+          <Link
+            href="/ledger"
+            className="text-muted-foreground hover:text-foreground"
+          >
+            View ledger
+          </Link>
         </div>
       </section>
     </div>

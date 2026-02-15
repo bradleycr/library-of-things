@@ -5,6 +5,7 @@ import { MapPin } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { BookCover } from "@/components/book-cover"
+import { getBookCoverUrl } from "@/lib/book-cover-generator"
 import type { Book } from "@/lib/types"
 
 const statusConfig = {
@@ -22,7 +23,7 @@ export function BookCard({ book }: { book: Book }) {
       <Card className="h-full overflow-hidden border-border transition-shadow hover:shadow-md">
         <div className="relative aspect-[2/3] overflow-hidden bg-muted">
           <BookCover
-            src={book.cover_image_url}
+            src={getBookCoverUrl(book)}
             title={book.title}
             className="transition-transform duration-300 group-hover:scale-105"
           />

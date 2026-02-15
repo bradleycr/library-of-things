@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { mockBooks } from "@/lib/mock-data"
+import { searchBooks } from "@/lib/server/repositories"
 
 export async function POST(request: NextRequest) {
   const body = await request.json()
@@ -13,30 +13,12 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  let results = [...mockBooks]
-
-  if (query) {
-    const q = query.toLowerCase()
-    results = results.filter(
-      (book) =>
-        book.title.toLowerCase().includes(q) ||
-        (book.author && book.author.toLowerCase().includes(q)) ||
-        (book.isbn && book.isbn.includes(q))
-    )
-  }
-
-  if (filters?.availability === "available") {
-    results = results.filter((b) => b.availability_status === "available")
-  }
-
-  if (filters?.lending_terms && filters.lending_terms.length > 0) {
-    results = results.filter((b) =>
-      filters.lending_terms!.includes(b.lending_terms.type)
-    )
-  }
-
-  // TODO: Implement geospatial distance filtering with Supabase
-  // TODO: Implement community-based filtering
+  const results = await searchBooks({
+    query,
+    availability: filters?.availability,
+    lendingTerms: filters?.lending_terms,
+    nodeId: filters?.community_id,
+  })
 
   return NextResponse.json({ books: results })
 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { returnBook } from "@/lib/server/repositories"
 
 export async function POST(request: NextRequest) {
   const body = await request.json()
@@ -16,21 +17,18 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  // TODO: Implement with Supabase
-  // 1. Update books.current_holder_id = NULL
-  // 2. Update books.availability_status = 'available'
-  // 3. Update books.current_node_id (if return_node_id provided)
-  // 4. Insert event to loan_events (event_type: 'return')
-  // 5. Send confirmation email via Resend
-
-  const loan_event = {
-    id: crypto.randomUUID(),
-    event_type: "return",
-    book_id,
-    user_id,
-    timestamp: new Date().toISOString(),
-    notes,
+  try {
+    await returnBook({
+      bookId: book_id,
+      userId: user_id,
+      returnNodeId: return_node_id,
+      notes,
+    })
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Return failed" },
+      { status: 400 }
+    )
   }
-
-  return NextResponse.json({ success: true, loan_event })
 }

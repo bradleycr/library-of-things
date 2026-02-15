@@ -6,7 +6,12 @@
     "dev": "next dev --turbo",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "db:provision": "node --env-file=.env.local scripts/provision-db.mjs",
+    "db:ensure-schema": "node --env-file=.env.local scripts/ensure-schema.mjs",
+    "db:backfill-added-events": "node --env-file=.env.local scripts/backfill-added-events.mjs",
+    "db:fix-ledger-constraint": "node --env-file=.env.local scripts/fix-loan-events-constraint.mjs",
+    "db:check": "node --env-file=.env.local -e \"if(!process.env.DATABASE_URL){throw new Error('DATABASE_URL missing')}console.log('DATABASE_URL is set')\""
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
@@ -47,6 +52,7 @@
     "lucide-react": "^0.544.0",
     "next": "16.1.6",
     "next-themes": "^0.4.6",
+    "pg": "^8.16.3",
     "react": "19.2.3",
     "react-day-picker": "8.10.1",
     "react-dom": "19.2.3",
@@ -62,6 +68,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.13",
     "@types/node": "^22",
+    "@types/pg": "^8.16.0",
     "@types/react": "19.2.7",
     "@types/react-dom": "19.2.3",
     "postcss": "^8.5",

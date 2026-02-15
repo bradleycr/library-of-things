@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react"
 import Link from "next/link"
-import { Download, Filter, X } from "lucide-react"
+import { Download, Filter, X, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -21,9 +21,10 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Card, CardContent } from "@/components/ui/card"
-import { mockLoanEvents } from "@/lib/mock-data"
+import { useBootstrapData } from "@/hooks/use-bootstrap-data"
 
 const eventTypeStyles: Record<string, string> = {
+  added: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
   checkout: "bg-primary/10 text-primary",
   return: "bg-accent/10 text-accent",
   transfer: "bg-secondary text-secondary-foreground",
@@ -42,19 +43,21 @@ function formatDateTime(dateStr: string) {
 }
 
 export default function LedgerPage() {
+  const { data } = useBootstrapData()
+  const loanEvents = data?.loanEvents ?? []
   const [eventFilter, setEventFilter] = useState("all")
   const [showFilters, setShowFilters] = useState(false)
 
   const sortedEvents = useMemo(() => {
     const filtered =
       eventFilter === "all"
-        ? mockLoanEvents
-        : mockLoanEvents.filter((e) => e.event_type === eventFilter)
+        ? loanEvents
+        : loanEvents.filter((e) => e.event_type === eventFilter)
     return [...filtered].sort(
       (a, b) =>
         new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
     )
-  }, [eventFilter])
+  }, [eventFilter, loanEvents])
 
   const exportData = (format: "csv" | "json") => {
     const data = sortedEvents.map((e) => ({
@@ -73,7 +76,7 @@ export default function LedgerPage() {
     if (format === "json") {
       content = JSON.stringify(data, null, 2)
       mimeType = "application/json"
-      filename = "flybrary-ledger.json"
+      filename = "library-of-things-ledger.json"
     } else {
       const headers = Object.keys(data[0] || {}).join(",")
       const rows = data.map((row) =>
@@ -83,7 +86,7 @@ export default function LedgerPage() {
       )
       content = [headers, ...rows].join("\n")
       mimeType = "text/csv"
-      filename = "flybrary-ledger.csv"
+      filename = "library-of-things-ledger.csv"
     }
 
     const blob = new Blob([content], { type: mimeType })
@@ -96,26 +99,39 @@ export default function LedgerPage() {
   }
 
   const stats = {
-    total: mockLoanEvents.length,
-    checkouts: mockLoanEvents.filter((e) => e.event_type === "checkout").length,
-    returns: mockLoanEvents.filter((e) => e.event_type === "return").length,
+    total: loanEvents.length,
+    checkouts: loanEvents.filter((e) => e.event_type === "checkout").length,
+    returns: loanEvents.filter((e) => e.event_type === "return").length,
   }
 
   return (
-    <div className="px-4 py-8">
-      <div className="mx-auto max-w-7xl">
+    <div className="py-6 sm:py-8">
+      <div className="page-container">
         {/* Header */}
         <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
             <h1 className="font-serif text-3xl font-bold text-foreground md:text-4xl">
-              Public Ledger
+              Sharing history
             </h1>
             <p className="mt-2 text-muted-foreground">
-              A transparent, append-only record of every loan event in the
-              Flybrary network
+              A transparent, append-only sharing history—when books are
+              added, checked out, returned, or transferred. Total events, checkouts,
+              and returns help you see if books are circulating or may have gone
+              missing (trust-based).
             </p>
           </div>
           <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2 text-foreground bg-transparent"
+              asChild
+            >
+              <Link href="/members">
+                <Users className="h-4 w-4" />
+                Members
+              </Link>
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -196,6 +212,7 @@ export default function LedgerPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All events</SelectItem>
+                    <SelectItem value="added">Added</SelectItem>
                     <SelectItem value="checkout">Checkouts</SelectItem>
                     <SelectItem value="return">Returns</SelectItem>
                     <SelectItem value="transfer">Transfers</SelectItem>
@@ -269,7 +286,7 @@ export default function LedgerPage() {
         </Card>
 
         <p className="mt-6 text-center text-xs text-muted-foreground">
-          This ledger is append-only. Events cannot be modified or deleted.
+          This sharing history is append-only. Events cannot be modified or deleted.
           Future versions will anchor hashes to IPFS for permanent
           verifiability.
         </p>
