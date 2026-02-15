@@ -39,9 +39,10 @@ In **Project Settings** → **Environment Variables**, add:
 
 - [Supabase Dashboard](https://supabase.com/dashboard) → your project → **Project Settings** (gear) → **Database**
 - Under **Connection string**, choose **URI**
-- Use the **Session pooler** (port **6543**) URL when shown; it works best with Vercel serverless. Format:  
+- Use the **Transaction pooler** (port **6543**) for Vercel serverless — avoid the direct port 5432. Format:  
   `postgresql://postgres.[ref]:[YOUR-PASSWORD]@aws-0-[region].pooler.supabase.com:6543/postgres`
 - Replace `[YOUR-PASSWORD]` with your database password and paste the full string as `DATABASE_URL`.
+- **Important:** Add the variable for **Production** (and Preview if you use preview deploys). If it’s only set for Preview, the live site won’t see it.
 
 ## 3. Database (Supabase)
 
@@ -93,11 +94,22 @@ Vercel will build and deploy. The site will use the **Supabase** `DATABASE_URL` 
 - **Steward dashboard:** https://libraryofthings.vercel.app/steward/login (password = `STEWARD_PASSWORD`).
 - **Bulk NFC URLs:** Steward Dashboard → “Bulk NFC Tag URLs” — copied URLs will use the live domain.
 
+## Troubleshooting: “0 in catalog” / database not connected
+
+1. **Check health:** Open **https://libraryofthings.vercel.app/api/health**
+   - If it returns `{ "ok": true }`, the DB is connected; the catalog may just be empty (run `pnpm db:provision` to seed).
+   - If it returns **503** and `{ "ok": false, "error": "..." }`, the app can’t reach the database.
+
+2. **Fix 503 / connection:**
+   - In Vercel → **Settings** → **Environment Variables**, confirm `DATABASE_URL` exists for **Production** (not only Preview).
+   - Use Supabase’s **Transaction pooler** URL with port **6543** (not 5432). In Supabase → Project Settings → Database, copy the URI that uses **port 6543** and set that as `DATABASE_URL` in Vercel.
+   - Save, then **Redeploy** (Deployments → latest → ⋯ → Redeploy).
+
 ## Checklist
 
 - [ ] Repo connected to Vercel project **library-of-things**
 - [ ] **Domains:** add `libraryofthings.vercel.app` (Settings → Domains)
-- [ ] `DATABASE_URL` = Supabase Postgres URI (in Vercel env vars)
+- [ ] `DATABASE_URL` = Supabase Postgres URI **with port 6543** (Production + Preview in Vercel)
 - [ ] `STEWARD_PASSWORD` set in Vercel (production)
 - [ ] `pnpm db:ensure-schema` run once against Supabase
 - [ ] Push to connected branch (or Redeploy) → live at **https://libraryofthings.vercel.app**

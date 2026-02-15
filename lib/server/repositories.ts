@@ -54,50 +54,34 @@ function mapUser(row: DbUser): User {
   }
 }
 
+/** Lists all books; throws if DB is unavailable (so we don't show "0 in catalog" when env is wrong). */
 export async function listBooks() {
-  try {
-    const { rows } = await db.query<DbBook>(
-      "select * from books order by created_at desc, id asc"
-    )
-    return rows.map(mapBook)
-  } catch (error) {
-    console.error("Failed to list books:", error)
-    return []
-  }
+  const { rows } = await db.query<DbBook>(
+    "select * from books order by created_at desc, id asc"
+  )
+  return rows.map(mapBook)
 }
 
+/** Lists all nodes; throws if DB is unavailable. */
 export async function listNodes() {
-  try {
-    const { rows } = await db.query<DbNode>("select * from nodes order by name asc")
-    return rows.map(mapNode)
-  } catch (error) {
-    console.error("Failed to list nodes:", error)
-    return []
-  }
+  const { rows } = await db.query<DbNode>("select * from nodes order by name asc")
+  return rows.map(mapNode)
 }
 
+/** Lists all users; throws if DB is unavailable. */
 export async function listUsers() {
-  try {
-    const { rows } = await db.query<DbUser>(
-      "select * from users order by created_at asc, id asc"
-    )
-    return rows.map(mapUser)
-  } catch (error) {
-    console.error("Failed to list users:", error)
-    return []
-  }
+  const { rows } = await db.query<DbUser>(
+    "select * from users order by created_at asc, id asc"
+  )
+  return rows.map(mapUser)
 }
 
+/** Lists all loan events; throws if DB is unavailable. */
 export async function listLoanEvents() {
-  try {
-    const { rows } = await db.query<DbLoanEvent>(
-      "select * from loan_events order by timestamp desc, id asc"
-    )
-    return rows.map(mapLoanEvent)
-  } catch (error) {
-    console.error("Failed to list loan events:", error)
-    return []
-  }
+  const { rows } = await db.query<DbLoanEvent>(
+    "select * from loan_events order by timestamp desc, id asc"
+  )
+  return rows.map(mapLoanEvent)
 }
 
 export async function getBookById(id: string) {

@@ -16,3 +16,6 @@ The script can't set them (token scope). Do this once:
    (Or push a commit to the connected branch to trigger a new deploy.)
 
 4. **Live URL:** https://libraryofthings.vercel.app (add this domain in Settings → Domains if needed)
+
+**Check env vars with Vercel CLI:**  
+From the repo run `vercel login` once, then `vercel link` (choose **library-of-things**), then `vercel env ls` to list variables.
