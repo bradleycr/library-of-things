@@ -9,6 +9,8 @@ import {
   Check,
   CreditCard,
   ArrowRight,
+  Copy,
+  QrCode,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -42,6 +44,8 @@ export default function AddBookPage() {
   const [isbnLookedUp, setIsbnLookedUp] = useState(false)
   const [bookCreated, setBookCreated] = useState(false)
   const [createdBookId, setCreatedBookId] = useState<string | null>(null)
+  const [createdCheckoutUrl, setCreatedCheckoutUrl] = useState<string | null>(null)
+  const [urlCopied, setUrlCopied] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [lookupError, setLookupError] = useState<string | null>(null)
   const [addAnonymously, setAddAnonymously] = useState(false)
@@ -129,9 +133,13 @@ export default function AddBookPage() {
       if (!response.ok) {
         throw new Error("Could not create book")
       }
-      const result = (await response.json()) as { id?: string }
+      const result = (await response.json()) as {
+        id?: string
+        checkout_url?: string
+      }
       setBookCreated(true)
       if (result?.id) setCreatedBookId(result.id)
+      if (result?.checkout_url) setCreatedCheckoutUrl(result.checkout_url)
     } finally {
       setIsSubmitting(false)
     }
@@ -428,12 +436,52 @@ export default function AddBookPage() {
                 </div>
                 <p className="mt-4 font-medium text-foreground">Book added to the catalog</p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  You can attach a physical NFC/QR tag from the book page when that feature is available.
+                  Use the URL below for a QR code or NFC tag. When someone taps it, they’ll see a simple checkout or return screen.
                 </p>
+                {createdCheckoutUrl && (
+                  <div className="mt-4 w-full max-w-md">
+                    <p className="mb-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      Book link (QR / NFC)
+                    </p>
+                    <div className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2">
+                      <code className="flex-1 truncate text-left text-sm text-foreground">
+                        {typeof window !== "undefined"
+                          ? `${window.location.origin}${createdCheckoutUrl}`
+                          : createdCheckoutUrl}
+                      </code>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0 gap-1"
+                        onClick={() => {
+                          const full = typeof window !== "undefined"
+                            ? `${window.location.origin}${createdCheckoutUrl}`
+                            : createdCheckoutUrl
+                          void navigator.clipboard.writeText(full).then(() => {
+                            setUrlCopied(true)
+                            setTimeout(() => setUrlCopied(false), 2000)
+                          })
+                        }}
+                      >
+                        {urlCopied ? (
+                          <Check className="h-4 w-4 text-accent" />
+                        ) : (
+                          <Copy className="h-4 w-4" />
+                        )}
+                        {urlCopied ? "Copied" : "Copy"}
+                      </Button>
+                    </div>
+                    <p className="mt-2 flex items-center justify-center gap-1 text-xs text-muted-foreground">
+                      <QrCode className="h-3.5 w-3.5" />
+                      Print this as a QR code or write it to an NFC tag to put on the book.
+                    </p>
+                  </div>
+                )}
                 {createdBookId && (
-                  <Link href={`/book/${createdBookId}`}>
-                    <Button className="mt-4 gap-2">
-                      View book
+                  <Link href={`/book/${createdBookId}`} className="mt-4">
+                    <Button variant="outline" className="gap-2">
+                      View book page
                       <ArrowRight className="h-4 w-4" />
                     </Button>
                   </Link>

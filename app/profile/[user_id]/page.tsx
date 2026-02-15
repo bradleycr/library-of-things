@@ -339,40 +339,42 @@ export default function ProfilePage({
           </Card>
         )}
 
-        {/* Library Card */}
-        <Card className="mt-8 border-border">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-card-foreground">
-              <CreditCard className="h-5 w-5" />
-              Your Library Card
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {mounted && (
-              card ? (
-                <div className="flex flex-col items-center gap-4">
-                  <LibraryCard card={card} />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setLibraryCardModalOpen(true)}
-                  >
-                    View details
-                  </Button>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center gap-4 py-4">
-                  <p className="text-center text-sm text-muted-foreground">
-                    Get a pseudonymous library card to browse and borrow. No email or identity required.
-                  </p>
-                  <Button onClick={() => setLibraryCardModalOpen(true)}>
-                    Get Your Card
-                  </Button>
-                </div>
-              )
-            )}
-          </CardContent>
-        </Card>
+        {/* Library Card — only on your own profile; never show card details for other members */}
+        {isOwnProfile && (
+          <Card className="mt-8 border-border">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-card-foreground">
+                <CreditCard className="h-5 w-5" />
+                Your Library Card
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {mounted && (
+                card ? (
+                  <div className="flex flex-col items-center gap-4">
+                    <LibraryCard card={card} />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setLibraryCardModalOpen(true)}
+                    >
+                      View details
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-4 py-4">
+                    <p className="text-center text-sm text-muted-foreground">
+                      Get a pseudonymous library card to browse and borrow. No email or identity required.
+                    </p>
+                    <Button onClick={() => setLibraryCardModalOpen(true)}>
+                      Get Your Card
+                    </Button>
+                  </div>
+                )
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         <GetLibraryCardModal
           open={libraryCardModalOpen}

@@ -105,6 +105,108 @@ export async function getBookById(id: string) {
   return rows[0] ? mapBook(rows[0]) : null
 }
 
+/**
+ * Update book metadata (steward edit). Does not change id, checkout_url, availability, or holder.
+ */
+export async function updateBook(
+  bookId: string,
+  input: {
+    title?: string
+    author?: string | null
+    edition?: string | null
+    isbn?: string | null
+    cover_image_url?: string | null
+    node_id?: string
+    lending_terms?: Book["lending_terms"]
+  }
+): Promise<Book | null> {
+  const client = await db.connect()
+  try {
+    const { rows: existing } = await client.query<DbBook>(
+      "select * from books where id = $1",
+      [bookId]
+    )
+    if (!existing[0]) return null
+
+    let nodeName: string | null = null
+    let locationText: string | null = null
+    if (input.node_id != null) {
+      const { rows: nodeRows } = await client.query<DbNode>(
+        "select * from nodes where id = $1",
+        [input.node_id]
+      )
+      const node = nodeRows[0]
+      if (node) {
+        nodeName = node.name
+        locationText = node.location_address ?? node.name
+      }
+    }
+
+    const title =
+      input.title !== undefined
+        ? (input.title?.trim() || existing[0].title)
+        : existing[0].title
+    const author =
+      input.author !== undefined ? input.author : existing[0].author
+    const edition =
+      input.edition !== undefined ? input.edition : existing[0].edition
+    const isbn = input.isbn !== undefined ? input.isbn : existing[0].isbn
+    const cover_image_url =
+      input.cover_image_url !== undefined
+        ? input.cover_image_url
+        : existing[0].cover_image_url
+    const current_node_id =
+      input.node_id !== undefined ? input.node_id : existing[0].current_node_id
+    const current_node_name =
+      nodeName !== null ? nodeName : existing[0].current_node_name
+    const current_location_text =
+      locationText !== null ? locationText : existing[0].current_location_text
+    const lending_terms =
+      input.lending_terms != null
+        ? JSON.stringify(input.lending_terms)
+        : (typeof existing[0].lending_terms === "object"
+            ? JSON.stringify(existing[0].lending_terms)
+            : existing[0].lending_terms)
+
+    await client.query(
+      `update books set
+        title = $2,
+        author = $3,
+        edition = $4,
+        isbn = $5,
+        cover_image_url = $6,
+        current_node_id = $7,
+        current_node_name = $8,
+        current_location_text = $9,
+        lending_terms = $10::jsonb
+       where id = $1`,
+      [
+        bookId,
+        title,
+        author ?? null,
+        edition ?? null,
+        isbn ?? null,
+        cover_image_url?.trim() || null,
+        current_node_id ?? null,
+        current_node_name ?? null,
+        current_location_text ?? null,
+        lending_terms,
+      ]
+    )
+
+    const { rows: updated } = await client.query<DbBook>(
+      "select * from books where id = $1",
+      [bookId]
+    )
+    return updated[0] ? mapBook(updated[0]) : null
+  } catch (error) {
+    console.error("Failed to update book:", error)
+    throw error
+  } finally {
+    client.release()
+  }
+}
+
 export async function getUserById(id: string) {
   const { rows } = await db.query<DbUser>("select * from users where id = $1", [id])
   return rows[0] ? mapUser(rows[0]) : null
@@ -324,6 +426,9 @@ export async function returnBook(params: {
     if (!book) {
       throw new Error("Book not found")
     }
+    if (book.current_holder_id && book.current_holder_id !== params.userId) {
+      throw new Error("Only the current holder can return this book")
+    }
 
     let nodeName = book.current_node_name ?? null
     let locationText = book.current_location_text ?? null
@@ -454,7 +559,7 @@ export async function createBook(input: {
         input.title,
         addedByUserId,
         addedByDisplayName,
-        node.location_address ?? node.name,
+        node.name,
       ]
     )
 
@@ -462,6 +567,7 @@ export async function createBook(input: {
     return {
       id,
       qr_tag_id: qrTagId,
+      checkout_url: checkoutUrl,
     }
   } catch (error) {
     await client.query("rollback")

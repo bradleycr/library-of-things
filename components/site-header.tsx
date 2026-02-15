@@ -7,7 +7,6 @@ import {
   X,
   Search,
   User,
-  Users,
   Settings,
   LayoutDashboard,
   ScrollText,
@@ -27,12 +26,11 @@ import { GetLibraryCardModal, type GetLibraryCardModalMode } from "@/components/
 import { LoginLibraryCardModal } from "@/components/login-library-card-modal"
 import { useLibraryCard } from "@/hooks/use-library-card"
 
-/** Main nav: Explore, Add a Book, Sharing history, Members. My Books lives on profile. */
+/** Main nav: Explore, Add a Book, Sharing history. Members linked from footer + ledger. */
 const navLinks = [
   { href: "/explore", label: "Explore", icon: Search },
   { href: "/steward/add-book", label: "Add a Book", icon: PlusCircle },
   { href: "/ledger", label: "Sharing history", icon: ScrollText },
-  { href: "/members", label: "Members", icon: Users },
 ]
 
 /** Admin: password-protected steward dashboard only. */

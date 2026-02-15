@@ -35,7 +35,7 @@ Open http://localhost:3000.
 
 ## Deploy
 
-Set `DATABASE_URL` and a strong `STEWARD_PASSWORD`. Run `pnpm db:ensure-schema` against the production DB once.
+**Vercel + Supabase:** See **[DEPLOY.md](./DEPLOY.md)** for steps using your existing [Vercel project](https://vercel.com/bradley-royes-projects/v0-flybrary) and Supabase (no Vercel DB). Set `DATABASE_URL` (Supabase) and `STEWARD_PASSWORD` in Vercel, run `pnpm db:ensure-schema` once, then push to sync.
 
 ## License
 

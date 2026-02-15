@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import type { LoanEvent } from "@/lib/types"
 import { listLoanEvents } from "@/lib/server/repositories"
 
 export async function GET(request: NextRequest) {
@@ -6,7 +7,17 @@ export async function GET(request: NextRequest) {
   const format = searchParams.get("format") || "json"
 
   const events = await listLoanEvents()
-  const data = events.map((e) => ({
+  type ExportRow = {
+    timestamp: string | undefined
+    event_type: string
+    book_id: string
+    book_title: string | undefined
+    user_id: string
+    user_display_name: string | undefined
+    location: string | undefined
+    notes: string
+  }
+  const data: ExportRow[] = events.map((e: LoanEvent) => ({
     timestamp: e.timestamp,
     event_type: e.event_type,
     book_id: e.book_id,
@@ -19,7 +30,7 @@ export async function GET(request: NextRequest) {
 
   if (format === "csv") {
     const headers = Object.keys(data[0] || {}).join(",")
-    const rows = data.map((row) =>
+    const rows = data.map((row: ExportRow) =>
       Object.values(row)
         .map((v) => `"${String(v).replace(/"/g, '""')}"`)
         .join(",")

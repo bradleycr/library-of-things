@@ -26,9 +26,22 @@ export async function POST(request: NextRequest) {
     added_by_display_name?: string
   }
 
-  if (!title || !node_id) {
+  if (!title || typeof title !== "string" || !node_id || typeof node_id !== "string") {
     return NextResponse.json(
       { error: "title and node_id are required" },
+      { status: 400 }
+    )
+  }
+  const trimmedTitle = title.trim()
+  if (!trimmedTitle) {
+    return NextResponse.json(
+      { error: "title cannot be empty" },
+      { status: 400 }
+    )
+  }
+  if (trimmedTitle.length > 1000) {
+    return NextResponse.json(
+      { error: "title is too long" },
       { status: 400 }
     )
   }
@@ -53,17 +66,16 @@ export async function POST(request: NextRequest) {
   mergedTerms.local_only = true
 
   const created = await createBook({
-    isbn,
-    title,
-    author,
-    edition,
+    isbn: typeof isbn === "string" ? isbn.trim().slice(0, 20) || undefined : undefined,
+    title: trimmedTitle,
+    author: typeof author === "string" ? author.trim().slice(0, 500) || undefined : undefined,
+    edition: typeof edition === "string" ? edition.trim().slice(0, 200) || undefined : undefined,
     nodeId: node_id,
     lendingTerms: mergedTerms,
-    coverImageUrl: cover_image_url,
+    coverImageUrl: typeof cover_image_url === "string" ? cover_image_url.trim().slice(0, 2048) || undefined : undefined,
     addedByUserId: added_by_user_id,
     addedByDisplayName: added_by_display_name,
   })
 
-  // QR code URL can be added when /api/qr/[id] is implemented for physical tags.
   return NextResponse.json({ success: true, ...created })
 }

@@ -54,7 +54,7 @@ export interface User {
   id: string
   display_name: string
   email?: string
-  auth_provider?: "email" | "linkedin" | "twitter"
+  auth_provider?: "email" | "linkedin" | "twitter" | "library_card"
   real_name?: string
   profile_picture_url?: string
   trust_score: number

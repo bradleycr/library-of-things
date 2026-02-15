@@ -4,6 +4,7 @@ const links = [
   { href: "/explore", label: "Explore" },
   { href: "/ledger", label: "Sharing history" },
   { href: "/steward/add-book", label: "Add a book" },
+  { href: "/members", label: "Members" },
   { href: "/my-books", label: "My books" },
 ]
 

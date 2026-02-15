@@ -3,6 +3,7 @@ import { BookOpen, ArrowRight, MapPin } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { BookCard } from "@/components/book-card"
+import type { Book, LoanEvent, Node } from "@/lib/types"
 import { listBooks, listLoanEvents, listNodes } from "@/lib/server/repositories"
 
 export const dynamic = "force-dynamic"
@@ -12,10 +13,8 @@ export default async function HomePage() {
     listBooks(),
     listLoanEvents(),
     listNodes(),
-  ])
-  const availableBooks = books.filter(
-    (b) => b.availability_status === "available"
-  )
+  ]) as [Book[], LoanEvent[], Node[]]
+  const availableBooks = books.filter((b) => b.availability_status === "available")
   const featuredBooks = availableBooks.slice(0, 4)
   const totalBooks = books.length
   const totalLoans = loanEvents.length
