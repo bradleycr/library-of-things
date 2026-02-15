@@ -225,17 +225,39 @@ export type UserProfileUpdate = {
   website_url?: string | null
 }
 
+/** Result of updateUserProfile: success or a specific failure reason for correct HTTP handling. */
+export type UpdateUserProfileResult =
+  | { ok: true }
+  | { ok: false; reason: "display_name_taken" }
+  | { ok: false; reason: "validation" }
+  | { ok: false; reason: "not_found" }
+  | { ok: false; reason: "schema_out_of_date" }
+  | { ok: false; reason: "error" }
+
+function getPgErrorCode(err: unknown): string {
+  return err && typeof err === "object" && "code" in err ? (err as { code: string }).code : ""
+}
+
+function isUniqueViolation(err: unknown): boolean {
+  return getPgErrorCode(err) === "23505"
+}
+
+/** Postgres 42703 = undefined_column — e.g. contact columns missing if DB wasn't migrated. */
+function isUndefinedColumn(err: unknown): boolean {
+  return getPgErrorCode(err) === "42703"
+}
+
 export async function updateUserProfile(
   userId: string,
   updates: UserProfileUpdate
-): Promise<boolean> {
+): Promise<UpdateUserProfileResult> {
   const setParts: string[] = []
   const values: unknown[] = []
   let idx = 0
 
   if (updates.display_name !== undefined) {
     const trimmed = String(updates.display_name).trim()
-    if (!trimmed.length) return false
+    if (!trimmed.length) return { ok: false, reason: "validation" }
     idx += 1
     setParts.push(`display_name = $${idx}`)
     values.push(trimmed)
@@ -271,16 +293,25 @@ export async function updateUserProfile(
     values.push(updates.website_url && updates.website_url.trim() ? updates.website_url.trim() : null)
   }
 
-  if (setParts.length === 0) return true
+  if (setParts.length === 0) return { ok: true }
   idx += 1
   values.push(userId)
   const sql = `update users set ${setParts.join(", ")} where id = $${idx}`
   try {
-    await db.query(sql, values)
-    return true
+    const result = await db.query(sql, values)
+    const rowCount = typeof result.rowCount === "number" ? result.rowCount : 0
+    if (rowCount === 0) return { ok: false, reason: "not_found" }
+    return { ok: true }
   } catch (error) {
+    if (isUniqueViolation(error)) {
+      return { ok: false, reason: "display_name_taken" }
+    }
+    if (isUndefinedColumn(error)) {
+      console.error("User profile update failed: missing column (run db:ensure-schema?)", error)
+      return { ok: false, reason: "schema_out_of_date" }
+    }
     console.error("Failed to update user profile:", error)
-    return false
+    return { ok: false, reason: "error" }
   }
 }
 

@@ -49,8 +49,32 @@ export async function PATCH(
       )
     }
 
-    const ok = await updateUserProfile(id, updates)
-    if (!ok) {
+    const result = await updateUserProfile(id, updates)
+    if (!result.ok) {
+      if (result.reason === "display_name_taken") {
+        return NextResponse.json(
+          { error: "That display name is already taken. Please choose another." },
+          { status: 409 }
+        )
+      }
+      if (result.reason === "validation") {
+        return NextResponse.json(
+          { error: "Invalid profile data (e.g. display name cannot be empty)." },
+          { status: 400 }
+        )
+      }
+      if (result.reason === "not_found") {
+        return NextResponse.json(
+          { error: "User not found." },
+          { status: 404 }
+        )
+      }
+      if (result.reason === "schema_out_of_date") {
+        return NextResponse.json(
+          { error: "Profile or contact settings couldn't be saved — the database may need an update. Please try again later or contact support." },
+          { status: 503 }
+        )
+      }
       return NextResponse.json(
         { error: "Failed to update user" },
         { status: 500 }
