@@ -7,10 +7,28 @@ Use **your existing Supabase** for the database and your **existing Vercel proje
 - **Project:** [library-of-things](https://vercel.com/bradley-royes-projects/library-of-things)  
 - **ID:** `prj_QttrjwiTNn4eIKj0ExANas0G2uVp`
 
-If this repo is not yet the project’s source:
+### Auto-sync from GitHub (deploy on every push)
 
-- Vercel → **library-of-things** → **Settings** → **Git**
-- Connect this GitHub repo and choose the branch to deploy (e.g. `main` or `release/ready-for-live`).
+For **every push to `main`** to trigger a new Vercel deployment:
+
+1. Open **Settings → Git**:  
+   [library-of-things → Settings → Git](https://vercel.com/bradley-royes-projects/library-of-things/settings/git)
+
+2. **Connect repository** (if not already):
+   - Click **Connect Git Repository**.
+   - Choose **GitHub** and authorize if prompted.
+   - Select the **flybrary** repo (e.g. `bradleycr/flybrary`).
+
+3. **Production branch:**
+   - Set **Production Branch** to `main` (so pushes to `main` deploy to production).
+
+4. **Confirm:**
+   - **Deploy Hooks** should show “Deploy on push” for the connected repo.
+   - After saving, each `git push origin main` will start a new deployment automatically.
+
+5. **Verify:** Push a commit to `main`, then open [Deployments](https://vercel.com/bradley-royes-projects/library-of-things/deployments) — a new deployment should appear within a few seconds.
+
+If the project was created with **Vercel CLI** (e.g. `vercel`) and never linked to GitHub, you must connect the repo in **Settings → Git** as above; otherwise pushes will not trigger builds.
 
 ## 2. Environment variables (Vercel)
 
@@ -107,9 +125,9 @@ Vercel will build and deploy. The site will use the **Supabase** `DATABASE_URL` 
 
 ## Checklist
 
-- [ ] Repo connected to Vercel project **library-of-things**
+- [ ] **Git:** Repo connected in **Settings → Git**, Production Branch = `main` (auto-deploy on push)
 - [ ] **Domains:** add `libraryofthings.vercel.app` (Settings → Domains)
 - [ ] `DATABASE_URL` = Supabase Postgres URI **with port 6543** (Production + Preview in Vercel)
 - [ ] `STEWARD_PASSWORD` set in Vercel (production)
 - [ ] `pnpm db:ensure-schema` run once against Supabase
-- [ ] Push to connected branch (or Redeploy) → live at **https://libraryofthings.vercel.app**
+- [ ] Push to `main` (or Redeploy) → live at **https://libraryofthings.vercel.app**
