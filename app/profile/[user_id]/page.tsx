@@ -21,7 +21,7 @@ import type { User } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,6 +34,7 @@ import { LibraryCard } from "@/components/library-card"
 import { GetLibraryCardModal } from "@/components/get-library-card-modal"
 import { useBootstrapData } from "@/hooks/use-bootstrap-data"
 import { useLibraryCard } from "@/hooks/use-library-card"
+import { getAvatarUrl, getInitials } from "@/lib/avatar"
 
 function getTrustBadge(score: number) {
   if (score >= 90) return { label: "Highly Trusted", className: "bg-accent text-accent-foreground" }
@@ -131,12 +132,6 @@ export default function ProfilePage({
   const userEvents = loanEvents.filter((e) => e.user_id === user.id)
   const isOwnProfile = card?.user_id === user_id
   const displayName = isOwnProfile && card ? card.pseudonym : user.display_name
-  const initials = displayName
-    .split(/(?=[A-Z0-9])/)
-    .slice(0, 2)
-    .map((s) => s[0])
-    .join("")
-    .toUpperCase()
 
   return (
     <div className="py-6 sm:py-8">
@@ -152,8 +147,12 @@ export default function ProfilePage({
         {/* Profile Header */}
         <div className="flex flex-col items-center gap-4 md:flex-row md:items-start">
           <Avatar className="h-20 w-20">
+            <AvatarImage 
+              src={getAvatarUrl(user.id)} 
+              alt={displayName}
+            />
             <AvatarFallback className="bg-primary/10 text-lg font-bold text-primary">
-              {initials}
+              {getInitials(displayName)}
             </AvatarFallback>
           </Avatar>
           <div className="flex-1 text-center md:text-left">

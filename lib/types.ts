@@ -70,7 +70,6 @@ export interface User {
   email?: string
   auth_provider?: "email" | "linkedin" | "twitter" | "library_card"
   real_name?: string
-  profile_picture_url?: string
   trust_score: number
   community_memberships: string[]
   created_at: string

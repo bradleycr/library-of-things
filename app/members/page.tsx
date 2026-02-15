@@ -5,7 +5,7 @@ import Link from "next/link"
 import { ArrowLeft, Users, BookOpen, Clock, ArrowRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import {
   Table,
   TableBody,
@@ -16,15 +16,7 @@ import {
 } from "@/components/ui/table"
 import { useBootstrapData } from "@/hooks/use-bootstrap-data"
 import type { User, LoanEvent } from "@/lib/types"
-
-function getInitials(displayName: string): string {
-  return displayName
-    .split(/(?=[A-Z0-9])/)
-    .slice(0, 2)
-    .map((s) => s[0])
-    .join("")
-    .toUpperCase()
-}
+import { getAvatarUrl, getInitials } from "@/lib/avatar"
 
 export default function MembersPage() {
   const { data } = useBootstrapData()
@@ -109,6 +101,10 @@ export default function MembersPage() {
                           className="flex items-center gap-3 hover:opacity-90"
                         >
                           <Avatar className="h-9 w-9">
+                            <AvatarImage 
+                              src={getAvatarUrl(user.id)} 
+                              alt={user.display_name}
+                            />
                             <AvatarFallback className="bg-primary/10 text-sm font-bold text-primary">
                               {getInitials(user.display_name)}
                             </AvatarFallback>

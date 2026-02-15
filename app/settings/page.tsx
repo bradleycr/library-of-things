@@ -1,14 +1,14 @@
 "use client"
 
 import { useEffect, useState, useRef } from "react"
-import { Upload, Trash2, Save, Loader2, CreditCard, LogIn } from "lucide-react"
+import { Trash2, Save, Loader2, CreditCard, LogIn } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import {
   Dialog,
   DialogContent,
@@ -21,6 +21,7 @@ import { GetLibraryCardModal } from "@/components/get-library-card-modal"
 import { LoginLibraryCardModal } from "@/components/login-library-card-modal"
 import { useBootstrapData } from "@/hooks/use-bootstrap-data"
 import { useLibraryCard } from "@/hooks/use-library-card"
+import { getAvatarUrl, getInitials } from "@/lib/avatar"
 
 export default function SettingsPage() {
   const { data, refetch, loading } = useBootstrapData()
@@ -245,20 +246,21 @@ export default function SettingsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-6">
-              {/* Avatar */}
+              {/* Avatar - deterministic pixel art generated from display name */}
               <div className="flex items-center gap-4">
                 <Avatar className="h-16 w-16">
+                  <AvatarImage 
+                    src={getAvatarUrl(currentUser?.id || "default")} 
+                    alt={displayName}
+                  />
                   <AvatarFallback className="bg-primary/10 text-lg font-bold text-primary">
-                    CR
+                    {getInitials(displayName)}
                   </AvatarFallback>
                 </Avatar>
                 <div>
-                  <Button variant="outline" size="sm" className="gap-2 text-foreground bg-transparent">
-                    <Upload className="h-4 w-4" />
-                    Upload Photo
-                  </Button>
+                  <p className="text-sm font-medium text-foreground">Your pixel art avatar</p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    JPG, PNG. Max 2MB.
+                    Unique design generated from your profile
                   </p>
                 </div>
               </div>
