@@ -33,7 +33,7 @@ export function LibraryCard({ card, className }: LibraryCardProps) {
 
       {/* Brand – top right */}
       <div className="absolute right-4 top-4 text-right">
-        <span className="font-flybrary text-[11px] font-normal tracking-wide text-muted-foreground">
+        <span className="font-lot text-[11px] font-normal tracking-wide text-muted-foreground">
           Library of Things
         </span>
         <span className="block text-[9px] font-medium uppercase tracking-widest text-muted-foreground/80">

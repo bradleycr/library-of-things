@@ -9,11 +9,10 @@ This doc is for maintainers (or anyone deploying their own instance). Use **Supa
 
 ### GitHub repo name
 
-The codebase and docs use **Library of Things** and the repo name **library-of-things**. If the repo is still named `flybrary` on GitHub, rename it so clone URLs and links stay consistent:
+The repo is **library-of-things** on GitHub (`bradleycr/library-of-things`). Clone and remote:
 
-1. On GitHub: **Settings** → **General** → **Repository name** → change to `library-of-things` → **Rename**.
-2. GitHub will redirect old URLs; Vercel will keep deploying from the same repo. Locally, update the remote if needed:  
-   `git remote set-url origin https://github.com/bradleycr/library-of-things.git`
+- **Clone:** `git clone https://github.com/bradleycr/library-of-things.git`
+- **Update existing clone:** `git remote set-url origin https://github.com/bradleycr/library-of-things.git`
 
 ### Auto-sync from GitHub (deploy on every push)
 

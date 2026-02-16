@@ -16,7 +16,7 @@ const libreBaskerville = Libre_Baskerville({
 const dmSerifText = DM_Serif_Text({
   subsets: ["latin"],
   weight: ["400"],
-  variable: "--font-flybrary",
+  variable: "--font-lot",
 })
 const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],

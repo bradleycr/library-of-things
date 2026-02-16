@@ -87,7 +87,7 @@ export function SiteHeader() {
             alt="Internet Archive"
             className="h-7 w-auto opacity-90"
           />
-          <span className="font-flybrary text-xl font-normal tracking-tight text-foreground">
+          <span className="font-lot text-xl font-normal tracking-tight text-foreground">
             Library of Things
           </span>
         </Link>

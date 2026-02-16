@@ -24,7 +24,7 @@ export function SiteFooter() {
         <div className="flex flex-col items-center gap-8 sm:flex-row sm:flex-wrap sm:justify-between sm:gap-6">
           <Link
             href="/"
-            className="font-flybrary text-lg font-normal text-foreground transition-opacity hover:opacity-80"
+            className="font-lot text-lg font-normal text-foreground transition-opacity hover:opacity-80"
           >
             Library of Things
           </Link>

@@ -3,14 +3,16 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import type { LibraryCard } from "@/lib/types"
 
-const STORAGE_KEY = "flybrary_library_card"
+const STORAGE_KEY = "library_of_things_library_card"
+/** One-time migration from old key; read and then remove. */
+const LEGACY_STORAGE_KEY = "flybrary_library_card"
 
 /**
  * Custom event name used to synchronise card state across all
  * `useLibraryCard` instances within the same browser tab.
  * (The native `storage` event only fires in *other* tabs.)
  */
-const SYNC_EVENT = "flybrary-card-sync"
+const SYNC_EVENT = "library-of-things-card-sync"
 
 /** Broadcast card changes so every hook instance stays in lockstep. */
 function broadcastCardChange(card: LibraryCard | null) {
@@ -73,6 +75,7 @@ export function useLibraryCard() {
   const clearCard = useCallback(() => {
     try {
       localStorage.removeItem(STORAGE_KEY)
+      localStorage.removeItem(LEGACY_STORAGE_KEY)
       setCard(null)
       broadcastCardChange(null)
       return true
@@ -98,12 +101,20 @@ export function useLibraryCard() {
     }
   }, [])
 
-  /* ── Initial load + hydration ── */
+  /* ── Initial load + one-time migration + hydration ── */
   useEffect(() => {
     let cancelled = false
     async function load() {
       try {
-        const stored = localStorage.getItem(STORAGE_KEY)
+        let stored = localStorage.getItem(STORAGE_KEY)
+        if (!stored) {
+          const legacy = localStorage.getItem(LEGACY_STORAGE_KEY)
+          if (legacy) {
+            localStorage.setItem(STORAGE_KEY, legacy)
+            localStorage.removeItem(LEGACY_STORAGE_KEY)
+            stored = legacy
+          }
+        }
         if (!stored) {
           setMounted(true)
           return
