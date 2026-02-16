@@ -783,6 +783,68 @@ export function normalizePinForAuth(pin: string): string {
   return digits.slice(-4).padStart(4, "0")
 }
 
+/* ═══════════════════════════════════════════
+ *  Account deletion — anonymise ledger entries,
+ *  return held books, then remove the user.
+ *  Cascade deletes library_cards & trust_events;
+ *  nullifies book references automatically.
+ * ═══════════════════════════════════════════ */
+
+export type DeleteUserResult =
+  | { ok: true }
+  | { ok: false; reason: "not_found" | "steward" | "has_checked_out_books" | "error" }
+
+export async function deleteUserAccount(userId: string): Promise<DeleteUserResult> {
+  const client = await resilientConnect()
+  try {
+    await client.query("begin")
+
+    /* Guard: node stewards must reassign before deleting */
+    const { rows: stewardNodes } = await client.query<{ id: string }>(
+      "SELECT id FROM nodes WHERE steward_id = $1 LIMIT 1",
+      [userId]
+    )
+    if (stewardNodes.length > 0) {
+      await client.query("rollback")
+      return { ok: false, reason: "steward" }
+    }
+
+    /* Return any books the user is currently holding */
+    await client.query(
+      `UPDATE books
+         SET current_holder_id   = NULL,
+             current_holder_name = NULL,
+             availability_status = 'available',
+             expected_return_date = NULL
+       WHERE current_holder_id = $1`,
+      [userId]
+    )
+
+    /* Anonymise the user's ledger history (preserves transparency) */
+    await client.query(
+      `UPDATE loan_events
+         SET user_display_name = '[Deleted]',
+             user_id = NULL
+       WHERE user_id = $1`,
+      [userId]
+    )
+
+    /* Delete user — cascades: library_cards, trust_events; nullifies: books.added_by */
+    const result = await client.query("DELETE FROM users WHERE id = $1", [userId])
+    await client.query("commit")
+
+    const rowCount = typeof result.rowCount === "number" ? result.rowCount : 0
+    if (rowCount === 0) return { ok: false, reason: "not_found" }
+    return { ok: true }
+  } catch (error) {
+    await client.query("rollback")
+    console.error("Failed to delete user account:", error)
+    return { ok: false, reason: "error" }
+  } finally {
+    client.release()
+  }
+}
+
 export async function getLibraryCardByNumberAndPin(
   cardNumber: string,
   pin: string

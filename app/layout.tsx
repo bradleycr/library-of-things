@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from "next"
 import { Inter, Libre_Baskerville, DM_Serif_Text, JetBrains_Mono } from "next/font/google"
 import { SiteHeader } from "@/components/site-header"
 import { SiteFooter } from "@/components/site-footer"
+import { Toaster } from "@/components/ui/toaster"
 
 import "./globals.css"
 
@@ -48,6 +49,7 @@ export default function RootLayout({
           <main className="flex-1">{children}</main>
           <SiteFooter />
         </div>
+        <Toaster />
       </body>
     </html>
   )

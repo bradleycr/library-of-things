@@ -1,7 +1,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Copy, Check } from "lucide-react"
+import Link from "next/link"
+import { Copy, Check, PlusCircle, UserCog, ShieldCheck } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -14,23 +15,42 @@ import { LibraryCard } from "@/components/library-card"
 import { useLibraryCard } from "@/hooks/use-library-card"
 import type { LibraryCard as LibraryCardType } from "@/lib/types"
 
-/** "view" = show current card only; "generate" = show get-new-card flow even if user has a card */
+/** "view" = show current card; "generate" = show get-new-card flow even if user has a card */
 export type GetLibraryCardModalMode = "view" | "generate"
 
 interface GetLibraryCardModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  /** When "view", always show current card. When "generate", show create-new flow (e.g. from Settings). */
+  /** When "view", show the current card. When "generate", show the create-new flow. */
   mode?: GetLibraryCardModalMode
 }
 
+/**
+ * Multi-step library card modal:
+ *   1. Generate  → "Get Your Card" button
+ *   2. Preview   → card + PIN shown, "Save to this device" button
+ *   3. Saved     → confirmation with next-step navigation
+ *   (or) View    → show existing card (no generation flow)
+ */
 export function GetLibraryCardModal({ open, onOpenChange, mode }: GetLibraryCardModalProps) {
   const { card, saveCard } = useLibraryCard()
+
   const [loading, setLoading] = useState(false)
   const [generateError, setGenerateError] = useState<string | null>(null)
   const [newCard, setNewCard] = useState<LibraryCardType | null>(null)
+  const [savedCard, setSavedCard] = useState<LibraryCardType | null>(null)
   const [copied, setCopied] = useState<"number" | "pin" | null>(null)
 
+  /* ── Reset state each time the modal opens in generate mode ── */
+  useEffect(() => {
+    if (open && mode === "generate") {
+      setNewCard(null)
+      setSavedCard(null)
+      setGenerateError(null)
+    }
+  }, [open, mode])
+
+  /* ── Step 1 → 2: Generate a card ── */
   const handleGetCard = async () => {
     setGenerateError(null)
     setLoading(true)
@@ -53,12 +73,12 @@ export function GetLibraryCardModal({ open, onOpenChange, mode }: GetLibraryCard
     }
   }
 
+  /* ── Step 2 → 3: Persist to device, show success screen ── */
   const handleSave = () => {
-    if (newCard) {
-      saveCard(newCard)
-      setNewCard(null)
-      onOpenChange(false)
-    }
+    if (!newCard) return
+    saveCard(newCard)
+    setSavedCard(newCard)
+    setNewCard(null)
   }
 
   const copyToClipboard = async (text: string, type: "number" | "pin") => {
@@ -67,73 +87,99 @@ export function GetLibraryCardModal({ open, onOpenChange, mode }: GetLibraryCard
     setTimeout(() => setCopied(null), 2000)
   }
 
-  // When opening in generate mode, start with a clean form (no leftover newCard from a previous open)
-  useEffect(() => {
-    if (open && mode === "generate") {
-      setNewCard(null)
-      setGenerateError(null)
-    }
-  }, [open, mode])
+  /* ── Determine which view to render ── */
+  const isViewMode = mode !== "generate"
+  const showExistingCard = newCard ?? (isViewMode ? card : null)
 
-  // After generating, show the new card (with Save); in "view" mode show current card; in "generate" with no newCard show form
-  const showExistingCard = newCard ?? (mode !== "generate" ? card : null)
+  /* ── Derived title / description ── */
+  const title = savedCard
+    ? "You're all set!"
+    : mode === "generate" && !newCard
+      ? "Get a library card"
+      : "Your Library Card"
+
+  const description = savedCard
+    ? "Your library card is saved to this device. Write down or screenshot your credentials — they're your only way back in."
+    : showExistingCard
+      ? "Save or screenshot this card and your PIN. You can use them to log in on another device. This device will remember your card until you clear it."
+      : mode === "generate" && card
+        ? "Creating a new card will replace your current card on this device. Use this if you want a new pseudonym."
+        : "Get a pseudonymous library card to browse and borrow. No email or identity required."
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>
-            {mode === "generate" && !newCard ? "Get a library card" : "Your Library Card"}
-          </DialogTitle>
-          <DialogDescription>
-            {showExistingCard
-              ? "Save or screenshot this card and your PIN. You can use them to log in on another device. This device will remember your card until you clear it."
-              : mode === "generate" && card
-                ? "Creating a new card will replace your current card on this device. Use this if you want a new pseudonym."
-                : "Get a pseudonymous library card to browse and borrow. No email or identity required."}
-          </DialogDescription>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
 
-        {showExistingCard ? (
+        {/* ───── Step 3: Card saved — confirmation + next steps ───── */}
+        {savedCard ? (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
+              <ShieldCheck className="h-6 w-6 shrink-0 text-primary" />
+              <p className="text-sm font-medium text-foreground">
+                Card saved to this device
+              </p>
+            </div>
+
+            <div className="flex justify-center">
+              <LibraryCard card={savedCard} />
+            </div>
+
+            <CredentialStrip
+              card={savedCard}
+              copied={copied}
+              onCopy={copyToClipboard}
+            />
+
+            {/* Next-step navigation */}
+            <div className="flex flex-col gap-2 pt-1">
+              <Link href="/add-book" onClick={() => onOpenChange(false)}>
+                <Button variant="default" className="w-full gap-2">
+                  <PlusCircle className="h-4 w-4" />
+                  Add a book
+                </Button>
+              </Link>
+              <Link href="/settings" onClick={() => onOpenChange(false)}>
+                <Button variant="outline" className="w-full gap-2">
+                  <UserCog className="h-4 w-4" />
+                  Set up your profile
+                </Button>
+              </Link>
+              <Button
+                variant="ghost"
+                className="w-full text-muted-foreground"
+                onClick={() => onOpenChange(false)}
+              >
+                Done
+              </Button>
+            </div>
+          </div>
+
+        /* ───── Step 2 / View: Show existing or just-generated card ───── */
+        ) : showExistingCard ? (
           <div className="space-y-4">
             <div className="flex justify-center">
               <LibraryCard card={showExistingCard} />
             </div>
 
-            <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3 text-sm">
-              <p className="text-xs font-medium text-muted-foreground">
-                Save or screenshot — you’ll need card number + PIN to log in on another device:
-              </p>
-              <div className="flex items-center justify-between gap-2">
-                <code className="flex-1 truncate font-mono text-xs">
-                  {showExistingCard.card_number} · PIN: {showExistingCard.pin}
-                </code>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 shrink-0"
-                  onClick={() =>
-                    copyToClipboard(
-                      `${showExistingCard.card_number} PIN: ${showExistingCard.pin}`,
-                      "number"
-                    )
-                  }
-                >
-                  {copied ? (
-                    <Check className="h-4 w-4 text-primary" />
-                  ) : (
-                    <Copy className="h-4 w-4" />
-                  )}
-                </Button>
-              </div>
-            </div>
+            <CredentialStrip
+              card={showExistingCard}
+              copied={copied}
+              onCopy={copyToClipboard}
+            />
 
+            {/* Only show "Save to this device" for freshly generated cards */}
             {newCard && (
               <Button className="w-full" onClick={handleSave}>
                 Save to this device
               </Button>
             )}
           </div>
+
+        /* ───── Step 1: Generate form ───── */
         ) : (
           <div className="space-y-3">
             {mode === "generate" && card && (
@@ -155,5 +201,45 @@ export function GetLibraryCardModal({ open, onOpenChange, mode }: GetLibraryCard
         )}
       </DialogContent>
     </Dialog>
+  )
+}
+
+/* ─────────────────────────────────────────────
+ * Credential strip — card number + PIN display
+ * with a single copy-all button.
+ * ───────────────────────────────────────────── */
+
+function CredentialStrip({
+  card,
+  copied,
+  onCopy,
+}: {
+  card: LibraryCardType
+  copied: "number" | "pin" | null
+  onCopy: (text: string, type: "number" | "pin") => void
+}) {
+  return (
+    <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3 text-sm">
+      <p className="text-xs font-medium text-muted-foreground">
+        Save these credentials — you'll need them to log in on another device:
+      </p>
+      <div className="flex items-center justify-between gap-2">
+        <code className="flex-1 truncate font-mono text-xs">
+          {card.card_number} · PIN: {card.pin}
+        </code>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 shrink-0"
+          onClick={() => onCopy(`${card.card_number} PIN: ${card.pin}`, "number")}
+        >
+          {copied ? (
+            <Check className="h-4 w-4 text-primary" />
+          ) : (
+            <Copy className="h-4 w-4" />
+          )}
+        </Button>
+      </div>
+    </div>
   )
 }

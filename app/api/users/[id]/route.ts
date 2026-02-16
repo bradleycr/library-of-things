@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { updateUserProfile } from "@/lib/server/repositories"
+import { updateUserProfile, deleteUserAccount } from "@/lib/server/repositories"
 
 /** PATCH /api/users/[id] — update profile (display name and/or optional contact info). */
 export async function PATCH(
@@ -86,6 +86,47 @@ export async function PATCH(
     console.error("User update error:", error)
     return NextResponse.json(
       { error: "Failed to update user" },
+      { status: 500 }
+    )
+  }
+}
+
+/**
+ * DELETE /api/users/[id] — permanently delete an account.
+ *
+ * Anonymises ledger history, returns held books, then removes
+ * the user and all associated data (library cards, trust events).
+ */
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+    const result = await deleteUserAccount(id)
+
+    if (!result.ok) {
+      const messages: Record<string, { msg: string; status: number }> = {
+        not_found: { msg: "User not found.", status: 404 },
+        steward: {
+          msg: "You are currently a steward of one or more book nodes. Please reassign stewardship before deleting your account.",
+          status: 409,
+        },
+        has_checked_out_books: {
+          msg: "Please return all checked-out books before deleting your account.",
+          status: 409,
+        },
+        error: { msg: "Failed to delete account. Please try again.", status: 500 },
+      }
+      const { msg, status } = messages[result.reason] ?? messages.error
+      return NextResponse.json({ error: msg }, { status })
+    }
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error("User delete error:", error)
+    return NextResponse.json(
+      { error: "Failed to delete account" },
       { status: 500 }
     )
   }

@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, useRef } from "react"
+import { useRouter } from "next/navigation"
 import { Trash2, Save, Loader2, CreditCard, LogIn } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -21,30 +22,49 @@ import { GetLibraryCardModal } from "@/components/get-library-card-modal"
 import { LoginLibraryCardModal } from "@/components/login-library-card-modal"
 import { useBootstrapData } from "@/hooks/use-bootstrap-data"
 import { useLibraryCard } from "@/hooks/use-library-card"
+import { useToast } from "@/hooks/use-toast"
 import { getAvatarUrl, getInitials } from "@/lib/avatar"
 
 export default function SettingsPage() {
+  const router = useRouter()
+  const { toast } = useToast()
   const { data, refetch, loading } = useBootstrapData()
-  const { card, updatePseudonym } = useLibraryCard()
+  const { card, updatePseudonym, clearCard } = useLibraryCard()
+
   const users = data?.users ?? []
   const currentUser = card?.user_id ? users.find((u) => u.id === card.user_id) ?? null : null
   const refetchOnMissingUser = useRef(false)
+
+  /* ── Modal toggles ── */
   const [getCardModalOpen, setGetCardModalOpen] = useState(false)
   const [loginModalOpen, setLoginModalOpen] = useState(false)
+
+  /* ── Profile fields ── */
   const [displayName, setDisplayName] = useState("")
-  const [saving, setSaving] = useState(false)
-  const [saveError, setSaveError] = useState<string | null>(null)
-  const [publicProfile, setPublicProfile] = useState(true)
+  const [savingProfile, setSavingProfile] = useState(false)
+
+  /* ── Contact fields ── */
   const [contactOptIn, setContactOptIn] = useState(true)
   const [contactEmail, setContactEmail] = useState("")
   const [phone, setPhone] = useState("")
   const [twitterUrl, setTwitterUrl] = useState("")
   const [linkedinUrl, setLinkedinUrl] = useState("")
   const [websiteUrl, setWebsiteUrl] = useState("")
+  const [savingContact, setSavingContact] = useState(false)
+
+  /* ── Notification preferences (UI-only for now) ── */
   const [emailReminders, setEmailReminders] = useState(true)
   const [emailAvailability, setEmailAvailability] = useState(true)
   const [emailNewsletter, setEmailNewsletter] = useState(false)
 
+  /* ── Privacy (UI-only for now) ── */
+  const [publicProfile, setPublicProfile] = useState(true)
+
+  /* ── Delete account ── */
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  /* ── Populate fields from current user ── */
   useEffect(() => {
     if (currentUser) {
       setDisplayName(currentUser.display_name)
@@ -57,7 +77,7 @@ export default function SettingsPage() {
     }
   }, [currentUser])
 
-  // When we have a card but user not in bootstrap (e.g. just created or logged in), refetch once per card
+  /* ── If card exists but user isn't in bootstrap yet, refetch once ── */
   useEffect(() => {
     if (!card?.user_id) {
       refetchOnMissingUser.current = false
@@ -69,10 +89,13 @@ export default function SettingsPage() {
     refetch()
   }, [card?.user_id, currentUser, refetch])
 
+  /* ════════════════════
+   *  Save handlers
+   * ════════════════════ */
+
   const handleSaveProfile = async () => {
     if (!currentUser) return
-    setSaving(true)
-    setSaveError(null)
+    setSavingProfile(true)
     try {
       const res = await fetch(`/api/users/${currentUser.id}`, {
         method: "PATCH",
@@ -88,22 +111,24 @@ export default function SettingsPage() {
         }),
       })
       const json = await res.json()
-      if (!res.ok) {
-        throw new Error(json.error ?? "Failed to save")
-      }
+      if (!res.ok) throw new Error(json.error ?? "Failed to save")
       updatePseudonym(displayName.trim())
       await refetch()
+      toast({ title: "Profile updated", description: "Your display name has been saved." })
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : "Failed to save profile")
+      toast({
+        variant: "destructive",
+        title: "Could not save profile",
+        description: err instanceof Error ? err.message : "Something went wrong. Please try again.",
+      })
     } finally {
-      setSaving(false)
+      setSavingProfile(false)
     }
   }
 
   const handleSaveContact = async () => {
     if (!currentUser) return
-    setSaving(true)
-    setSaveError(null)
+    setSavingContact(true)
     try {
       const res = await fetch(`/api/users/${currentUser.id}`, {
         method: "PATCH",
@@ -118,18 +143,50 @@ export default function SettingsPage() {
         }),
       })
       const json = await res.json()
-      if (!res.ok) {
-        throw new Error(json.error ?? "Failed to save contact info")
-      }
+      if (!res.ok) throw new Error(json.error ?? "Failed to save contact info")
       await refetch()
+      toast({ title: "Contact info saved", description: "Your contact information has been updated." })
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : "Failed to save contact info")
+      toast({
+        variant: "destructive",
+        title: "Could not save contact info",
+        description: err instanceof Error ? err.message : "Something went wrong. Please try again.",
+      })
     } finally {
-      setSaving(false)
+      setSavingContact(false)
     }
   }
 
-  // No card at all: show sign-in / get card gate. If they have a card (even without user_id), we treat them as signed in and show Settings below.
+  /* ════════════════════
+   *  Delete account
+   * ════════════════════ */
+
+  const handleDeleteAccount = async () => {
+    if (!currentUser) return
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/users/${currentUser.id}`, { method: "DELETE" })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? "Failed to delete account")
+
+      clearCard()
+      setDeleteDialogOpen(false)
+      toast({ title: "Account deleted", description: "Your account and personal data have been removed." })
+      router.push("/")
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Could not delete account",
+        description: err instanceof Error ? err.message : "Something went wrong. Please try again.",
+      })
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  /* ════════════════════
+   *  Gate: no card at all
+   * ════════════════════ */
   if (!card) {
     return (
       <div className="py-6 sm:py-8"><div className="page-container">
@@ -174,7 +231,9 @@ export default function SettingsPage() {
     )
   }
 
-  // Card has user_id but user not in bootstrap yet (e.g. just created): refetch once
+  /* ════════════════════
+   *  Gate: card but user not in bootstrap yet
+   * ════════════════════ */
   if (card.user_id && !currentUser) {
     return (
       <div className="py-6 sm:py-8"><div className="page-container">
@@ -191,7 +250,9 @@ export default function SettingsPage() {
     )
   }
 
-  // Card on device but not linked (no user_id): show Settings with banner — enter PIN to link and unlock full profile + checkout
+  /* ════════════════════
+   *  Gate: card on device but not linked
+   * ════════════════════ */
   if (card && !card.user_id) {
     return (
       <div className="py-6 sm:py-8"><div className="page-container">
@@ -199,7 +260,7 @@ export default function SettingsPage() {
           <div className="mb-6 rounded-lg border border-primary/30 bg-primary/5 p-4">
             <h2 className="font-medium text-foreground">Your card is on this device</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              You’re signed in as <strong>{card.pseudonym}</strong>. Enter your PIN below to link your card and unlock profile settings, checkout, and adding books.
+              You're signed in as <strong>{card.pseudonym}</strong>. Enter your PIN below to link your card and unlock profile settings, checkout, and adding books.
             </p>
             <div className="mt-4 flex flex-wrap items-center gap-3">
               <Button
@@ -226,6 +287,9 @@ export default function SettingsPage() {
     )
   }
 
+  /* ════════════════════
+   *  Main settings view
+   * ════════════════════ */
   return (
     <div className="py-6 sm:py-8"><div className="page-container">
       <div className="mx-auto max-w-2xl">
@@ -239,7 +303,8 @@ export default function SettingsPage() {
         </div>
 
         <div className="flex flex-col gap-6">
-          {/* Profile */}
+
+          {/* ─── Profile ─── */}
           <Card className="border-border">
             <CardHeader>
               <CardTitle className="text-card-foreground">Profile</CardTitle>
@@ -248,7 +313,6 @@ export default function SettingsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-6">
-              {/* Avatar - deterministic pixel art generated from display name */}
               <div className="flex items-center gap-4">
                 <Avatar className="h-16 w-16">
                   <AvatarImage 
@@ -270,7 +334,6 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              {/* Display Name */}
               <div>
                 <Label htmlFor="display-name">Display Name</Label>
                 <Input
@@ -284,15 +347,12 @@ export default function SettingsPage() {
                 </p>
               </div>
 
-              {saveError && (
-                <p className="text-sm text-destructive">{saveError}</p>
-              )}
               <Button
                 className="w-fit gap-2"
                 onClick={handleSaveProfile}
-                disabled={saving}
+                disabled={savingProfile}
               >
-                {saving ? (
+                {savingProfile ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <Save className="h-4 w-4" />
@@ -302,7 +362,7 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
-          {/* Contact — optional email, phone, social links; shown on profile when contact_opt_in */}
+          {/* ─── Contact ─── */}
           <Card className="border-border">
             <CardHeader>
               <CardTitle className="text-card-foreground">Contact</CardTitle>
@@ -386,9 +446,9 @@ export default function SettingsPage() {
               <Button
                 className="w-fit gap-2"
                 onClick={handleSaveContact}
-                disabled={saving}
+                disabled={savingContact}
               >
-                {saving ? (
+                {savingContact ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <Save className="h-4 w-4" />
@@ -398,7 +458,7 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
-          {/* Notifications */}
+          {/* ─── Notifications ─── */}
           <Card className="border-border">
             <CardHeader>
               <CardTitle className="text-card-foreground">
@@ -456,7 +516,7 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
-          {/* Privacy */}
+          {/* ─── Privacy ─── */}
           <Card className="border-border">
             <CardHeader>
               <CardTitle className="text-card-foreground">Privacy</CardTitle>
@@ -482,7 +542,7 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
-          {/* Danger Zone */}
+          {/* ─── Danger Zone ─── */}
           <Card className="border-destructive/30">
             <CardHeader>
               <CardTitle className="text-destructive">Danger Zone</CardTitle>
@@ -491,7 +551,7 @@ export default function SettingsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Dialog>
+              <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
                 <DialogTrigger asChild>
                   <Button variant="destructive" className="gap-2">
                     <Trash2 className="h-4 w-4" />
@@ -511,10 +571,26 @@ export default function SettingsPage() {
                     </DialogDescription>
                   </DialogHeader>
                   <div className="mt-4 flex justify-end gap-3">
-                    <Button variant="outline" className="text-foreground bg-transparent">Cancel</Button>
-                    <Button variant="destructive" className="gap-2">
-                      <Trash2 className="h-4 w-4" />
-                      Delete Account
+                    <Button
+                      variant="outline"
+                      className="text-foreground bg-transparent"
+                      onClick={() => setDeleteDialogOpen(false)}
+                      disabled={deleting}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      className="gap-2"
+                      onClick={handleDeleteAccount}
+                      disabled={deleting}
+                    >
+                      {deleting ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                      {deleting ? "Deleting…" : "Delete Account"}
                     </Button>
                   </div>
                 </DialogContent>

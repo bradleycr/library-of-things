@@ -143,7 +143,7 @@ async function main() {
         event_type text not null check (event_type in ('added','checkout','return','transfer','report_lost','report_damaged')),
         book_id text not null references books(id) on delete cascade,
         book_title text,
-        user_id text not null references users(id) on delete restrict,
+        user_id text references users(id) on delete set null,
         user_display_name text,
         timestamp timestamptz not null default now(),
         location_lat double precision,
@@ -161,6 +161,29 @@ async function main() {
       alter table loan_events drop constraint if exists loan_events_event_type_check;
       alter table loan_events add constraint loan_events_event_type_check
         check (event_type in ('added','checkout','return','transfer','report_lost','report_damaged'));
+    `)
+
+    // Migration: make loan_events.user_id nullable + change FK from RESTRICT to SET NULL.
+    // This allows account deletion while preserving anonymised ledger entries.
+    await client.query(`
+      DO $$
+      BEGIN
+        -- Make user_id nullable (no-op if already nullable)
+        ALTER TABLE loan_events ALTER COLUMN user_id DROP NOT NULL;
+
+        -- Swap RESTRICT → SET NULL so user deletion doesn't block
+        IF EXISTS (
+          SELECT 1 FROM information_schema.table_constraints
+           WHERE constraint_name = 'loan_events_user_id_fkey'
+             AND table_name = 'loan_events'
+             AND table_schema = 'public'
+        ) THEN
+          ALTER TABLE loan_events DROP CONSTRAINT loan_events_user_id_fkey;
+          ALTER TABLE loan_events
+            ADD CONSTRAINT loan_events_user_id_fkey
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL;
+        END IF;
+      END $$;
     `)
 
     await client.query(`
