@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { BookCover } from "@/components/book-cover"
 import { getBookCoverUrl } from "@/lib/book-cover-generator"
+import { formatLocationForDisplay } from "@/lib/format-location"
 import type { Book } from "@/lib/types"
 
 const statusConfig = {
@@ -53,7 +54,9 @@ export function BookCard({ book }: { book: Book }) {
               ) : (
                 <Building2 className="h-3 w-3 shrink-0" />
               )}
-              <span className="line-clamp-1">{book.current_location_text}</span>
+              <span className="line-clamp-1">
+                {formatLocationForDisplay(book.current_location_text)}
+              </span>
             </div>
           )}
         </CardContent>

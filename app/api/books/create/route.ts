@@ -9,6 +9,7 @@ export async function POST(request: NextRequest) {
     title,
     author,
     edition,
+    description,
     node_id,
     cover_image_url,
     lending_terms,
@@ -22,6 +23,7 @@ export async function POST(request: NextRequest) {
     title: string
     author?: string
     edition?: string
+    description?: string
     node_id?: string
     cover_image_url?: string
     lending_terms?: Record<string, unknown>
@@ -101,6 +103,7 @@ export async function POST(request: NextRequest) {
     title: trimmedTitle,
     author: typeof author === "string" ? author.trim().slice(0, 500) || undefined : undefined,
     edition: typeof edition === "string" ? edition.trim().slice(0, 200) || undefined : undefined,
+    description: typeof description === "string" ? description.trim().slice(0, 3000) || undefined : undefined,
     nodeId: node_id,
     lendingTerms: mergedTerms,
     coverImageUrl: typeof cover_image_url === "string" ? cover_image_url.trim().slice(0, 2048) || undefined : undefined,

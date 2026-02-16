@@ -30,6 +30,7 @@ export async function PATCH(
     author,
     edition,
     isbn,
+    description,
     cover_image_url,
     node_id,
     lending_terms,
@@ -38,6 +39,7 @@ export async function PATCH(
     author?: string | null
     edition?: string | null
     isbn?: string | null
+    description?: string | null
     cover_image_url?: string | null
     node_id?: string
     lending_terms?: Record<string, unknown>
@@ -72,6 +74,10 @@ export async function PATCH(
         isbn === undefined
           ? undefined
           : (typeof isbn === "string" ? isbn : null),
+      description:
+        description === undefined
+          ? undefined
+          : (typeof description === "string" ? description : null),
       cover_image_url:
         cover_image_url === undefined
           ? undefined

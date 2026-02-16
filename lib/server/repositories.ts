@@ -1,7 +1,11 @@
 import "server-only"
 
 import type { Book, LoanEvent, Node, User } from "@/lib/types"
-import { db } from "@/lib/server/db"
+import { resilientQuery, resilientConnect } from "@/lib/server/db"
+
+/* ─── Row ↔ domain mappers ───
+ * Postgres returns Date objects; the rest of the app expects ISO strings.
+ */
 
 type DbBook = Omit<Book, "created_at" | "expected_return_date"> & {
   created_at: string | Date
@@ -58,9 +62,14 @@ function mapUser(row: DbUser): User {
   }
 }
 
+/* ═══════════════════════════════════════════
+ *  Read queries — all use resilientQuery for
+ *  automatic retry on transient failures.
+ * ═══════════════════════════════════════════ */
+
 /** Lists all books; throws if DB is unavailable (so we don't show "0 in catalog" when env is wrong). */
 export async function listBooks() {
-  const { rows } = await db.query<DbBook>(
+  const { rows } = await resilientQuery<DbBook>(
     "select * from books order by created_at desc, id asc"
   )
   return rows.map(mapBook)
@@ -68,13 +77,13 @@ export async function listBooks() {
 
 /** Lists all nodes; throws if DB is unavailable. */
 export async function listNodes() {
-  const { rows } = await db.query<DbNode>("select * from nodes order by name asc")
+  const { rows } = await resilientQuery<DbNode>("select * from nodes order by name asc")
   return rows.map(mapNode)
 }
 
 /** Lists all users; throws if DB is unavailable. */
 export async function listUsers() {
-  const { rows } = await db.query<DbUser>(
+  const { rows } = await resilientQuery<DbUser>(
     "select * from public.users order by created_at asc, id asc"
   )
   return rows.map(mapUser)
@@ -82,14 +91,14 @@ export async function listUsers() {
 
 /** Lists all loan events; throws if DB is unavailable. */
 export async function listLoanEvents() {
-  const { rows } = await db.query<DbLoanEvent>(
+  const { rows } = await resilientQuery<DbLoanEvent>(
     "select * from loan_events order by timestamp desc, id asc"
   )
   return rows.map(mapLoanEvent)
 }
 
 export async function getBookById(id: string) {
-  const { rows } = await db.query<DbBook>("select * from books where id = $1", [id])
+  const { rows } = await resilientQuery<DbBook>("select * from books where id = $1", [id])
   return rows[0] ? mapBook(rows[0]) : null
 }
 
@@ -103,12 +112,13 @@ export async function updateBook(
     author?: string | null
     edition?: string | null
     isbn?: string | null
+    description?: string | null
     cover_image_url?: string | null
     node_id?: string
     lending_terms?: Book["lending_terms"]
   }
 ): Promise<Book | null> {
-  const client = await db.connect()
+  const client = await resilientConnect()
   try {
     const { rows: existing } = await client.query<DbBook>(
       "select * from books where id = $1",
@@ -139,6 +149,8 @@ export async function updateBook(
     const edition =
       input.edition !== undefined ? input.edition : existing[0].edition
     const isbn = input.isbn !== undefined ? input.isbn : existing[0].isbn
+    const description =
+      input.description !== undefined ? input.description : existing[0].description
     const cover_image_url =
       input.cover_image_url !== undefined
         ? input.cover_image_url
@@ -162,11 +174,12 @@ export async function updateBook(
         author = $3,
         edition = $4,
         isbn = $5,
-        cover_image_url = $6,
-        current_node_id = $7,
-        current_node_name = $8,
-        current_location_text = $9,
-        lending_terms = $10::jsonb
+        description = $6,
+        cover_image_url = $7,
+        current_node_id = $8,
+        current_node_name = $9,
+        current_location_text = $10,
+        lending_terms = $11::jsonb
        where id = $1`,
       [
         bookId,
@@ -174,6 +187,7 @@ export async function updateBook(
         author ?? null,
         edition ?? null,
         isbn ?? null,
+        description?.trim() || null,
         cover_image_url?.trim() || null,
         current_node_id ?? null,
         current_node_name ?? null,
@@ -196,7 +210,7 @@ export async function updateBook(
 }
 
 export async function getUserById(id: string) {
-  const { rows } = await db.query<DbUser>("select * from public.users where id = $1", [id])
+  const { rows } = await resilientQuery<DbUser>("select * from public.users where id = $1", [id])
   return rows[0] ? mapUser(rows[0]) : null
 }
 
@@ -207,7 +221,7 @@ export async function updateUserDisplayName(
   const trimmed = displayName.trim()
   if (!trimmed.length) return false
   try {
-    await db.query(
+    await resilientQuery(
       "update users set display_name = $1 where id = $2",
       [trimmed, userId]
     )
@@ -302,7 +316,7 @@ export async function updateUserProfile(
   values.push(userId)
   const sql = `update users set ${setParts.join(", ")} where id = $${idx}`
   try {
-    const result = await db.query(sql, values)
+    const result = await resilientQuery(sql, values)
     const rowCount = typeof result.rowCount === "number" ? result.rowCount : 0
     if (rowCount === 0) return { ok: false, reason: "not_found" }
     return { ok: true }
@@ -320,7 +334,7 @@ export async function updateUserProfile(
 }
 
 export async function getBookEvents(bookId: string) {
-  const { rows } = await db.query<DbLoanEvent>(
+  const { rows } = await resilientQuery<DbLoanEvent>(
     "select * from loan_events where book_id = $1 order by timestamp desc",
     [bookId]
   )
@@ -328,7 +342,7 @@ export async function getBookEvents(bookId: string) {
 }
 
 export async function getUserEvents(userId: string) {
-  const { rows } = await db.query<DbLoanEvent>(
+  const { rows } = await resilientQuery<DbLoanEvent>(
     "select * from loan_events where user_id = $1 order by timestamp desc",
     [userId]
   )
@@ -369,12 +383,18 @@ export async function searchBooks(params: {
 
   const where = clauses.length > 0 ? `where ${clauses.join(" and ")}` : ""
   const sql = `select * from books ${where} order by created_at desc, id asc`
-  const { rows } = await db.query<DbBook>(sql, values)
+  const { rows } = await resilientQuery<DbBook>(sql, values)
   return rows.map(mapBook)
 }
 
+/* ═══════════════════════════════════════════
+ *  Write operations — transactions use
+ *  resilientConnect for the initial handshake,
+ *  then raw client queries inside the txn.
+ * ═══════════════════════════════════════════ */
+
 export async function checkoutBook(params: { bookId: string; userId: string }) {
-  const client = await db.connect()
+  const client = await resilientConnect()
   try {
     await client.query("begin")
     const { rows: books } = await client.query<DbBook>(
@@ -434,7 +454,7 @@ export async function returnBook(params: {
   returnNodeId?: string
   notes?: string
 }) {
-  const client = await db.connect()
+  const client = await resilientConnect()
   try {
     await client.query("begin")
     const { rows: books } = await client.query<DbBook>(
@@ -512,6 +532,8 @@ export async function createBook(input: {
   title: string
   author?: string
   edition?: string
+  /** Optional short description (e.g. from Open Library). */
+  description?: string | null
   /** For node-based books, the node ID. For Pocket Library books, this should be undefined/null. */
   nodeId?: string
   lendingTerms: Book["lending_terms"]
@@ -531,7 +553,7 @@ export async function createBook(input: {
   const checkoutToken = Buffer.from(`${id}-${Date.now()}`, "utf8").toString("base64url")
   const checkoutUrl = `/book/${id}/checkout?token=${checkoutToken}`
 
-  const client = await db.connect()
+  const client = await resilientConnect()
   try {
     await client.query("begin")
 
@@ -540,7 +562,6 @@ export async function createBook(input: {
     let locationText: string | null = input.currentLocationText ?? null
     let addedByUserId = input.addedByUserId ?? null
 
-    // For node-based books, fetch node details
     if (nodeId) {
       const { rows: nodes } = await client.query<DbNode>(
         "select * from nodes where id = $1",
@@ -550,32 +571,30 @@ export async function createBook(input: {
       if (!node) throw new Error("Node not found")
       nodeName = node.name
       locationText = node.location_address ?? node.name
-      // If no user specified, attribute to node steward
       if (!addedByUserId) addedByUserId = node.steward_id
     } else if (!input.isPocketLibrary) {
-      // If no node and not explicitly marked as pocket library, this is an error
       throw new Error("Either nodeId must be provided or isPocketLibrary must be true")
     }
 
-    // For Pocket Library books, require owner contact email
     if (input.isPocketLibrary && !input.ownerContactEmail) {
       throw new Error("Pocket Library books require an owner contact email")
     }
 
     await client.query(
       `insert into books
-        (id, isbn, title, author, edition, qr_tag_id, checkout_url, cover_image_url, 
+        (id, isbn, title, author, edition, description, qr_tag_id, checkout_url, cover_image_url, 
          current_node_id, current_node_name, current_location_text, 
          availability_status, lending_terms, added_by_user_id, added_by_display_name, 
          owner_contact_email, is_pocket_library, created_at)
        values
-        ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'available', $12::jsonb, $13, $14, $15, $16, now())`,
+        ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'available', $13::jsonb, $14, $15, $16, $17, now())`,
       [
         id,
         input.isbn ?? null,
         input.title,
         input.author ?? null,
         input.edition ?? null,
+        input.description?.trim() || null,
         qrTagId,
         checkoutUrl,
         input.coverImageUrl?.trim() || null,
@@ -590,7 +609,6 @@ export async function createBook(input: {
       ]
     )
 
-    // Ledger: record "added" so every new book appears in the sharing history
     const { rows: userRows } = await client.query<DbUser>(
       "select display_name from users where id = $1",
       [addedByUserId]
@@ -627,7 +645,9 @@ export async function createBook(input: {
   }
 }
 
-// --- Library cards (create user + card; login by card + PIN) ---
+/* ═══════════════════════════════════════════
+ *  Library cards (create user + card; login)
+ * ═══════════════════════════════════════════ */
 
 export function hashPin(pin: string): string {
   const { createHash } = require("crypto")
@@ -636,7 +656,7 @@ export function hashPin(pin: string): string {
 
 export async function createUserForLibraryCard(pseudonym: string): Promise<User> {
   const id = crypto.randomUUID()
-  await db.query(
+  await resilientQuery(
     `insert into public.users (id, display_name, auth_provider, trust_score, community_memberships, created_at)
      values ($1, $2, 'library_card', 50, '{}', now())`,
     [id, pseudonym]
@@ -658,7 +678,7 @@ export async function createLibraryCard(params: {
   pseudonym: string
 }): Promise<{ id: string }> {
   const id = crypto.randomUUID()
-  await db.query(
+  await resilientQuery(
     `insert into public.library_cards (id, card_number, pin_hash, user_id, pseudonym, created_at)
      values ($1, $2, $3, $4, $5, now())`,
     [
@@ -686,7 +706,7 @@ export async function getLibraryCardByNumberAndPin(
   if (!normalizedCard) return null
   const normalizedPin = normalizePinForAuth(pin)
   const pinHash = hashPin(normalizedPin)
-  const { rows } = await db.query<{
+  const { rows } = await resilientQuery<{
     id: string
     card_number: string
     pseudonym: string

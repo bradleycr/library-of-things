@@ -23,6 +23,8 @@ export interface Book {
   qr_tag_id: string
   checkout_url: string // URL for QR/NFC tag: /book/{uuid}/checkout?token={secret}
   cover_image_url?: string
+  /** Short description (e.g. from Open Library); optional, for display on book page. */
+  description?: string
   current_holder_id?: string
   current_holder_name?: string
   current_location_lat?: number

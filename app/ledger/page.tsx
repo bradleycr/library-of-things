@@ -21,6 +21,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Card, CardContent } from "@/components/ui/card"
+import { formatLocationForDisplay } from "@/lib/format-location"
 import { useBootstrapData } from "@/hooks/use-bootstrap-data"
 
 const eventTypeStyles: Record<string, string> = {
@@ -272,7 +273,9 @@ export default function LedgerPage() {
                         </Link>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {event.location_text}
+                        {event.location_text
+                          ? formatLocationForDisplay(event.location_text)
+                          : "—"}
                       </TableCell>
                       <TableCell className="max-w-[200px] truncate text-sm text-muted-foreground">
                         {event.notes || "—"}

@@ -18,6 +18,7 @@ import {
 import { BookCard } from "@/components/book-card"
 import { BookCover } from "@/components/book-cover"
 import { getBookCoverUrl } from "@/lib/book-cover-generator"
+import { formatLocationForDisplay } from "@/lib/format-location"
 import { useBootstrapData } from "@/hooks/use-bootstrap-data"
 
 export default function ExplorePage() {
@@ -304,7 +305,7 @@ export default function ExplorePage() {
                   )}
                   {book.current_location_text && (
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {book.current_location_text}
+                      {formatLocationForDisplay(book.current_location_text)}
                     </p>
                   )}
                 </div>

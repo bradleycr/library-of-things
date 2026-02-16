@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/table"
 import { BookCover } from "@/components/book-cover"
 import { getBookCoverUrl } from "@/lib/book-cover-generator"
+import { formatLocationForDisplay } from "@/lib/format-location"
 import { useBootstrapData } from "@/hooks/use-bootstrap-data"
 
 function formatDate(dateStr: string) {
@@ -65,9 +66,22 @@ export default function BookDetailPage({
 }) {
   const { data, loading } = useBootstrapData()
   const books = data?.books ?? []
+  const nodes = data?.nodes ?? []
   const loanEvents = data?.loanEvents ?? []
   const { uuid } = use(params)
   const book = books.find((b) => b.id === uuid)
+  const node = book?.current_node_id ? nodes.find((n) => n.id === book.current_node_id) : null
+  // Directions: node books → node address/coords (correct place); pocket → owner's entered location.
+  const directionsHref =
+    node != null
+      ? node.location_lat != null && node.location_lng != null
+        ? `https://www.google.com/maps/search/?api=1&query=${node.location_lat},${node.location_lng}`
+        : node.location_address
+          ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(node.location_address)}`
+          : null
+      : book?.current_location_text
+        ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(formatLocationForDisplay(book.current_location_text))}`
+        : null
   const bookEvents = loanEvents
     .filter((e) => e.book_id === uuid)
     .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
@@ -158,6 +172,13 @@ export default function BookDetailPage({
               {book.isbn && <span>ISBN: {book.isbn}</span>}
             </div>
 
+            {/* Description (e.g. from Open Library); only when present */}
+            {book.description?.trim() && (
+              <p className="mt-4 text-sm text-muted-foreground leading-relaxed">
+                {book.description.trim()}
+              </p>
+            )}
+
             {/* Added by — who contributed this book to the library */}
             {(book.added_by_user_id || book.added_by_display_name) && (
               <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
@@ -186,7 +207,7 @@ export default function BookDetailPage({
                 ) : (
                   <Building2 className="h-4 w-4 text-primary" />
                 )}
-                <span>{book.current_location_text}</span>
+                <span>{formatLocationForDisplay(book.current_location_text)}</span>
               </div>
             )}
 
@@ -222,16 +243,24 @@ export default function BookDetailPage({
                         using the email above to arrange pickup. When you meet, scan the NFC or QR
                         code on the book to check it out.
                       </p>
-                      {book.owner_contact_email && (
-                        <div className="mt-4 flex flex-wrap gap-3">
+                      <div className="mt-4 flex flex-wrap gap-3">
+                        {book.owner_contact_email && (
                           <Button variant="outline" className="gap-2" asChild>
                             <a href={`mailto:${book.owner_contact_email}?subject=Borrowing "${book.title}" from Pocket Library`}>
                               <Mail className="h-4 w-4" />
                               Contact Owner
                             </a>
                           </Button>
-                        </div>
-                      )}
+                        )}
+                        {directionsHref && (
+                          <Button variant="outline" className="gap-2" asChild>
+                            <a href={directionsHref} target="_blank" rel="noopener noreferrer">
+                              <MapPin className="h-4 w-4" />
+                              Get Directions
+                            </a>
+                          </Button>
+                        )}
+                      </div>
                     </>
                   ) : (
                     <>
@@ -240,17 +269,16 @@ export default function BookDetailPage({
                         book to check it out. This is a trust-based system - no web checkout
                         required!
                       </p>
-                      <div className="mt-4 flex flex-wrap gap-3">
-                        <Button variant="outline" className="gap-2" asChild>
-                          <Link
-                            href={`https://www.google.com/maps/search/${encodeURIComponent(book.current_location_text || "")}`}
-                            target="_blank"
-                          >
-                            <MapPin className="h-4 w-4" />
-                            Get Directions
-                          </Link>
-                        </Button>
-                      </div>
+                      {directionsHref && (
+                        <div className="mt-4 flex flex-wrap gap-3">
+                          <Button variant="outline" className="gap-2" asChild>
+                            <a href={directionsHref} target="_blank" rel="noopener noreferrer">
+                              <MapPin className="h-4 w-4" />
+                              Get Directions
+                            </a>
+                          </Button>
+                        </div>
+                      )}
                     </>
                   )}
                 </CardContent>
@@ -378,7 +406,9 @@ export default function BookDetailPage({
                           </Link>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
-                          {event.location_text}
+                          {event.location_text
+                            ? formatLocationForDisplay(event.location_text)
+                            : "—"}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {event.notes || "—"}

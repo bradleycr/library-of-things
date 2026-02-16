@@ -51,15 +51,15 @@ const users = [
   },
 ]
 
-// Foresight Flybrary locations only: Berlin (CIC) and SF (The Fold). No cafe or other nodes.
+// Foresight nodes: Berlin (CIC) and SF (The Fold).
 const nodes = [
   {
     id: "n1",
-    name: "Foresight Berlin Flybrary",
+    name: "Foresight Berlin Node",
     type: "coworking",
-    location_lat: 52.4977,
-    location_lng: 13.4478,
-    location_address: "Lohmühlenstraße 65, 12435 Berlin · +49 176 22525121",
+    location_lat: 52.4940361,
+    location_lng: 13.4462696,
+    location_address: "Lohmühlenstraße 65, 12435 Berlin, Germany",
     steward_id: "u1",
     public: true,
     capacity: 120,
@@ -68,7 +68,7 @@ const nodes = [
   },
   {
     id: "n2",
-    name: "Foresight SF Flybrary",
+    name: "Foresight SF Node",
     type: "coworking",
     location_lat: 37.7506,
     location_lng: -122.4144,
@@ -114,9 +114,9 @@ const books = [
     current_holder_name: null,
     current_location_lat: null,
     current_location_lng: null,
-    current_location_text: "Foresight Berlin Flybrary, Shelf A",
+    current_location_text: "Foresight Berlin Node",
     current_node_id: "n1",
-    current_node_name: "Foresight Berlin Flybrary",
+    current_node_name: "Foresight Berlin Node",
     availability_status: "available",
     lending_terms: defaultTerms,
     created_at: "2024-06-01T12:00:00Z",
@@ -137,7 +137,7 @@ const books = [
     current_location_lng: null,
     current_location_text: "With WanderingOwl42",
     current_node_id: "n1",
-    current_node_name: "Foresight Berlin Flybrary",
+    current_node_name: "Foresight Berlin Node",
     availability_status: "checked_out",
     lending_terms: defaultTerms,
     created_at: "2024-06-01T12:00:00Z",
@@ -156,9 +156,9 @@ const books = [
     current_holder_name: null,
     current_location_lat: null,
     current_location_lng: null,
-    current_location_text: "Foresight Berlin Flybrary, Shelf B",
+    current_location_text: "Foresight Berlin Node",
     current_node_id: "n1",
-    current_node_name: "Foresight Berlin Flybrary",
+    current_node_name: "Foresight Berlin Node",
     availability_status: "available",
     lending_terms: defaultTerms,
     created_at: "2024-06-01T12:00:00Z",
@@ -177,9 +177,9 @@ const books = [
     current_holder_name: null,
     current_location_lat: null,
     current_location_lng: null,
-    current_location_text: "Foresight SF Flybrary, Shelf A",
+    current_location_text: "Foresight SF Node",
     current_node_id: "n2",
-    current_node_name: "Foresight SF Flybrary",
+    current_node_name: "Foresight SF Node",
     availability_status: "available",
     lending_terms: { ...defaultTerms },
     created_at: "2024-06-15T12:00:00Z",
@@ -200,7 +200,7 @@ const books = [
     current_location_lng: null,
     current_location_text: "With BrightFox29",
     current_node_id: "n1",
-    current_node_name: "Foresight Berlin Flybrary",
+    current_node_name: "Foresight Berlin Node",
     availability_status: "checked_out",
     lending_terms: defaultTerms,
     created_at: "2024-06-01T12:00:00Z",
@@ -221,7 +221,7 @@ const books = [
     current_location_lng: null,
     current_location_text: "With CleverRaven88",
     current_node_id: "n1",
-    current_node_name: "Foresight Berlin Flybrary",
+    current_node_name: "Foresight Berlin Node",
     availability_status: "checked_out",
     lending_terms: defaultTerms,
     created_at: "2024-06-01T12:00:00Z",
@@ -238,7 +238,7 @@ const loanEvents = [
     user_id: "u2",
     user_display_name: "WanderingOwl42",
     timestamp: "2026-02-08T14:30:00Z",
-    location_text: "Foresight Berlin Flybrary",
+    location_text: "Foresight Berlin Node",
     notes: null,
   },
   {
@@ -249,7 +249,7 @@ const loanEvents = [
     user_id: "u3",
     user_display_name: "BrightFox29",
     timestamp: "2026-02-06T10:15:00Z",
-    location_text: "Foresight Berlin Flybrary",
+    location_text: "Foresight Berlin Node",
     notes: null,
   },
   {
@@ -260,7 +260,7 @@ const loanEvents = [
     user_id: "u1",
     user_display_name: "CleverRaven88",
     timestamp: "2026-02-05T16:45:00Z",
-    location_text: "Foresight Berlin Flybrary",
+    location_text: "Foresight Berlin Node",
     notes: null,
   },
   {
@@ -271,7 +271,7 @@ const loanEvents = [
     user_id: "u1",
     user_display_name: "CleverRaven88",
     timestamp: "2026-01-15T11:20:00Z",
-    location_text: "Foresight Berlin Flybrary",
+    location_text: "Foresight Berlin Node",
     notes: null,
   },
   {
@@ -282,8 +282,8 @@ const loanEvents = [
     user_id: "u2",
     user_display_name: "WanderingOwl42",
     timestamp: "2025-11-15T16:00:00Z",
-    location_text: "Foresight SF Flybrary",
-    notes: "Transferred at Foresight SF Flybrary",
+    location_text: "Foresight SF Node",
+    notes: "Transferred at Foresight SF Node",
   },
 ]
 
@@ -367,6 +367,7 @@ async function main() {
         title text not null,
         author text,
         edition text,
+        description text,
         qr_tag_id text not null unique,
         checkout_url text not null,
         cover_image_url text,
@@ -462,14 +463,15 @@ async function main() {
 
     for (const b of books) {
       await client.query(
-        `insert into books (id,isbn,title,author,edition,qr_tag_id,checkout_url,cover_image_url,current_holder_id,current_holder_name,current_location_lat,current_location_lng,current_location_text,current_node_id,current_node_name,added_by_user_id,added_by_display_name,owner_contact_email,is_pocket_library,availability_status,lending_terms,created_at,expected_return_date)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21::jsonb,$22,$23)`,
+        `insert into books (id,isbn,title,author,edition,description,qr_tag_id,checkout_url,cover_image_url,current_holder_id,current_holder_name,current_location_lat,current_location_lng,current_location_text,current_node_id,current_node_name,added_by_user_id,added_by_display_name,owner_contact_email,is_pocket_library,availability_status,lending_terms,created_at,expected_return_date)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22::jsonb,$23,$24)`,
         [
           b.id,
           b.isbn,
           b.title,
           b.author,
           b.edition,
+          b.description ?? null,
           b.qr_tag_id,
           b.checkout_url,
           b.cover_image_url,

@@ -120,6 +120,9 @@ async function main() {
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'books' AND column_name = 'added_by_display_name') THEN
           ALTER TABLE public.books ADD COLUMN added_by_display_name text;
         END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'books' AND column_name = 'description') THEN
+          ALTER TABLE public.books ADD COLUMN description text;
+        END IF;
       END $$;
     `)
 

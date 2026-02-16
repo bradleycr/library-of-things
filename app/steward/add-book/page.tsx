@@ -41,6 +41,7 @@ export default function AddBookPage() {
   const [contactRequired, setContactRequired] = useState(false)
   const [contactOptIn, setContactOptIn] = useState(true)
   const [coverImageUrl, setCoverImageUrl] = useState("")
+  const [description, setDescription] = useState("")
   const [isbnLookedUp, setIsbnLookedUp] = useState(false)
   const [bookCreated, setBookCreated] = useState(false)
   const [createdBookId, setCreatedBookId] = useState<string | null>(null)
@@ -66,6 +67,7 @@ export default function AddBookPage() {
         edition_name?: string
         publish_date?: string
         authors?: { key: string }[]
+        works?: { key: string }[]
       }
       setTitle(payload.title || title)
       if (payload.by_statement) {
@@ -91,6 +93,27 @@ export default function AddBookPage() {
       setCoverImageUrl(
         `https://covers.openlibrary.org/b/isbn/${encodeURIComponent(isbn.trim())}-L.jpg`
       )
+      // Optional: fetch work description from Open Library (best-effort, never fails the lookup)
+      const workKey = payload.works?.[0]?.key
+      if (workKey) {
+        try {
+          const workRes = await fetch(`https://openlibrary.org${workKey}.json`)
+          if (workRes.ok) {
+            const work = (await workRes.json()) as {
+              description?: string | { type?: string; value?: string }
+            }
+            const raw =
+              typeof work.description === "string"
+                ? work.description
+                : work.description?.value
+            if (raw && typeof raw === "string") {
+              setDescription(raw.trim().slice(0, 3000))
+            }
+          }
+        } catch {
+          // ignore; description stays empty
+        }
+      }
       setIsbnLookedUp(true)
     } catch (error) {
       setLookupError(
@@ -114,6 +137,7 @@ export default function AddBookPage() {
           title,
           author: author || undefined,
           edition: edition || undefined,
+          description: description.trim() || undefined,
           node_id: nodeId,
           cover_image_url: coverImageUrl.trim() || undefined,
           lending_terms: {
@@ -340,7 +364,7 @@ export default function AddBookPage() {
             <CardContent>
               <div>
                 <Label>
-                  Node / Shelf <span className="text-destructive">*</span>
+                  Node <span className="text-destructive">*</span>
                 </Label>
                 <Select value={nodeId} onValueChange={setNodeId} required>
                   <SelectTrigger className="mt-1">

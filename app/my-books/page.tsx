@@ -34,6 +34,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { BookCover } from "@/components/book-cover"
 import { getBookCoverUrl } from "@/lib/book-cover-generator"
+import { formatLocationForDisplay } from "@/lib/format-location"
 import { useBootstrapData } from "@/hooks/use-bootstrap-data"
 import { useLibraryCard } from "@/hooks/use-library-card"
 
@@ -418,7 +419,7 @@ export default function MyBooksPage() {
                               }
                             )}
                             {event.location_text &&
-                              ` at ${event.location_text}`}
+                              ` at ${formatLocationForDisplay(event.location_text)}`}
                           </p>
                         </div>
                       </div>
