@@ -33,10 +33,22 @@ Open http://localhost:3000.
 | `pnpm db:provision` | Reset DB + seed (dev only) |
 | `pnpm db:backfill-added-events` | Backfill “added” events for existing books |
 
+## Docs
+
+| Doc | Purpose |
+|-----|---------|
+| [CONTRIBUTING.md](./CONTRIBUTING.md) | How to contribute (PRs, issues, code style) |
+| [DEPLOY.md](./DEPLOY.md) | Deploy to Vercel + Supabase (maintainers) |
+| [POCKET_LIBRARY_FEATURE.md](./POCKET_LIBRARY_FEATURE.md) | Pocket Library (floating books) design |
+
+## Contributing
+
+We welcome contributions. Please read **[CONTRIBUTING.md](./CONTRIBUTING.md)** before opening a PR. Run `pnpm build` before pushing.
+
 ## Deploy
 
-**Vercel + Supabase:** See **[DEPLOY.md](./DEPLOY.md)** for steps using your existing [Vercel project](https://vercel.com/bradley-royes-projects/library-of-things) and Supabase (no Vercel DB). Set `DATABASE_URL` (Supabase) and `STEWARD_PASSWORD` in Vercel, run `pnpm db:ensure-schema` once, then push to sync.
+**Vercel + Supabase:** See **[DEPLOY.md](./DEPLOY.md)** for deploy steps. You need a Supabase Postgres instance and a Vercel project; set `DATABASE_URL` and `STEWARD_PASSWORD`, run `pnpm db:ensure-schema` once, then push to sync.
 
 ## License
 
-MIT.
+MIT. See [LICENSE](./LICENSE).

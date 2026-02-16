@@ -41,6 +41,14 @@ export default async function HomePage() {
   const totalLoans = loanEvents.length
   const totalNodes = nodes.length
 
+  // Actual count of books linked to each node (for display on node cards).
+  const booksPerNodeId = books.reduce<Record<string, number>>((acc, book) => {
+    if (book.current_node_id) {
+      acc[book.current_node_id] = (acc[book.current_node_id] ?? 0) + 1
+    }
+    return acc
+  }, {})
+
   return (
     <div className="bg-background">
       {/* Hero — simple, internal-facing */}
@@ -167,11 +175,9 @@ export default async function HomePage() {
                         {node.operating_hours}
                       </p>
                     )}
-                    {node.capacity && (
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {node.capacity} books
-                      </p>
-                    )}
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {booksPerNodeId[node.id] ?? 0} books
+                    </p>
                   </CardContent>
                 </Card>
               ))}

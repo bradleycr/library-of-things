@@ -1,6 +1,6 @@
 # Deploy Flybrary (Vercel + Supabase)
 
-Use **your existing Supabase** for the database and your **existing Vercel project** for the app. No Vercel Postgres—keep it clean.
+This doc is for maintainers (or anyone deploying their own instance). Use **Supabase** for the database and **Vercel** for the app. No Vercel Postgres.
 
 ## 1. Vercel project
 
