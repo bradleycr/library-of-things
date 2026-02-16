@@ -33,10 +33,9 @@ const navLinks = [
   { href: "/ledger", label: "Sharing history", icon: ScrollText },
 ]
 
-/** Admin: password-protected steward dashboard and book management. */
+/** Admin: steward dashboard only; add-book is reached from inside the dashboard. */
 const adminLinks = [
   { href: "/steward/dashboard", label: "Steward Dashboard", icon: LayoutDashboard },
-  { href: "/steward/add-book", label: "Add Book (Steward)", icon: PlusCircle },
 ]
 
 export function SiteHeader() {

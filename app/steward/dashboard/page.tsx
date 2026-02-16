@@ -13,6 +13,8 @@ import {
   Copy,
   Check,
   Link2,
+  Loader2,
+  ListOrdered,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -43,6 +45,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import {
   Bar,
   BarChart,
@@ -83,6 +86,13 @@ export default function StewardDashboardPage() {
     loan_period_days: 21,
   })
 
+  // Bulk add by ISBN
+  const [bulkIsbns, setBulkIsbns] = useState("")
+  const [bulkNodeId, setBulkNodeId] = useState("")
+  const [bulkAdding, setBulkAdding] = useState(false)
+  const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number } | null>(null)
+  const [bulkResult, setBulkResult] = useState<{ added: number; failed: string[] } | null>(null)
+
   useEffect(() => {
     if (editingBook) {
       setEditForm({
@@ -97,6 +107,10 @@ export default function StewardDashboardPage() {
       setEditError(null)
     }
   }, [editingBook])
+
+  useEffect(() => {
+    if (nodes.length > 0 && !bulkNodeId) setBulkNodeId(nodes[0].id)
+  }, [nodes, bulkNodeId])
   const checkedOut = books.filter(
     (b) => b.availability_status === "checked_out"
   ).length
@@ -167,6 +181,114 @@ export default function StewardDashboardPage() {
       setUrlsCopied(true)
       setTimeout(() => setUrlsCopied(false), 2000)
     })
+  }
+
+  const handleBulkAdd = async () => {
+    const isbns = bulkIsbns
+      .split(/\n|,/)
+      .map((s) => s.trim().replace(/-/g, ""))
+      .filter((s) => s.length >= 10)
+    if (isbns.length === 0) {
+      setBulkResult({ added: 0, failed: ["No valid ISBNs (one per line or comma-separated)."] })
+      return
+    }
+    if (!bulkNodeId) {
+      setBulkResult({ added: 0, failed: ["Select a node first."] })
+      return
+    }
+    setBulkAdding(true)
+    setBulkResult(null)
+    const failed: string[] = []
+    let added = 0
+    const total = isbns.length
+    const defaultTerms = {
+      type: "borrow" as const,
+      shipping_allowed: false,
+      local_only: true,
+      contact_required: false,
+      contact_opt_in: true,
+    }
+    for (let i = 0; i < isbns.length; i++) {
+      const isbn = isbns[i]
+      setBulkProgress({ current: i + 1, total })
+      try {
+        const editionRes = await fetch(
+          `https://openlibrary.org/isbn/${encodeURIComponent(isbn)}.json`
+        )
+        if (!editionRes.ok) {
+          failed.push(isbn)
+          continue
+        }
+        const edition = (await editionRes.json()) as {
+          title?: string
+          by_statement?: string
+          edition_name?: string
+          publish_date?: string
+          authors?: { key: string }[]
+          works?: { key: string }[]
+        }
+        let author: string | undefined = edition.by_statement
+        if (!author && edition.authors?.[0]?.key) {
+          try {
+            const authorRes = await fetch(
+              `https://openlibrary.org${edition.authors[0].key}.json`
+            )
+            if (authorRes.ok) {
+              const authorData = (await authorRes.json()) as { name?: string }
+              author = authorData.name
+            }
+          } catch {
+            // keep author undefined
+          }
+        }
+        let description: string | undefined
+        const workKey = edition.works?.[0]?.key
+        if (workKey) {
+          try {
+            const workRes = await fetch(`https://openlibrary.org${workKey}.json`)
+            if (workRes.ok) {
+              const work = (await workRes.json()) as {
+                description?: string | { type?: string; value?: string }
+              }
+              const raw =
+                typeof work.description === "string"
+                  ? work.description
+                  : work.description?.value
+              if (raw && typeof raw === "string") description = raw.trim().slice(0, 3000)
+            }
+          } catch {
+            // ignore
+          }
+        }
+        const coverImageUrl = `https://covers.openlibrary.org/b/isbn/${encodeURIComponent(isbn)}-L.jpg`
+        const editionText = edition.edition_name ?? edition.publish_date ?? undefined
+        const createRes = await fetch("/api/books/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            isbn,
+            title: edition.title ?? "Unknown",
+            author: author ?? undefined,
+            edition: editionText,
+            description: description ?? undefined,
+            node_id: bulkNodeId,
+            cover_image_url: coverImageUrl,
+            lending_terms: defaultTerms,
+          }),
+        })
+        if (!createRes.ok) {
+          failed.push(isbn)
+        } else {
+          added++
+        }
+      } catch {
+        failed.push(isbn)
+      }
+    }
+    setBulkProgress(null)
+    setBulkAdding(false)
+    setBulkResult({ added, failed })
+    if (added > 0) await refetch()
   }
 
   const handleSaveBook = async () => {
@@ -254,6 +376,79 @@ export default function StewardDashboardPage() {
             </Button>
           </div>
         </div>
+
+        {/* Bulk add by ISBN */}
+        <Card className="mb-8 border-border">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-card-foreground">
+              <ListOrdered className="h-5 w-5" />
+              Bulk add by ISBN
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Paste one ISBN per line (or comma-separated). Metadata and cover are fetched from Open Library; books are added to the selected node.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="min-w-[200px]">
+                <Label className="text-xs text-muted-foreground">Node</Label>
+                <Select value={bulkNodeId} onValueChange={setBulkNodeId} disabled={bulkAdding}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Select node" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {nodes.map((node) => (
+                      <SelectItem key={node.id} value={node.id}>
+                        {node.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex-1">
+                <Label className="text-xs text-muted-foreground">ISBNs (one per line or comma-separated)</Label>
+                <Textarea
+                  className="mt-1 min-h-[100px]"
+                  placeholder="9780316484923&#10;9780199678112&#10;..."
+                  value={bulkIsbns}
+                  onChange={(e) => setBulkIsbns(e.target.value)}
+                  disabled={bulkAdding}
+                />
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                onClick={handleBulkAdd}
+                disabled={bulkAdding || !bulkIsbns.trim() || !bulkNodeId}
+                className="gap-2"
+              >
+                {bulkAdding ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    {bulkProgress ? `Adding ${bulkProgress.current}/${bulkProgress.total}…` : "Adding…"}
+                  </>
+                ) : (
+                  <>
+                    <PlusCircle className="h-4 w-4" />
+                    Add books
+                  </>
+                )}
+              </Button>
+              {bulkResult && (
+                <span className="text-sm text-muted-foreground">
+                  Added {bulkResult.added}
+                  {bulkResult.failed.length > 0 && `; ${bulkResult.failed.length} failed`}
+                  {bulkResult.failed.length > 0 && bulkResult.failed.length <= 5 && (
+                    <>: {bulkResult.failed.join(", ")}</>
+                  )}
+                  {bulkResult.failed.length > 5 && (
+                    <>: {bulkResult.failed.slice(0, 3).join(", ")} and {bulkResult.failed.length - 3} more</>
+                  )}
+                </span>
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Stats */}
         <div className="mb-8 grid grid-cols-2 gap-4 md:grid-cols-4">
