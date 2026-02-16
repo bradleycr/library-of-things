@@ -125,6 +125,18 @@ export interface Community {
   created_at: string
 }
 
+/** Single trust score change — used for "where your score came from" breakdown. */
+export interface TrustEvent {
+  id: string
+  user_id: string
+  reason: "return_on_time" | "return_late" | "return_very_late" | "add_book"
+  delta: number
+  score_after: number
+  book_id?: string | null
+  book_title?: string | null
+  created_at: string
+}
+
 export interface LibraryCard {
   id: string
   card_number: string // 16-digit number like "4532 1098 7654 1942"

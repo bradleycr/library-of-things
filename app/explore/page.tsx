@@ -50,7 +50,7 @@ export default function ExplorePage() {
 
       const matchesLending =
         lendingType.length === 0 ||
-        lendingType.includes(book.lending_terms.type)
+        lendingType.includes(book.lending_terms?.type ?? "borrow")
 
       return matchesQuery && matchesAvailability && matchesNode && matchesLending
     })

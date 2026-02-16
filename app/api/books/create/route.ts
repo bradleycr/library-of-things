@@ -85,16 +85,22 @@ export async function POST(request: NextRequest) {
     requires_id: false,
     pseudonymous_allowed: true,
     contact_required: false,
-    loan_period_days: 21, // default 3 weeks; suggestion only
+    loan_period_days: 21,
     shipping_allowed: false,
     local_only: true,
     contact_opt_in: true,
   }
+  const raw = lending_terms && typeof lending_terms === "object" ? lending_terms as Record<string, unknown> : {}
   const mergedTerms: LendingTerms = {
     ...defaultTerms,
-    ...(lending_terms && typeof lending_terms === "object" ? lending_terms : {}),
+    type: (typeof raw.type === "string" ? raw.type : defaultTerms.type) as LendingTerms["type"],
+    is_free: typeof raw.is_free === "boolean" ? raw.is_free : defaultTerms.is_free,
+    requires_id: typeof raw.requires_id === "boolean" ? raw.requires_id : defaultTerms.requires_id,
+    pseudonymous_allowed: typeof raw.pseudonymous_allowed === "boolean" ? raw.pseudonymous_allowed : defaultTerms.pseudonymous_allowed,
+    contact_required: typeof raw.contact_required === "boolean" ? raw.contact_required : defaultTerms.contact_required,
+    loan_period_days: typeof raw.loan_period_days === "number" && raw.loan_period_days >= 1 ? raw.loan_period_days : defaultTerms.loan_period_days,
+    contact_opt_in: typeof raw.contact_opt_in === "boolean" ? raw.contact_opt_in : defaultTerms.contact_opt_in,
   }
-  if (mergedTerms.loan_period_days == null) mergedTerms.loan_period_days = 21
   mergedTerms.shipping_allowed = false
   mergedTerms.local_only = true
 

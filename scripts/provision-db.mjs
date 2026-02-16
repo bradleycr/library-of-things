@@ -419,6 +419,19 @@ async function main() {
       );
     `)
 
+    await client.query(`
+      create table if not exists trust_events (
+        id text primary key,
+        user_id text not null references users(id) on delete cascade,
+        reason text not null check (reason in ('return_on_time','return_late','return_very_late','add_book')),
+        delta integer not null,
+        score_after integer not null,
+        book_id text references books(id) on delete set null,
+        book_title text,
+        created_at timestamptz not null default now()
+      );
+    `)
+
     await client.query("truncate table loan_events restart identity cascade")
     await client.query("truncate table books restart identity cascade")
     await client.query("truncate table nodes restart identity cascade")
@@ -526,6 +539,9 @@ async function main() {
     )
     await client.query(
       "create index if not exists idx_loan_events_user_timestamp on loan_events(user_id, timestamp desc)"
+    )
+    await client.query(
+      "create index if not exists idx_trust_events_user_created on trust_events(user_id, created_at desc)"
     )
 
     await client.query("commit")

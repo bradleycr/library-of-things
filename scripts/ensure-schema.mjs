@@ -166,8 +166,25 @@ async function main() {
     await client.query(`
       create index if not exists idx_books_added_by_user_id on books(added_by_user_id)
     `)
+
+    await client.query(`
+      create table if not exists trust_events (
+        id text primary key,
+        user_id text not null references users(id) on delete cascade,
+        reason text not null check (reason in ('return_on_time','return_late','return_very_late','add_book')),
+        delta integer not null,
+        score_after integer not null,
+        book_id text references books(id) on delete set null,
+        book_title text,
+        created_at timestamptz not null default now()
+      );
+    `)
+    await client.query(`
+      create index if not exists idx_trust_events_user_created on trust_events(user_id, created_at desc);
+    `)
+
     await client.query("commit")
-    console.log("Schema ensured. Tables: users, nodes, books, library_cards, loan_events.")
+    console.log("Schema ensured. Tables: users, nodes, books, library_cards, loan_events, trust_events.")
   } catch (error) {
     await client.query("rollback")
     console.error("Schema ensure failed:", error.message)

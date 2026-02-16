@@ -176,7 +176,7 @@ export default function CheckoutPage({
         message={
           <>
             You checked out <strong>{book.title}</strong>. Suggested return within{" "}
-            {book.lending_terms.loan_period_days} days.
+            {book.lending_terms?.loan_period_days ?? 21} days.
           </>
         }
         action={
@@ -467,7 +467,7 @@ function AvailableFlow({
                     onCheckedChange={(c) => setAgreedToTerms(c === true)}
                   />
                   <label htmlFor="terms" className="cursor-pointer text-sm text-muted-foreground">
-                    I’ll return it within {book.lending_terms.loan_period_days} days and treat it with care.
+                    I’ll return it within {book.lending_terms?.loan_period_days ?? 21} days and treat it with care.
                   </label>
                 </div>
                 <Button

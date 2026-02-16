@@ -15,6 +15,7 @@ import {
   Link2,
   Loader2,
   ListOrdered,
+  Building2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -34,6 +35,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
@@ -58,17 +60,22 @@ import {
   ResponsiveContainer,
 } from "recharts"
 import { useBootstrapData } from "@/hooks/use-bootstrap-data"
-import type { Book } from "@/lib/types"
+import type { Book, Node as NodeType } from "@/lib/types"
 
 export default function StewardDashboardPage() {
   const { data, refetch } = useBootstrapData()
   const books = data?.books ?? []
   const loanEvents = data?.loanEvents ?? []
   const nodes = data?.nodes ?? []
-  const stewardNode = nodes[0]
+  const users = data?.users ?? []
+  // Node context for header and filters (Bulk NFC, etc.); "all" or a node id.
+  const [selectedNodeId, setSelectedNodeId] = useState<string>("all")
+
+  // Sharing activity chart: scope by timeframe for trends.
+  type ActivityTimeframe = "week" | "month" | "year" | "all"
+  const [activityTimeframe, setActivityTimeframe] = useState<ActivityTimeframe>("month")
   
   // Bulk URL generator state
-  const [selectedNodeId, setSelectedNodeId] = useState<string>("all")
   const [selectedBookIds, setSelectedBookIds] = useState<Set<string>>(new Set())
   const [urlsCopied, setUrlsCopied] = useState(false)
   
@@ -93,6 +100,22 @@ export default function StewardDashboardPage() {
   const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number } | null>(null)
   const [bulkResult, setBulkResult] = useState<{ added: number; failed: string[] } | null>(null)
 
+  // Add node form
+  const [addNodeOpen, setAddNodeOpen] = useState(false)
+  const [addNodeSaving, setAddNodeSaving] = useState(false)
+  const [addNodeError, setAddNodeError] = useState<string | null>(null)
+  const [addNodeForm, setAddNodeForm] = useState({
+    name: "",
+    type: "coworking" as NodeType["type"],
+    steward_id: "",
+    location_address: "",
+    location_lat: "",
+    location_lng: "",
+    operating_hours: "",
+    capacity: "",
+    public: true,
+  })
+
   useEffect(() => {
     if (editingBook) {
       setEditForm({
@@ -111,6 +134,21 @@ export default function StewardDashboardPage() {
   useEffect(() => {
     if (nodes.length > 0 && !bulkNodeId) setBulkNodeId(nodes[0].id)
   }, [nodes, bulkNodeId])
+
+  useEffect(() => {
+    if (users.length > 0) {
+      setAddNodeForm((f) =>
+        !f.steward_id || !users.some((u) => u.id === f.steward_id)
+          ? { ...f, steward_id: users[0].id }
+          : f
+      )
+    }
+  }, [users])
+
+  const managingLabel =
+    selectedNodeId === "all"
+      ? "All nodes"
+      : nodes.find((n) => n.id === selectedNodeId)?.name ?? "All nodes"
   const checkedOut = books.filter(
     (b) => b.availability_status === "checked_out"
   ).length
@@ -134,20 +172,77 @@ export default function StewardDashboardPage() {
       name: name.length > 18 ? `${name.slice(0, 18)}...` : name,
       checkouts: count,
     }))
-  const activityByMonth = loanEvents.reduce(
-    (acc, e) => {
-      const month = new Date(e.timestamp).toLocaleDateString("en-US", {
-        month: "short",
-        year: "2-digit",
-      })
-      acc[month] = (acc[month] || 0) + 1
-      return acc
-    },
-    {} as Record<string, number>
-  )
-  const activityData = Object.entries(activityByMonth)
-    .map(([month, events]) => ({ month, events }))
-    .reverse()
+  // Sharing activity: filter by timeframe, then bucket and fill so the chart is continuous.
+  const now = new Date()
+  const cutoff =
+    activityTimeframe === "week"
+      ? new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+      : activityTimeframe === "month"
+        ? new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+        : activityTimeframe === "year"
+          ? new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)
+          : null
+  const filteredActivityEvents =
+    cutoff == null
+      ? loanEvents
+      : loanEvents.filter((e) => new Date(e.timestamp) >= cutoff)
+
+  const activityData = (() => {
+    if (activityTimeframe === "week" || activityTimeframe === "month") {
+      const days = activityTimeframe === "week" ? 7 : 30
+      const buckets: { key: string; label: string; events: number }[] = []
+      for (let i = days - 1; i >= 0; i--) {
+        const d = new Date(now)
+        d.setDate(d.getDate() - i)
+        d.setHours(0, 0, 0, 0)
+        const key = d.toISOString().slice(0, 10)
+        const label =
+          activityTimeframe === "week"
+            ? d.toLocaleDateString("en-US", { weekday: "short", month: "numeric", day: "numeric" })
+            : d.toLocaleDateString("en-US", { month: "numeric", day: "numeric" })
+        buckets.push({ key, label, events: 0 })
+      }
+      for (const e of filteredActivityEvents) {
+        const d = new Date(e.timestamp)
+        d.setHours(0, 0, 0, 0)
+        const key = d.toISOString().slice(0, 10)
+        const b = buckets.find((x) => x.key === key)
+        if (b) b.events += 1
+      }
+      return buckets.map(({ label, events }) => ({ month: label, events }))
+    }
+    if (activityTimeframe === "year") {
+      const buckets: { key: string; label: string; events: number }[] = []
+      for (let i = 11; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+        const label = d.toLocaleDateString("en-US", { month: "short", year: "2-digit" })
+        buckets.push({ key, label, events: 0 })
+      }
+      for (const e of filteredActivityEvents) {
+        const d = new Date(e.timestamp)
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+        const b = buckets.find((x) => x.key === key)
+        if (b) b.events += 1
+      }
+      return buckets.map(({ label, events }) => ({ month: label, events }))
+    }
+    // All time: bucket by month (only months that have data), sorted chronological.
+    const byMonth = filteredActivityEvents.reduce(
+      (acc, e) => {
+        const d = new Date(e.timestamp)
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+        const label = d.toLocaleDateString("en-US", { month: "short", year: "2-digit" })
+        if (!acc[key]) acc[key] = { label, events: 0 }
+        acc[key].events += 1
+        return acc
+      },
+      {} as Record<string, { label: string; events: number }>
+    )
+    return Object.entries(byMonth)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([, v]) => ({ month: v.label, events: v.events }))
+  })()
 
   const filteredBooks = selectedNodeId === "all" 
     ? books 
@@ -291,6 +386,68 @@ export default function StewardDashboardPage() {
     if (added > 0) await refetch()
   }
 
+  const handleAddNode = async () => {
+    const name = addNodeForm.name.trim()
+    if (!name) {
+      setAddNodeError("Name is required")
+      return
+    }
+    if (!addNodeForm.steward_id) {
+      setAddNodeError("Steward is required")
+      return
+    }
+    setAddNodeSaving(true)
+    setAddNodeError(null)
+    try {
+      const res = await fetch("/api/nodes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          name,
+          type: addNodeForm.type,
+          steward_id: addNodeForm.steward_id,
+          location_address: addNodeForm.location_address.trim() || undefined,
+          location_lat:
+            addNodeForm.location_lat !== ""
+              ? Number.parseFloat(addNodeForm.location_lat)
+              : undefined,
+          location_lng:
+            addNodeForm.location_lng !== ""
+              ? Number.parseFloat(addNodeForm.location_lng)
+              : undefined,
+          operating_hours: addNodeForm.operating_hours.trim() || undefined,
+          capacity:
+            addNodeForm.capacity !== ""
+              ? Math.max(0, Math.min(9999, Number.parseInt(addNodeForm.capacity, 10)))
+              : undefined,
+          public: addNodeForm.public,
+        }),
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j?.error ?? "Failed to create node")
+      }
+      await refetch()
+      setAddNodeOpen(false)
+      setAddNodeForm({
+        name: "",
+        type: "coworking",
+        steward_id: users[0]?.id ?? "",
+        location_address: "",
+        location_lat: "",
+        location_lng: "",
+        operating_hours: "",
+        capacity: "",
+        public: true,
+      })
+    } catch (e) {
+      setAddNodeError(e instanceof Error ? e.message : "Failed to create node")
+    } finally {
+      setAddNodeSaving(false)
+    }
+  }
+
   const handleSaveBook = async () => {
     if (!editingBook) return
     const trimmedTitle = editForm.title.trim()
@@ -330,28 +487,49 @@ export default function StewardDashboardPage() {
     }
   }
 
-  if (!stewardNode) {
-    return (
-      <div className="py-6 sm:py-8">
-        <div className="page-container text-sm text-muted-foreground">No node data found.</div>
-      </div>
-    )
-  }
-
   return (
     <div className="py-6 sm:py-8">
       <div className="page-container">
         {/* Header */}
         <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div>
-            <h1 className="font-serif text-3xl font-bold text-foreground">
-              Steward Dashboard
-            </h1>
-            <p className="mt-1 text-muted-foreground">
-              Managing: {stewardNode.name}
-            </p>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+            <div>
+              <h1 className="font-serif text-3xl font-bold text-foreground">
+                Steward Dashboard
+              </h1>
+              <p className="mt-1 text-muted-foreground">
+                Managing: {managingLabel}
+              </p>
+            </div>
+            {nodes.length > 0 && (
+              <Select value={selectedNodeId} onValueChange={setSelectedNodeId}>
+                <SelectTrigger className="w-[220px] mt-1 sm:mt-0">
+                  <SelectValue placeholder="View node" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All nodes</SelectItem>
+                  {nodes.map((node) => (
+                    <SelectItem key={node.id} value={node.id}>
+                      {node.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="gap-2"
+              onClick={() => {
+                setAddNodeError(null)
+                setAddNodeOpen(true)
+              }}
+            >
+              <Building2 className="h-4 w-4" />
+              Add node
+            </Button>
             <Link href="/steward/add-book">
               <Button className="gap-2">
                 <PlusCircle className="h-4 w-4" />
@@ -377,78 +555,145 @@ export default function StewardDashboardPage() {
           </div>
         </div>
 
-        {/* Bulk add by ISBN */}
-        <Card className="mb-8 border-border">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-card-foreground">
-              <ListOrdered className="h-5 w-5" />
-              Bulk add by ISBN
-            </CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Paste one ISBN per line (or comma-separated). Metadata and cover are fetched from Open Library; books are added to the selected node.
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <div className="min-w-[200px]">
-                <Label className="text-xs text-muted-foreground">Node</Label>
-                <Select value={bulkNodeId} onValueChange={setBulkNodeId} disabled={bulkAdding}>
-                  <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Select node" />
+        {/* Add node dialog */}
+        <Dialog open={addNodeOpen} onOpenChange={setAddNodeOpen}>
+          <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Add node</DialogTitle>
+              <DialogDescription>
+                New nodes appear on the homepage and in add-book/return flows. Steward must be an existing user.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="node-name">Name</Label>
+                <Input
+                  id="node-name"
+                  value={addNodeForm.name}
+                  onChange={(e) => setAddNodeForm((f) => ({ ...f, name: e.target.value }))}
+                  placeholder="e.g. Foresight Berlin Node"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>Type</Label>
+                <Select
+                  value={addNodeForm.type}
+                  onValueChange={(v) => setAddNodeForm((f) => ({ ...f, type: v as NodeType["type"] }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {nodes.map((node) => (
-                      <SelectItem key={node.id} value={node.id}>
-                        {node.name}
+                    {(["coworking", "library", "cafe", "bookstore", "little_free_library", "home"] as const).map(
+                      (t) => (
+                        <SelectItem key={t} value={t}>
+                          {t.replace("_", " ")}
+                        </SelectItem>
+                      )
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label>Steward (user)</Label>
+                <Select
+                  value={addNodeForm.steward_id}
+                  onValueChange={(v) => setAddNodeForm((f) => ({ ...f, steward_id: v }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select user" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {users.map((u) => (
+                      <SelectItem key={u.id} value={u.id}>
+                        {u.display_name}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex-1">
-                <Label className="text-xs text-muted-foreground">ISBNs (one per line or comma-separated)</Label>
-                <Textarea
-                  className="mt-1 min-h-[100px]"
-                  placeholder="9780316484923&#10;9780199678112&#10;..."
-                  value={bulkIsbns}
-                  onChange={(e) => setBulkIsbns(e.target.value)}
-                  disabled={bulkAdding}
+              <div className="grid gap-2">
+                <Label htmlFor="node-address">Address</Label>
+                <Input
+                  id="node-address"
+                  value={addNodeForm.location_address}
+                  onChange={(e) => setAddNodeForm((f) => ({ ...f, location_address: e.target.value }))}
+                  placeholder="Street, city, country"
                 />
               </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                onClick={handleBulkAdd}
-                disabled={bulkAdding || !bulkIsbns.trim() || !bulkNodeId}
-                className="gap-2"
-              >
-                {bulkAdding ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    {bulkProgress ? `Adding ${bulkProgress.current}/${bulkProgress.total}…` : "Adding…"}
-                  </>
-                ) : (
-                  <>
-                    <PlusCircle className="h-4 w-4" />
-                    Add books
-                  </>
-                )}
-              </Button>
-              {bulkResult && (
-                <span className="text-sm text-muted-foreground">
-                  Added {bulkResult.added}
-                  {bulkResult.failed.length > 0 && `; ${bulkResult.failed.length} failed`}
-                  {bulkResult.failed.length > 0 && bulkResult.failed.length <= 5 && (
-                    <>: {bulkResult.failed.join(", ")}</>
-                  )}
-                  {bulkResult.failed.length > 5 && (
-                    <>: {bulkResult.failed.slice(0, 3).join(", ")} and {bulkResult.failed.length - 3} more</>
-                  )}
-                </span>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="node-lat">Latitude</Label>
+                  <Input
+                    id="node-lat"
+                    type="number"
+                    step="any"
+                    value={addNodeForm.location_lat}
+                    onChange={(e) => setAddNodeForm((f) => ({ ...f, location_lat: e.target.value }))}
+                    placeholder="52.49"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="node-lng">Longitude</Label>
+                  <Input
+                    id="node-lng"
+                    type="number"
+                    step="any"
+                    value={addNodeForm.location_lng}
+                    onChange={(e) => setAddNodeForm((f) => ({ ...f, location_lng: e.target.value }))}
+                    placeholder="13.44"
+                  />
+                </div>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="node-hours">Operating hours</Label>
+                <Input
+                  id="node-hours"
+                  value={addNodeForm.operating_hours}
+                  onChange={(e) => setAddNodeForm((f) => ({ ...f, operating_hours: e.target.value }))}
+                  placeholder="e.g. Mon–Fri 9–18"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="node-capacity">Capacity (optional)</Label>
+                <Input
+                  id="node-capacity"
+                  type="number"
+                  min={0}
+                  value={addNodeForm.capacity}
+                  onChange={(e) => setAddNodeForm((f) => ({ ...f, capacity: e.target.value }))}
+                  placeholder="e.g. 80"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="node-public"
+                  checked={addNodeForm.public}
+                  onCheckedChange={(c) => setAddNodeForm((f) => ({ ...f, public: c === true }))}
+                />
+                <Label htmlFor="node-public">Public (visible to everyone)</Label>
+              </div>
+              {addNodeError && (
+                <p className="text-sm text-destructive">{addNodeError}</p>
               )}
             </div>
-          </CardContent>
-        </Card>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setAddNodeOpen(false)} disabled={addNodeSaving}>
+                Cancel
+              </Button>
+              <Button onClick={handleAddNode} disabled={addNodeSaving}>
+                {addNodeSaving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Adding…
+                  </>
+                ) : (
+                  "Add node"
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Stats */}
         <div className="mb-8 grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -534,10 +779,31 @@ export default function StewardDashboardPage() {
 
           {/* Sharing activity */}
           <Card className="border-border">
-            <CardHeader>
+            <CardHeader className="space-y-3">
               <CardTitle className="text-card-foreground">
                 Sharing activity over time
               </CardTitle>
+              <ToggleGroup
+                type="single"
+                value={activityTimeframe}
+                onValueChange={(v) => v && setActivityTimeframe(v as ActivityTimeframe)}
+                className="flex flex-wrap gap-1 justify-start"
+                variant="outline"
+                size="sm"
+              >
+                <ToggleGroupItem value="week" aria-label="Last week">
+                  Last week
+                </ToggleGroupItem>
+                <ToggleGroupItem value="month" aria-label="Last month">
+                  Last month
+                </ToggleGroupItem>
+                <ToggleGroupItem value="year" aria-label="Last year">
+                  Last year
+                </ToggleGroupItem>
+                <ToggleGroupItem value="all" aria-label="All time">
+                  All time
+                </ToggleGroupItem>
+              </ToggleGroup>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={250}>
@@ -684,6 +950,79 @@ export default function StewardDashboardPage() {
             <p className="mt-3 text-xs text-muted-foreground">
               💡 <strong>Tip:</strong> Copied text is one URL per line—paste directly into your NFC app (e.g. NFC Tools → Write → Add record → URL) to write each tag.
             </p>
+          </CardContent>
+        </Card>
+
+        {/* Bulk add by ISBN */}
+        <Card className="mb-8 border-border">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-card-foreground">
+              <ListOrdered className="h-5 w-5" />
+              Bulk add by ISBN
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Paste one ISBN per line (or comma-separated). Metadata and cover are fetched from Open Library; books are added to the selected node.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="min-w-[200px]">
+                <Label className="text-xs text-muted-foreground">Node</Label>
+                <Select value={bulkNodeId} onValueChange={setBulkNodeId} disabled={bulkAdding}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Select node" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {nodes.map((node) => (
+                      <SelectItem key={node.id} value={node.id}>
+                        {node.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex-1">
+                <Label className="text-xs text-muted-foreground">ISBNs (one per line or comma-separated)</Label>
+                <Textarea
+                  className="mt-1 min-h-[100px]"
+                  placeholder="9780316484923&#10;9780199678112&#10;..."
+                  value={bulkIsbns}
+                  onChange={(e) => setBulkIsbns(e.target.value)}
+                  disabled={bulkAdding}
+                />
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                onClick={handleBulkAdd}
+                disabled={bulkAdding || !bulkIsbns.trim() || !bulkNodeId}
+                className="gap-2"
+              >
+                {bulkAdding ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    {bulkProgress ? `Adding ${bulkProgress.current}/${bulkProgress.total}…` : "Adding…"}
+                  </>
+                ) : (
+                  <>
+                    <PlusCircle className="h-4 w-4" />
+                    Add books
+                  </>
+                )}
+              </Button>
+              {bulkResult && (
+                <span className="text-sm text-muted-foreground">
+                  Added {bulkResult.added}
+                  {bulkResult.failed.length > 0 && `; ${bulkResult.failed.length} failed`}
+                  {bulkResult.failed.length > 0 && bulkResult.failed.length <= 5 && (
+                    <>: {bulkResult.failed.join(", ")}</>
+                  )}
+                  {bulkResult.failed.length > 5 && (
+                    <>: {bulkResult.failed.slice(0, 3).join(", ")} and {bulkResult.failed.length - 3} more</>
+                  )}
+                </span>
+              )}
+            </div>
           </CardContent>
         </Card>
 

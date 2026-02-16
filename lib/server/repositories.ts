@@ -1,7 +1,12 @@
 import "server-only"
 
-import type { Book, LoanEvent, Node, User } from "@/lib/types"
+import type { Book, LoanEvent, Node, TrustEvent, User } from "@/lib/types"
 import { resilientQuery, resilientConnect } from "@/lib/server/db"
+import {
+  applyTrustChange,
+  classifyReturn,
+  getDeltaForReason,
+} from "@/lib/server/trust"
 
 /* ─── Row ↔ domain mappers ───
  * Postgres returns Date objects; the rest of the app expects ISO strings.
@@ -23,6 +28,10 @@ type DbNode = Omit<Node, "created_at"> & {
 }
 
 type DbUser = Omit<User, "created_at"> & {
+  created_at: string | Date
+}
+
+type DbTrustEvent = Omit<TrustEvent, "created_at"> & {
   created_at: string | Date
 }
 
@@ -62,6 +71,13 @@ function mapUser(row: DbUser): User {
   }
 }
 
+function mapTrustEvent(row: DbTrustEvent): TrustEvent {
+  return {
+    ...row,
+    created_at: asIso(row.created_at)!,
+  }
+}
+
 /* ═══════════════════════════════════════════
  *  Read queries — all use resilientQuery for
  *  automatic retry on transient failures.
@@ -81,6 +97,45 @@ export async function listNodes() {
   return rows.map(mapNode)
 }
 
+/** Create a new node; used by steward dashboard. steward_id must reference an existing user. */
+export async function createNode(input: {
+  name: string
+  type: Node["type"]
+  steward_id: string
+  location_address?: string | null
+  location_lat?: number | null
+  location_lng?: number | null
+  public?: boolean
+  capacity?: number | null
+  operating_hours?: string | null
+}): Promise<Node> {
+  const id = crypto.randomUUID()
+  const client = await resilientConnect()
+  try {
+    await client.query(
+      `insert into nodes (id, name, type, steward_id, location_address, location_lat, location_lng, public, capacity, operating_hours, created_at)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())`,
+      [
+        id,
+        input.name.trim(),
+        input.type,
+        input.steward_id,
+        input.location_address?.trim() || null,
+        input.location_lat ?? null,
+        input.location_lng ?? null,
+        input.public ?? true,
+        input.capacity ?? null,
+        input.operating_hours?.trim() || null,
+      ]
+    )
+    const { rows } = await client.query<DbNode>("select * from nodes where id = $1", [id])
+    if (!rows[0]) throw new Error("Node not created")
+    return mapNode(rows[0])
+  } finally {
+    client.release()
+  }
+}
+
 /** Lists all users; throws if DB is unavailable. */
 export async function listUsers() {
   const { rows } = await resilientQuery<DbUser>(
@@ -95,6 +150,15 @@ export async function listLoanEvents() {
     "select * from loan_events order by timestamp desc, id asc"
   )
   return rows.map(mapLoanEvent)
+}
+
+/** Trust score history for a user (breakdown for hover/click). Most recent first. */
+export async function listTrustEventsByUserId(userId: string): Promise<TrustEvent[]> {
+  const { rows } = await resilientQuery<DbTrustEvent>(
+    "select * from trust_events where user_id = $1 order by created_at desc, id asc",
+    [userId]
+  )
+  return rows.map(mapTrustEvent)
 }
 
 export async function getBookById(id: string) {
@@ -518,6 +582,17 @@ export async function returnBook(params: {
       ]
     )
 
+    // Trust: return on time +2, late (after suggested) -3, very late (60+ days) -12
+    const reason = classifyReturn(book.expected_return_date)
+    const delta = getDeltaForReason(reason)
+    await applyTrustChange(client, {
+      userId: params.userId,
+      reason,
+      delta,
+      bookId: params.bookId,
+      bookTitle: book.title,
+    })
+
     await client.query("commit")
   } catch (error) {
     await client.query("rollback")
@@ -630,6 +705,16 @@ export async function createBook(input: {
         locationText ?? (input.isPocketLibrary ? "Pocket Library" : "Unknown"),
       ]
     )
+
+    if (addedByUserId) {
+      await applyTrustChange(client, {
+        userId: addedByUserId,
+        reason: "add_book",
+        delta: getDeltaForReason("add_book"),
+        bookId: id,
+        bookTitle: input.title,
+      })
+    }
 
     await client.query("commit")
     return {

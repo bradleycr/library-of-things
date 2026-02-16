@@ -33,6 +33,7 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { BookCover } from "@/components/book-cover"
+import { TrustScoreWithBreakdown } from "@/components/trust-score-breakdown"
 import { getBookCoverUrl } from "@/lib/book-cover-generator"
 import { formatLocationForDisplay } from "@/lib/format-location"
 import { useBootstrapData } from "@/hooks/use-bootstrap-data"
@@ -117,19 +118,13 @@ export default function MyBooksPage() {
             </p>
           </div>
 
-          {/* Trust Score Widget */}
+          {/* Trust Score — click for breakdown */}
           <Card className="border-border md:w-56">
-            <CardContent className="flex items-center gap-4 p-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent/10">
-                <Shield className="h-6 w-6 text-accent" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Trust Score</p>
-                <p className="text-2xl font-bold text-foreground">
-                  {currentUser.trust_score}
-                  <span className="text-sm text-muted-foreground">/100</span>
-                </p>
-              </div>
+            <CardContent className="flex flex-col items-center p-4">
+              <TrustScoreWithBreakdown
+                userId={currentUser.id}
+                trustScore={currentUser.trust_score}
+              />
             </CardContent>
           </Card>
         </div>

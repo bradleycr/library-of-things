@@ -326,7 +326,7 @@ export default function BookDetailPage({
                   <div className="flex items-center gap-2 text-card-foreground">
                     <Clock className="h-4 w-4 text-muted-foreground" />
                     <span>
-                      {book.lending_terms.loan_period_days} day borrow period (suggested)
+                      {book.lending_terms?.loan_period_days ?? 21} day borrow period (suggested)
                     </span>
                   </div>
                   <div className="flex items-center gap-2 text-card-foreground">
@@ -345,12 +345,12 @@ export default function BookDetailPage({
                   <div className="flex items-center gap-2 text-card-foreground">
                     <MessageSquare className="h-4 w-4 text-muted-foreground" />
                     <span>
-                      {book.lending_terms.contact_opt_in
+                      {book.lending_terms?.contact_opt_in
                         ? "Contact allowed"
                         : "No contact"}
                     </span>
                   </div>
-                  {book.lending_terms.contact_required && (
+                  {book.lending_terms?.contact_required && (
                     <div className="flex items-center gap-2 text-card-foreground">
                       <UserPlus className="h-4 w-4 text-muted-foreground" />
                       <span>Contact info required to borrow</span>

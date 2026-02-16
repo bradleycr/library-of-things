@@ -32,6 +32,7 @@ import { BookCover } from "@/components/book-cover"
 import { getBookCoverUrl } from "@/lib/book-cover-generator"
 import { LibraryCard } from "@/components/library-card"
 import { GetLibraryCardModal } from "@/components/get-library-card-modal"
+import { TrustScoreWithBreakdown } from "@/components/trust-score-breakdown"
 import { useBootstrapData } from "@/hooks/use-bootstrap-data"
 import { useLibraryCard } from "@/hooks/use-library-card"
 import { getAvatarUrl, getInitials } from "@/lib/avatar"
@@ -262,13 +263,10 @@ export default function ProfilePage({
         <div className="mt-6 grid grid-cols-3 gap-4">
           <Card className="border-border">
             <CardContent className="flex flex-col items-center p-4">
-              <Shield className="h-5 w-5 text-accent" />
-              <span className="mt-2 text-2xl font-bold text-foreground">
-                {user.trust_score}
-              </span>
-              <span className="text-xs text-muted-foreground">
-                Trust Score
-              </span>
+              <TrustScoreWithBreakdown
+                userId={user.id}
+                trustScore={user.trust_score}
+              />
             </CardContent>
           </Card>
           <Card className="border-border">
