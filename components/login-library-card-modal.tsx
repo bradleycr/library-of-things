@@ -19,9 +19,11 @@ interface LoginLibraryCardModalProps {
   onOpenChange: (open: boolean) => void
   /** When set, card number is pre-filled and read-only; user only enters PIN to link. */
   initialCardNumber?: string
+  /** Called after a successful login so the parent can refetch data, redirect, etc. */
+  onSuccess?: () => void
 }
 
-export function LoginLibraryCardModal({ open, onOpenChange, initialCardNumber }: LoginLibraryCardModalProps) {
+export function LoginLibraryCardModal({ open, onOpenChange, initialCardNumber, onSuccess }: LoginLibraryCardModalProps) {
   const { saveCard } = useLibraryCard()
   const [cardNumber, setCardNumber] = useState("")
   const [pin, setPin] = useState("")
@@ -58,6 +60,7 @@ export function LoginLibraryCardModal({ open, onOpenChange, initialCardNumber }:
         if (!isPinOnlyMode) setCardNumber("")
         setPin("")
         onOpenChange(false)
+        onSuccess?.()
       }
     } catch {
       setError("Something went wrong")

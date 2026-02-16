@@ -167,6 +167,7 @@ export default function SettingsPage() {
         <LoginLibraryCardModal
           open={loginModalOpen}
           onOpenChange={setLoginModalOpen}
+          onSuccess={refetch}
         />
         </div>
       </div>
@@ -218,6 +219,7 @@ export default function SettingsPage() {
           open={loginModalOpen}
           onOpenChange={setLoginModalOpen}
           initialCardNumber={card.card_number}
+          onSuccess={refetch}
         />
         </div>
       </div>

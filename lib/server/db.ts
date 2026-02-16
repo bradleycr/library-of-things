@@ -6,21 +6,29 @@ const globalForDb = globalThis as unknown as { pool?: Pool }
 
 function getPool(): Pool {
   if (globalForDb.pool) return globalForDb.pool
+
   const connectionString = process.env.DATABASE_URL
   if (!connectionString) {
     throw new Error(
       "DATABASE_URL is required. Add it to .env.local (or Vercel env vars) using your Supabase Postgres connection string."
     )
   }
+
   const pool = new Pool({
     connectionString,
-    ssl: {
-      rejectUnauthorized: false,
-    },
-    connectionTimeoutMillis: 5000,
+    ssl: { rejectUnauthorized: false },
+    // Vercel serverless: keep pool small to avoid exhausting Supabase connection limits.
+    // Each serverless function gets its own pool; with many concurrent invocations the
+    // total connection count = max × concurrent_functions.
+    max: 3,
+    // Release idle clients quickly so connections don't linger between invocations.
+    idleTimeoutMillis: 10_000,
+    // Fail fast if DB is unreachable rather than hanging the request.
+    connectionTimeoutMillis: 5_000,
   })
+
+  // Warm-check in dev so we see connection issues immediately
   if (process.env.NODE_ENV !== "production") {
-    globalForDb.pool = pool
     pool.query("SELECT 1").catch((err) => {
       console.warn(
         "Database connection warning:",
@@ -30,6 +38,7 @@ function getPool(): Pool {
       )
     })
   }
+
   globalForDb.pool = pool
   return pool
 }
