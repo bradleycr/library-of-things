@@ -1,4 +1,4 @@
-# Deploy Flybrary (Vercel + Supabase)
+# Deploy Library of Things (Vercel + Supabase)
 
 This doc is for maintainers (or anyone deploying their own instance). Use **Supabase** for the database and **Vercel** for the app. No Vercel Postgres.
 
@@ -6,6 +6,14 @@ This doc is for maintainers (or anyone deploying their own instance). Use **Supa
 
 - **Project:** [library-of-things](https://vercel.com/bradley-royes-projects/library-of-things)  
 - **ID:** `prj_QttrjwiTNn4eIKj0ExANas0G2uVp`
+
+### GitHub repo name
+
+The codebase and docs use **Library of Things** and the repo name **library-of-things**. If the repo is still named `flybrary` on GitHub, rename it so clone URLs and links stay consistent:
+
+1. On GitHub: **Settings** → **General** → **Repository name** → change to `library-of-things` → **Rename**.
+2. GitHub will redirect old URLs; Vercel will keep deploying from the same repo. Locally, update the remote if needed:  
+   `git remote set-url origin https://github.com/bradleycr/library-of-things.git`
 
 ### Auto-sync from GitHub (deploy on every push)
 
@@ -17,7 +25,7 @@ For **every push to `main`** to trigger a new Vercel deployment:
 2. **Connect repository** (if not already):
    - Click **Connect Git Repository**.
    - Choose **GitHub** and authorize if prompted.
-   - Select the **flybrary** repo (e.g. `bradleycr/flybrary`).
+   - Select the **library-of-things** repo (e.g. `bradleycr/library-of-things`).
 
 3. **Production branch:**
    - Set **Production Branch** to `main` (so pushes to `main` deploy to production).

@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for considering contributing to Flybrary.
+Thanks for considering contributing to Library of Things.
 
 ## How to contribute
 

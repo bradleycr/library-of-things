@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Set Vercel environment variables for the flybrary project using the Vercel REST API.
+ * Set Vercel environment variables for the Library of Things project using the Vercel REST API.
  * Uses DATABASE_URL and STEWARD_PASSWORD from .env.local (or env), and VERCEL_TOKEN from env.
  *
  * 1. Create a token: https://vercel.com/account/tokens (scope: Full Account or at least the project)

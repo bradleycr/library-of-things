@@ -1,4 +1,4 @@
-# Flybrary
+# Library of Things
 
 Trust-based book sharing: physical books at community nodes, NFC/QR checkout, public sharing history. No late fees.
 
@@ -7,8 +7,8 @@ Trust-based book sharing: physical books at community nodes, NFC/QR checkout, pu
 ## Run locally
 
 ```bash
-git clone https://github.com/bradleycr/flybrary.git
-cd flybrary
+git clone https://github.com/bradleycr/library-of-things.git
+cd library-of-things
 corepack enable && pnpm install
 cp env.example .env.local
 ```

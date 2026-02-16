@@ -1,10 +1,10 @@
-# Flybrary — context for AI / contributors
+# Library of Things — context for AI / contributors
 
 **Update this file when you make meaningful changes** so the next session (or another dev) knows where the app stands.
 
 ## What it is
 
-- **Flybrary** (Library of Things): trust-based physical book sharing at community nodes.
+- **Library of Things:** trust-based physical book sharing at community nodes.
 - Users get a **pseudonymous library card** (card number + PIN); no email required to browse/borrow.
 - Books live at **nodes** or as **Pocket Library** (floating, owner keeps book; contact for pickup).
 - **QR/NFC** checkout; public **sharing history** (ledger). No late fees.
