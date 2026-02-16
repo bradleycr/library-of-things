@@ -23,8 +23,8 @@ function getPool(): Pool {
     max: 3,
     // Release idle clients quickly so connections don't linger between invocations.
     idleTimeoutMillis: 10_000,
-    // Fail fast if DB is unreachable rather than hanging the request.
-    connectionTimeoutMillis: 5_000,
+    // Vercel cold start + Supabase pooler can take >5s; use 12s so first connection can succeed.
+    connectionTimeoutMillis: 12_000,
   })
 
   // Warm-check in dev so we see connection issues immediately

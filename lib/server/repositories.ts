@@ -75,7 +75,7 @@ export async function listNodes() {
 /** Lists all users; throws if DB is unavailable. */
 export async function listUsers() {
   const { rows } = await db.query<DbUser>(
-    "select * from users order by created_at asc, id asc"
+    "select * from public.users order by created_at asc, id asc"
   )
   return rows.map(mapUser)
 }
@@ -196,7 +196,7 @@ export async function updateBook(
 }
 
 export async function getUserById(id: string) {
-  const { rows } = await db.query<DbUser>("select * from users where id = $1", [id])
+  const { rows } = await db.query<DbUser>("select * from public.users where id = $1", [id])
   return rows[0] ? mapUser(rows[0]) : null
 }
 
@@ -637,7 +637,7 @@ export function hashPin(pin: string): string {
 export async function createUserForLibraryCard(pseudonym: string): Promise<User> {
   const id = crypto.randomUUID()
   await db.query(
-    `insert into users (id, display_name, auth_provider, trust_score, community_memberships, created_at)
+    `insert into public.users (id, display_name, auth_provider, trust_score, community_memberships, created_at)
      values ($1, $2, 'library_card', 50, '{}', now())`,
     [id, pseudonym]
   )
@@ -659,7 +659,7 @@ export async function createLibraryCard(params: {
 }): Promise<{ id: string }> {
   const id = crypto.randomUUID()
   await db.query(
-    `insert into library_cards (id, card_number, pin_hash, user_id, pseudonym, created_at)
+    `insert into public.library_cards (id, card_number, pin_hash, user_id, pseudonym, created_at)
      values ($1, $2, $3, $4, $5, now())`,
     [
       id,
@@ -693,7 +693,7 @@ export async function getLibraryCardByNumberAndPin(
     user_id: string
     created_at: string
   }>(
-    "select id, card_number, pseudonym, user_id, created_at from library_cards where replace(card_number, ' ', '') = $1 and pin_hash = $2",
+    "select id, card_number, pseudonym, user_id, created_at from public.library_cards where replace(card_number, ' ', '') = $1 and pin_hash = $2",
     [normalizedCard, pinHash]
   )
   const row = rows[0]

@@ -93,11 +93,13 @@ export default function ProfilePage({
   }, [isOwnProfileById, user, refetch])
 
   if (!user) {
-    // Own profile but still loading after refetch
-    if (isOwnProfileById && loading) {
+    // Still loading: don't show "User not found" until we've finished loading
+    if (loading) {
       return (
         <div className="flex flex-col items-center justify-center px-4 py-20">
-          <p className="text-muted-foreground">Loading your profile…</p>
+          <p className="text-muted-foreground">
+            {isOwnProfileById ? "Loading your profile…" : "Loading…"}
+          </p>
         </div>
       )
     }

@@ -35,11 +35,22 @@ function generatePIN(): string {
   return Math.floor(Math.random() * 10000).toString().padStart(4, "0")
 }
 
-const MAX_RETRIES = 4
+const MAX_UNIQUE_RETRIES = 4
+/** Retry on transient DB/connection errors (e.g. Vercel cold start, "timeout exceeded when trying to connect"). */
+const TRANSIENT_RETRIES = 3
 
 function isUniqueViolation(err: unknown): boolean {
   const code = err && typeof err === "object" && "code" in err ? (err as { code: string }).code : ""
   return code === "23505"
+}
+
+/** Connection timeout, reset, or PG connection errors that often succeed on retry. */
+function isTransientError(err: unknown): boolean {
+  const code = err && typeof err === "object" && "code" in err ? (err as { code: string }).code : ""
+  const msg = err && typeof err === "object" && "message" in err ? String((err as { message: unknown }).message) : ""
+  if (["08006", "08000", "57P01", "40001", "40P01"].includes(code)) return true
+  if (/timeout|ECONNRESET|ECONNREFUSED|connection closed/i.test(msg)) return true
+  return false
 }
 
 export async function POST(request: NextRequest) {
@@ -54,47 +65,62 @@ export async function POST(request: NextRequest) {
     // use random pseudonym
   }
 
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    try {
-      if (attempt > 0) {
-        pseudonym = generatePseudonym()
-      }
-      const pin = generatePIN()
-      const cardNumber = generateCardNumber()
+  let lastError: unknown = null
+  outer: for (let attempt = 0; attempt < MAX_UNIQUE_RETRIES; attempt++) {
+    if (attempt > 0) pseudonym = generatePseudonym()
+    const pin = generatePIN()
+    const cardNumber = generateCardNumber()
 
-      const user = await createUserForLibraryCard(pseudonym)
-      const { id: cardId } = await createLibraryCard({
-        cardNumber,
-        pinHash: hashPin(normalizePinForAuth(pin)),
-        userId: user.id,
-        pseudonym,
-      })
+    for (let transientAttempt = 0; transientAttempt <= TRANSIENT_RETRIES; transientAttempt++) {
+      try {
+        if (transientAttempt > 0) {
+          await new Promise((r) => setTimeout(r, 500 + transientAttempt * 500))
+        }
+        const user = await createUserForLibraryCard(pseudonym)
+        const { id: cardId } = await createLibraryCard({
+          cardNumber,
+          pinHash: hashPin(normalizePinForAuth(pin)),
+          userId: user.id,
+          pseudonym,
+        })
 
-      const card = {
-        id: cardId,
-        card_number: cardNumber,
-        pin,
-        pseudonym,
-        user_id: user.id,
-        created_at: new Date().toISOString(),
-        access_count: 0,
-        status: "active" as const,
-      }
+        const card = {
+          id: cardId,
+          card_number: cardNumber,
+          pin,
+          pseudonym,
+          user_id: user.id,
+          created_at: new Date().toISOString(),
+          access_count: 0,
+          status: "active" as const,
+        }
 
-      return NextResponse.json({ success: true, card })
-    } catch (error) {
-      if (isUniqueViolation(error)) {
-        console.warn("Library card generate: unique conflict, retrying with new pseudonym/card", error)
-        continue
+        return NextResponse.json({ success: true, card })
+      } catch (error) {
+        lastError = error
+        if (isUniqueViolation(error)) {
+          console.warn("Library card generate: unique conflict, retrying with new pseudonym/card", error)
+          continue outer
+        }
+        if (isTransientError(error) && transientAttempt < TRANSIENT_RETRIES) {
+          console.warn("Library card generate: transient error, retrying same identity", error)
+          continue
+        }
+        console.error("Library card generation error:", error)
+        return NextResponse.json(
+          {
+            success: false,
+            error: isTransientError(error)
+              ? "The database was temporarily unavailable. Please try again."
+              : "Failed to generate library card",
+          },
+          { status: 500 }
+        )
       }
-      console.error("Library card generation error:", error)
-      return NextResponse.json(
-        { success: false, error: "Failed to generate library card" },
-        { status: 500 }
-      )
     }
   }
 
+  console.error("Library card generate: exhausted retries", lastError)
   return NextResponse.json(
     { success: false, error: "Could not generate a unique card. Please try again." },
     { status: 500 }
