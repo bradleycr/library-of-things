@@ -15,6 +15,7 @@ import {
   MessageSquare,
   Mail,
   Building2,
+  Loader2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -62,7 +63,7 @@ export default function BookDetailPage({
 }: {
   params: Promise<{ uuid: string }>
 }) {
-  const { data } = useBootstrapData()
+  const { data, loading } = useBootstrapData()
   const books = data?.books ?? []
   const loanEvents = data?.loanEvents ?? []
   const { uuid } = use(params)
@@ -70,6 +71,17 @@ export default function BookDetailPage({
   const bookEvents = loanEvents
     .filter((e) => e.book_id === uuid)
     .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 sm:py-20">
+        <div className="page-container flex flex-col items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <span className="mt-3 text-sm text-muted-foreground">Loading…</span>
+        </div>
+      </div>
+    )
+  }
 
   if (!book) {
     return (

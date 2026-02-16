@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { Search, SlidersHorizontal, X, Grid3X3, List } from "lucide-react"
+import { Search, SlidersHorizontal, X, Grid3X3, List, Loader2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -21,7 +21,7 @@ import { getBookCoverUrl } from "@/lib/book-cover-generator"
 import { useBootstrapData } from "@/hooks/use-bootstrap-data"
 
 export default function ExplorePage() {
-  const { data } = useBootstrapData()
+  const { data, loading } = useBootstrapData()
   const books = data?.books ?? []
   const nodes = data?.nodes ?? []
   const [query, setQuery] = useState("")
@@ -84,8 +84,9 @@ export default function ExplorePage() {
             Explore Books
           </h1>
           <p className="mt-2 text-muted-foreground">
-            Search and browse {books.length} books across{" "}
-            {nodes.length} community nodes
+            {loading
+              ? "Loading…"
+              : `Search and browse ${books.length} books across ${nodes.length} community nodes`}
           </p>
         </div>
 
@@ -246,10 +247,17 @@ export default function ExplorePage() {
 
         {/* Results */}
         <div className="mb-4 text-sm text-muted-foreground">
-          {filteredBooks.length} book{filteredBooks.length !== 1 ? "s" : ""} found
+          {loading
+            ? "Loading…"
+            : `${filteredBooks.length} book${filteredBooks.length !== 1 ? "s" : ""} found`}
         </div>
 
-        {filteredBooks.length === 0 ? (
+        {loading ? (
+          <div className="flex items-center justify-center rounded-lg border border-border bg-card py-16">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <span className="sr-only">Loading books</span>
+          </div>
+        ) : filteredBooks.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-lg border border-border bg-card py-16">
             <Search className="h-10 w-10 text-muted-foreground/40" />
             <h3 className="mt-4 font-semibold text-card-foreground">No books found</h3>

@@ -2,7 +2,7 @@
 
 import { useMemo } from "react"
 import Link from "next/link"
-import { ArrowLeft, Users, BookOpen, Clock, ArrowRight } from "lucide-react"
+import { ArrowLeft, Users, BookOpen, Clock, ArrowRight, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
@@ -19,7 +19,7 @@ import type { User, LoanEvent } from "@/lib/types"
 import { getAvatarUrl, getInitials } from "@/lib/avatar"
 
 export default function MembersPage() {
-  const { data } = useBootstrapData()
+  const { data, loading } = useBootstrapData()
   const users = data?.users ?? []
   const books = data?.books ?? []
   const loanEvents = data?.loanEvents ?? []
@@ -77,10 +77,16 @@ export default function MembersPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-card-foreground">
               <Users className="h-5 w-5" />
-              All members ({sortedMembers.length})
+              {loading ? "Loading…" : `All members (${sortedMembers.length})`}
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
+            {loading ? (
+              <div className="flex items-center justify-center gap-2 py-12 text-muted-foreground">
+                <Loader2 className="h-6 w-6 animate-spin" />
+                <span>Loading members</span>
+              </div>
+            ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
@@ -160,6 +166,7 @@ export default function MembersPage() {
                 </TableBody>
               </Table>
             </div>
+            )}
           </CardContent>
         </Card>
 
