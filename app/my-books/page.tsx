@@ -294,7 +294,7 @@ export default function MyBooksPage() {
                 <p className="mt-1 text-center text-sm text-muted-foreground">
                   Add a book from your shelf to share with the community
                 </p>
-                <Link href="/steward/add-book">
+                <Link href="/add-book">
                   <Button className="mt-4 gap-2">
                     <Plus className="h-4 w-4" />
                     Add a Book

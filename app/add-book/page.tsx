@@ -197,11 +197,12 @@ export default function AddBookPage() {
           is_pocket_library: locationType === "pocket",
           owner_contact_email: locationType === "pocket" ? ownerContactEmail : undefined,
           current_location_text: locationType === "pocket" ? currentLocation : undefined,
-          // Attach current user so the catalog shows who added this book (unless anonymous)
-          ...(card?.user_id && !addAnonymously && {
-            added_by_user_id: card.user_id,
-            added_by_display_name: card.pseudonym ?? undefined,
-          }),
+          // Attribution: linked user, or "Anonymous" when add-anonymously is checked
+          ...(card?.user_id && !addAnonymously
+            ? { added_by_user_id: card.user_id, added_by_display_name: card.pseudonym ?? undefined }
+            : addAnonymously
+              ? { added_by_display_name: "Anonymous" }
+              : {}),
         }),
       })
       if (!response.ok) {
@@ -561,7 +562,7 @@ export default function AddBookPage() {
                       </Label>
                     </div>
                     <p className="ml-6 text-xs text-muted-foreground">
-                      Don&apos;t show my name as the person who added this book.
+                      Don&apos;t show my name; the book will list &quot;Added by Anonymous&quot; on its page.
                     </p>
                   </div>
                 </div>

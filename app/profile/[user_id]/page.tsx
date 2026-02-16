@@ -238,7 +238,7 @@ export default function ProfilePage({
             </Card>
           </Link>
           {isOwnProfile && mounted && card && (
-            <Link href="/steward/add-book" className="flex-1">
+            <Link href="/add-book" className="flex-1">
               <Card className="border-border transition-colors hover:border-primary/40 hover:bg-muted/30 cursor-pointer h-full">
                 <CardContent className="flex items-center justify-between p-4">
                   <div className="flex items-center gap-3">

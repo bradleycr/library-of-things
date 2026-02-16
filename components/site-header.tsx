@@ -22,6 +22,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { GetLibraryCardModal, type GetLibraryCardModalMode } from "@/components/get-library-card-modal"
 import { LoginLibraryCardModal } from "@/components/login-library-card-modal"
 import { useLibraryCard } from "@/hooks/use-library-card"
@@ -43,7 +53,18 @@ export function SiteHeader() {
   const [libraryCardModalOpen, setLibraryCardModalOpen] = useState(false)
   const [libraryCardModalMode, setLibraryCardModalMode] = useState<GetLibraryCardModalMode>("view")
   const [loginModalOpen, setLoginModalOpen] = useState(false)
+  const [removeCardConfirmOpen, setRemoveCardConfirmOpen] = useState(false)
   const { card, clearCard } = useLibraryCard()
+
+  const handleRemoveCardClick = () => {
+    setRemoveCardConfirmOpen(true)
+    setMobileOpen(false)
+  }
+
+  const handleRemoveCardConfirm = () => {
+    clearCard()
+    setRemoveCardConfirmOpen(false)
+  }
 
   const openLibraryCardModal = (mode: GetLibraryCardModalMode) => {
     setLibraryCardModalMode(mode)
@@ -148,10 +169,7 @@ export function SiteHeader() {
                     View library card
                   </DropdownMenuItem>
                   <DropdownMenuItem
-                    onClick={() => {
-                      clearCard()
-                      setMobileOpen(false)
-                    }}
+                    onClick={handleRemoveCardClick}
                     className="text-muted-foreground"
                   >
                     <LogOut className="h-4 w-4" />
@@ -183,6 +201,26 @@ export function SiteHeader() {
         open={loginModalOpen}
         onOpenChange={setLoginModalOpen}
       />
+
+      <AlertDialog open={removeCardConfirmOpen} onOpenChange={setRemoveCardConfirmOpen}>
+        <AlertDialogContent className="sm:max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove card from this device?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Make sure you save your card number and PIN. Otherwise, you won&apos;t have access to this account.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleRemoveCardConfirm}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Remove card
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {mobileOpen && (
         <nav className="border-t border-border bg-background px-4 pb-4 pt-2 md:hidden">
@@ -264,10 +302,7 @@ export function SiteHeader() {
                   <Button
                     variant="ghost"
                     className="w-full justify-start gap-3 text-muted-foreground"
-                    onClick={() => {
-                      clearCard()
-                      setMobileOpen(false)
-                    }}
+                    onClick={handleRemoveCardClick}
                   >
                     <LogOut className="h-5 w-5" />
                     Remove card from this device

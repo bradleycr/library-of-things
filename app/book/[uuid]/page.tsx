@@ -179,25 +179,25 @@ export default function BookDetailPage({
               </p>
             )}
 
-            {/* Added by — who contributed this book to the library */}
-            {(book.added_by_user_id || book.added_by_display_name) && (
-              <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
-                <UserPlus className="h-4 w-4 text-primary" />
-                <span>
-                  Added by{" "}
-                  {book.added_by_user_id ? (
-                    <Link
-                      href={`/profile/${book.added_by_user_id}`}
-                      className="font-medium text-primary hover:underline"
-                    >
-                      {book.added_by_display_name || "a community member"}
-                    </Link>
-                  ) : (
-                    book.added_by_display_name || "a community member"
-                  )}
-                </span>
-              </div>
-            )}
+            {/* Added by — who contributed this book to the library; Anonymous when added anonymously */}
+            <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+              <UserPlus className="h-4 w-4 text-primary" />
+              <span>
+                Added by{" "}
+                {book.added_by_user_id ? (
+                  <Link
+                    href={`/profile/${book.added_by_user_id}`}
+                    className="font-medium text-primary hover:underline"
+                  >
+                    {book.added_by_display_name || "a community member"}
+                  </Link>
+                ) : book.added_by_display_name ? (
+                  book.added_by_display_name
+                ) : (
+                  <span className="italic">Anonymous</span>
+                )}
+              </span>
+            </div>
 
             {/* Location */}
             {book.current_location_text && (

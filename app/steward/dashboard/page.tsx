@@ -530,7 +530,7 @@ export default function StewardDashboardPage() {
               <Building2 className="h-4 w-4" />
               Add node
             </Button>
-            <Link href="/steward/add-book">
+            <Link href="/add-book">
               <Button className="gap-2">
                 <PlusCircle className="h-4 w-4" />
                 Add New Book

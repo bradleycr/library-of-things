@@ -39,7 +39,9 @@ Open http://localhost:3000.
 |-----|---------|
 | [CONTRIBUTING.md](./CONTRIBUTING.md) | How to contribute (PRs, issues, code style) |
 | [DEPLOY.md](./DEPLOY.md) | Deploy to Vercel + Supabase (maintainers) |
+| [SUPABASE_SETUP.md](./SUPABASE_SETUP.md) | Supabase DB connection (Session Pooler, local) |
 | [POCKET_LIBRARY_FEATURE.md](./POCKET_LIBRARY_FEATURE.md) | Pocket Library (floating books) design |
+| [claude.md](./claude.md) | Living context for AI/contributors (routes, data, current state) |
 
 ## Contributing
 
