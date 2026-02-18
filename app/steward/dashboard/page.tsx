@@ -405,6 +405,7 @@ export default function StewardDashboardPage() {
         const createRes = await fetch("/api/books/create", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          credentials: "include",
           body: JSON.stringify({
             isbn,
             title: edition.title ?? "Unknown",
@@ -510,6 +511,7 @@ export default function StewardDashboardPage() {
       const res = await fetch(`/api/books/${editingBook.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           title: trimmedTitle,
           author: editForm.author.trim() || null,
