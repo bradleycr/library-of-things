@@ -112,7 +112,9 @@ export async function POST(request: NextRequest) {
     description: typeof description === "string" ? description.trim().slice(0, 3000) || undefined : undefined,
     nodeId: node_id,
     lendingTerms: mergedTerms,
-    coverImageUrl: typeof cover_image_url === "string" ? cover_image_url.trim().slice(0, 2048) || undefined : undefined,
+    coverImageUrl: typeof cover_image_url === "string"
+      ? sanitizeCoverUrl(cover_image_url) || undefined
+      : undefined,
     addedByUserId: added_by_user_id,
     addedByDisplayName: added_by_display_name,
     isPocketLibrary: is_pocket_library ?? false,
@@ -121,4 +123,14 @@ export async function POST(request: NextRequest) {
   })
 
   return NextResponse.json({ success: true, ...created })
+}
+
+/** Accept data-URI photos (up to ~500 KB base64) or regular URLs (up to 2 048 chars). */
+function sanitizeCoverUrl(raw: string): string {
+  const v = raw.trim()
+  if (v.startsWith("data:image/")) {
+    const MAX_DATA_URI = 512_000
+    return v.length <= MAX_DATA_URI ? v : ""
+  }
+  return v.slice(0, 2048)
 }
