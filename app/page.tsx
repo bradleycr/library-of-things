@@ -50,7 +50,7 @@ export default async function HomePage() {
   }, {})
 
   return (
-    <div className="bg-background">
+    <div className="min-w-0 bg-background">
       {/* Hero — simple, internal-facing */}
       <section className="border-b border-border/60 py-12 sm:py-16 md:py-20 lg:py-24">
         <div className="page-container">
@@ -121,7 +121,7 @@ export default async function HomePage() {
           </div>
 
           {featuredBooks.length > 0 ? (
-            <div className="mt-4 grid grid-cols-2 gap-3 sm:mt-6 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:mt-6 sm:gap-4 md:grid-cols-3 lg:grid-cols-4 [&>*]:min-w-0">
               {featuredBooks.map((book) => (
                 <BookCard key={book.id} book={book} />
               ))}
@@ -141,13 +141,13 @@ export default async function HomePage() {
         <section className="border-t border-border/60 py-12 md:py-16">
           <div className="page-container">
             <h2 className="text-lg font-semibold text-foreground">Library nodes</h2>
-            <div className="mt-4 grid gap-3 sm:mt-6 sm:gap-4 md:grid-cols-2">
+            <div className="mt-4 grid gap-3 sm:mt-6 sm:gap-4 md:grid-cols-2 [&>*]:min-w-0">
               {nodes.map((node) => (
-                <Card key={node.id} className="border-border bg-card">
+                <Card key={node.id} className="min-w-0 border-border bg-card">
                   <CardContent className="p-4 sm:p-5">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <h3 className="font-medium text-card-foreground">
+                        <h3 className="truncate font-medium text-card-foreground">
                           {node.name}
                         </h3>
                         <span className="mt-0.5 inline-block text-xs capitalize text-muted-foreground">

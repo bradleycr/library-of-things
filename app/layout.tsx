@@ -44,7 +44,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} ${libreBaskerville.variable} ${dmSerifText.variable} ${jetbrainsMono.variable}`}>
       <body className="font-sans antialiased">
-        <div className="flex min-h-screen flex-col">
+        <div className="flex min-h-screen min-w-0 flex-col overflow-x-hidden">
           <SiteHeader />
           <main className="flex-1">{children}</main>
           <SiteFooter />

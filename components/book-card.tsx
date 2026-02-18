@@ -20,7 +20,7 @@ export function BookCard({ book }: { book: Book }) {
   const status = statusConfig[book.availability_status]
 
   return (
-    <Link href={`/book/${book.id}`} className="group">
+    <Link href={`/book/${book.id}`} className="group min-w-0">
       <Card className="h-full overflow-hidden border-border transition-shadow hover:shadow-md">
         <div className="relative aspect-[2/3] overflow-hidden bg-muted">
           <BookCover
