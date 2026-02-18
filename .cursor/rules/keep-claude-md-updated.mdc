@@ -1,0 +1,14 @@
+---
+description: Keep claude.md in sync when making meaningful changes
+alwaysApply: true
+---
+
+# Keep claude.md up to date
+
+When you make meaningful changes to the app (new routes, APIs, features, or behavior), update **claude.md** so the next session or contributors know the current state.
+
+- **Key routes** — Add or adjust the route table if you add pages or change what a route does.
+- **Current state** — Update the bullet list at the bottom with new capabilities, auth rules, or notable behavior.
+- **Data & auth / Code layout** — Only if you add new patterns (e.g. new hooks, server modules).
+
+Keep the file concise. The first line of claude.md already says: *"Update this file when you make meaningful changes."*
