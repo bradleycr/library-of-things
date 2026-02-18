@@ -128,8 +128,7 @@ Vercel will build and deploy. The site will use the **Supabase** `DATABASE_URL` 
 ## 7. After deploy
 
 - **App URL:** **https://libraryofthings.vercel.app**
-- **Steward dashboard:** https://libraryofthings.vercel.app/steward/login (password = `STEWARD_PASSWORD`).
-- **Bulk NFC URLs:** Steward Dashboard → “Bulk NFC Tag URLs” — copied URLs will use the live domain.
+- **Steward dashboard:** https://libraryofthings.vercel.app/steward/login (password = `STEWARD_PASSWORD`). From the dashboard you can edit books (metadata, status, holder, location, optional ledger note), bulk-add by ISBN, manage members (edit profile, delete), and copy bulk NFC tag URLs; all book/member changes show in the public sharing history.
 
 ## Troubleshooting: “0 in catalog” / database not connected
 

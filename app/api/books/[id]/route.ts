@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
+import { cookies } from "next/headers"
 import type { LendingTerms } from "@/lib/types"
 import { updateBook } from "@/lib/server/repositories"
+import { getStewardCookieName, stewardToken } from "@/lib/server/steward-auth"
 
 /**
  * PATCH /api/books/[id]
@@ -10,6 +12,12 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const cookieStore = await cookies()
+  const token = cookieStore.get(getStewardCookieName())?.value
+  if (token !== stewardToken()) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
   const { id } = await params
   if (!id) {
     return NextResponse.json({ error: "Book id required" }, { status: 400 })
@@ -34,6 +42,9 @@ export async function PATCH(
     cover_image_url,
     node_id,
     lending_terms,
+    availability_status,
+    current_holder_id,
+    note,
   } = body as {
     title?: string
     author?: string | null
@@ -43,6 +54,9 @@ export async function PATCH(
     cover_image_url?: string | null
     node_id?: string
     lending_terms?: Record<string, unknown>
+    availability_status?: string
+    current_holder_id?: string | null
+    note?: string | null
   }
 
   const trimmedTitle =
@@ -50,6 +64,25 @@ export async function PATCH(
   if (trimmedTitle !== undefined && !trimmedTitle) {
     return NextResponse.json(
       { error: "Title cannot be empty" },
+      { status: 400 }
+    )
+  }
+
+  const normalizedStatus =
+    availability_status === "unavailable"
+      ? "in_transit"
+      : availability_status === "missing"
+        ? "retired"
+        : availability_status
+  if (
+    normalizedStatus !== undefined &&
+    normalizedStatus !== "available" &&
+    normalizedStatus !== "checked_out" &&
+    normalizedStatus !== "in_transit" &&
+    normalizedStatus !== "retired"
+  ) {
+    return NextResponse.json(
+      { error: "Invalid availability_status" },
       { status: 400 }
     )
   }
@@ -84,6 +117,16 @@ export async function PATCH(
           : (typeof cover_image_url === "string" ? cover_image_url : null),
       node_id: typeof node_id === "string" && node_id ? node_id : undefined,
       lending_terms: parsedTerms,
+      availability_status: normalizedStatus,
+      current_holder_id:
+        current_holder_id === undefined
+          ? undefined
+          : (typeof current_holder_id === "string" && current_holder_id
+              ? current_holder_id
+              : null),
+      ledger_note:
+        note === undefined ? undefined : (typeof note === "string" ? note : null),
+      actor_display_name: "Steward",
     })
 
     if (!updated) {

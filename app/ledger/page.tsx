@@ -265,12 +265,18 @@ export default function LedgerPage() {
                         </Link>
                       </TableCell>
                       <TableCell>
-                        <Link
-                          href={`/profile/${event.user_id}`}
-                          className="text-sm font-medium text-primary hover:underline"
-                        >
-                          {event.user_display_name}
-                        </Link>
+                        {event.user_id ? (
+                          <Link
+                            href={`/profile/${event.user_id}`}
+                            className="text-sm font-medium text-primary hover:underline"
+                          >
+                            {event.user_display_name || "Unknown"}
+                          </Link>
+                        ) : (
+                          <span className="text-sm font-medium text-muted-foreground">
+                            {event.user_display_name || "Unknown"}
+                          </span>
+                        )}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {event.location_text

@@ -28,7 +28,7 @@
 | `/profile/[user_id]` | Public profile |
 | `/settings` | Link card (PIN), get new card, log in with card |
 | `/ledger` | Sharing history |
-| `/steward/login`, `/steward/dashboard` | Steward: nodes, books, add book |
+| `/steward/login`, `/steward/dashboard` | Steward: nodes, books (edit metadata + status/holder/location + optional ledger note), bulk add, member edit/delete; changes write to ledger |
 
 ## Data & auth
 
@@ -55,5 +55,7 @@
 ## Current state (as of last update)
 
 - App is deployable; main branch drives Vercel.
+- Steward dashboard: edit book metadata, set availability (available / checked out / unavailable / missing), assign or change holder, move location; optional note per change; all such changes append to the sharing history (ledger). Member management: edit display name and contact info, delete members (steward-only API).
+- Book edit API (`PATCH /api/books/[id]`) and member API (`PATCH|DELETE /api/steward/members/[id]`) require steward cookie auth.
 - Remove-card-from-device flow includes the “save your card and PIN” confirmation dialog.
 - No mock data in runtime; all data from Postgres via bootstrap and API routes.

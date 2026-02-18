@@ -90,7 +90,7 @@ export interface LoanEvent {
   event_type: "added" | "checkout" | "return" | "transfer" | "report_lost" | "report_damaged"
   book_id: string
   book_title?: string
-  user_id: string
+  user_id?: string
   user_display_name?: string
   timestamp: string
   location_lat?: number

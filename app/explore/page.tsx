@@ -318,12 +318,18 @@ export default function ExplorePage() {
                   className={
                     book.availability_status === "available"
                       ? "bg-accent text-accent-foreground"
-                      : ""
+                      : book.availability_status === "retired"
+                        ? "bg-destructive/10 text-destructive"
+                        : ""
                   }
                 >
                   {book.availability_status === "available"
                     ? "Available"
-                    : "Checked Out"}
+                    : book.availability_status === "checked_out"
+                      ? "Checked Out"
+                      : book.availability_status === "in_transit"
+                        ? "Unavailable"
+                        : "Missing"}
                 </Badge>
               </a>
             ))}

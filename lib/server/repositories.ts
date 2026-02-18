@@ -167,7 +167,11 @@ export async function getBookById(id: string) {
 }
 
 /**
- * Update book metadata (steward edit). Does not change id, checkout_url, availability, or holder.
+ * Steward book edit:
+ * - metadata (title/author/edition/isbn/description/cover/terms)
+ * - location transfer (node)
+ * - operational circulation state (available / checked out / unavailable / missing)
+ *   with ledger events emitted for status / holder / location changes.
  */
 export async function updateBook(
   bookId: string,
@@ -180,6 +184,11 @@ export async function updateBook(
     cover_image_url?: string | null
     node_id?: string
     lending_terms?: Book["lending_terms"]
+    availability_status?: Book["availability_status"]
+    current_holder_id?: string | null
+    ledger_note?: string | null
+    actor_user_id?: string | null
+    actor_display_name?: string | null
   }
 ): Promise<Book | null> {
   const client = await resilientConnect()
@@ -188,7 +197,9 @@ export async function updateBook(
       "select * from books where id = $1",
       [bookId]
     )
-    if (!existing[0]) return null
+    const current = existing[0]
+    if (!current) return null
+    const noteText = input.ledger_note?.trim() || null
 
     let nodeName: string | null = null
     let locationText: string | null = null
@@ -206,31 +217,164 @@ export async function updateBook(
 
     const title =
       input.title !== undefined
-        ? (input.title?.trim() || existing[0].title)
-        : existing[0].title
+        ? (input.title?.trim() || current.title)
+        : current.title
     const author =
-      input.author !== undefined ? input.author : existing[0].author
+      input.author !== undefined ? input.author : current.author
     const edition =
-      input.edition !== undefined ? input.edition : existing[0].edition
-    const isbn = input.isbn !== undefined ? input.isbn : existing[0].isbn
+      input.edition !== undefined ? input.edition : current.edition
+    const isbn = input.isbn !== undefined ? input.isbn : current.isbn
     const description =
-      input.description !== undefined ? input.description : existing[0].description
+      input.description !== undefined ? input.description : current.description
     const cover_image_url =
       input.cover_image_url !== undefined
         ? input.cover_image_url
-        : existing[0].cover_image_url
+        : current.cover_image_url
     const current_node_id =
-      input.node_id !== undefined ? input.node_id : existing[0].current_node_id
+      input.node_id !== undefined ? input.node_id : current.current_node_id
     const current_node_name =
-      nodeName !== null ? nodeName : existing[0].current_node_name
+      nodeName !== null ? nodeName : current.current_node_name
     const current_location_text =
-      locationText !== null ? locationText : existing[0].current_location_text
-    const lending_terms =
+      locationText !== null ? locationText : current.current_location_text
+    const lending_terms_obj =
       input.lending_terms != null
-        ? JSON.stringify(input.lending_terms)
-        : (typeof existing[0].lending_terms === "object"
-            ? JSON.stringify(existing[0].lending_terms)
-            : existing[0].lending_terms)
+        ? input.lending_terms
+        : ((current.lending_terms as Book["lending_terms"]) ?? {})
+    const lending_terms = JSON.stringify(lending_terms_obj)
+
+    const availability_status =
+      input.availability_status !== undefined
+        ? input.availability_status
+        : current.availability_status
+    const loanPeriodDays = Math.max(
+      1,
+      Number(lending_terms_obj?.loan_period_days) || 21
+    )
+    const expected_return_date =
+      availability_status === "checked_out"
+        ? new Date(Date.now() + loanPeriodDays * 24 * 60 * 60 * 1000).toISOString()
+        : null
+
+    const requestedHolderId =
+      input.current_holder_id !== undefined
+        ? input.current_holder_id
+        : (current.current_holder_id ?? null)
+    const current_holder_id =
+      availability_status === "checked_out" ? requestedHolderId : null
+    if (availability_status === "checked_out" && !current_holder_id) {
+      throw new Error("Checked out books must have a current holder")
+    }
+
+    let current_holder_name: string | null = null
+    if (current_holder_id) {
+      const { rows: holderRows } = await client.query<{ display_name: string }>(
+        "select display_name from users where id = $1",
+        [current_holder_id]
+      )
+      if (!holderRows[0]) throw new Error("Selected holder not found")
+      current_holder_name = holderRows[0].display_name
+    }
+
+    const actor_user_id = input.actor_user_id ?? null
+    let actor_display_name = input.actor_display_name?.trim() || "Steward"
+    if (actor_user_id) {
+      const { rows: actorRows } = await client.query<{ display_name: string }>(
+        "select display_name from users where id = $1",
+        [actor_user_id]
+      )
+      if (actorRows[0]?.display_name) actor_display_name = actorRows[0].display_name
+    }
+
+    const oldStatus = current.availability_status
+    const oldHolderId = current.current_holder_id ?? null
+    const oldNodeId = current.current_node_id ?? null
+
+    const insertLoanEvent = async (params: {
+      eventType: "checkout" | "return" | "transfer" | "report_lost"
+      userId?: string | null
+      userDisplayName?: string | null
+      notes?: string | null
+      previousHolderId?: string | null
+      newHolderId?: string | null
+    }) => {
+      await client.query(
+        `insert into loan_events
+          (id, event_type, book_id, book_title, user_id, user_display_name, timestamp, location_text, notes, previous_holder_id, new_holder_id)
+         values
+          ($1, $2, $3, $4, $5, $6, now(), $7, $8, $9, $10)`,
+        [
+          crypto.randomUUID(),
+          params.eventType,
+          bookId,
+          title,
+          params.userId ?? null,
+          params.userDisplayName ?? null,
+          current_location_text ?? null,
+          params.notes ?? null,
+          params.previousHolderId ?? null,
+          params.newHolderId ?? null,
+        ]
+      )
+    }
+
+    // Ledger policy: operational circulation/location changes are append-only events.
+    if (availability_status === "retired" && oldStatus !== "retired") {
+      await insertLoanEvent({
+        eventType: "report_lost",
+        userId: actor_user_id,
+        userDisplayName: actor_display_name,
+        notes: noteText,
+      })
+    } else if (oldStatus === "checked_out" && availability_status === "available") {
+      let returnUserId = oldHolderId
+      let returnDisplayName = current.current_holder_name ?? null
+      if (returnUserId && !returnDisplayName) {
+        const { rows: returnRows } = await client.query<{ display_name: string }>(
+          "select display_name from users where id = $1",
+          [returnUserId]
+        )
+        returnDisplayName = returnRows[0]?.display_name ?? null
+      }
+      if (!returnUserId) {
+        returnUserId = actor_user_id
+        returnDisplayName = actor_display_name
+      }
+      await insertLoanEvent({
+        eventType: "return",
+        userId: returnUserId,
+        userDisplayName: returnDisplayName,
+        notes: noteText,
+      })
+    } else if (availability_status === "checked_out" && current_holder_id) {
+      if (oldStatus === "checked_out" && oldHolderId && oldHolderId !== current_holder_id) {
+        await insertLoanEvent({
+          eventType: "transfer",
+          userId: actor_user_id,
+          userDisplayName: actor_display_name,
+          notes: noteText,
+          previousHolderId: oldHolderId,
+          newHolderId: current_holder_id,
+        })
+      } else if (oldStatus !== "checked_out" || oldHolderId !== current_holder_id) {
+        await insertLoanEvent({
+          eventType: "checkout",
+          userId: current_holder_id,
+          userDisplayName: current_holder_name,
+          notes: noteText,
+        })
+      }
+    } else if (
+      oldNodeId !== (current_node_id ?? null) ||
+      (oldStatus !== "in_transit" && availability_status === "in_transit") ||
+      (oldStatus === "in_transit" && availability_status === "available")
+    ) {
+      await insertLoanEvent({
+        eventType: "transfer",
+        userId: actor_user_id,
+        userDisplayName: actor_display_name,
+        notes: noteText,
+      })
+    }
 
     await client.query(
       `update books set
@@ -243,7 +387,11 @@ export async function updateBook(
         current_node_id = $8,
         current_node_name = $9,
         current_location_text = $10,
-        lending_terms = $11::jsonb
+        lending_terms = $11::jsonb,
+        availability_status = $12,
+        current_holder_id = $13,
+        current_holder_name = $14,
+        expected_return_date = $15
        where id = $1`,
       [
         bookId,
@@ -257,6 +405,10 @@ export async function updateBook(
         current_node_name ?? null,
         current_location_text ?? null,
         lending_terms,
+        availability_status,
+        current_holder_id ?? null,
+        current_holder_name ?? null,
+        expected_return_date,
       ]
     )
 

@@ -82,7 +82,7 @@ export default async function HomePage() {
             <div className="mt-8 flex flex-wrap gap-4 gap-y-1 text-sm text-muted-foreground sm:mt-10 sm:gap-6">
               <span>{totalBooks} in catalog</span>
               <span>{totalLoans} sharing events</span>
-              <span>{totalNodes} nodes</span>
+              <span>{totalNodes} library nodes</span>
             </div>
           )}
           </div>
@@ -140,7 +140,7 @@ export default async function HomePage() {
       {nodes.length > 0 && (
         <section className="border-t border-border/60 py-12 md:py-16">
           <div className="page-container">
-            <h2 className="text-lg font-semibold text-foreground">Nodes</h2>
+            <h2 className="text-lg font-semibold text-foreground">Library nodes</h2>
             <div className="mt-4 grid gap-3 sm:mt-6 sm:gap-4 md:grid-cols-2">
               {nodes.map((node) => (
                 <Card key={node.id} className="border-border bg-card">
@@ -176,7 +176,7 @@ export default async function HomePage() {
                       </p>
                     )}
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {booksPerNodeId[node.id] ?? 0} books
+                      {booksPerNodeId[node.id] ?? 0} books at this node
                     </p>
                   </CardContent>
                 </Card>

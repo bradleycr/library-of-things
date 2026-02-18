@@ -120,6 +120,14 @@ export default function BookDetailPage({
   }
 
   const isAvailable = book.availability_status === "available"
+  const statusLabel =
+    book.availability_status === "available"
+      ? "Available"
+      : book.availability_status === "checked_out"
+        ? "Checked Out"
+        : book.availability_status === "in_transit"
+          ? "Unavailable"
+          : "Missing"
 
   return (
     <div className="py-6 sm:py-8">
@@ -147,10 +155,12 @@ export default function BookDetailPage({
                 className={
                   isAvailable
                     ? "bg-accent text-accent-foreground"
-                    : "bg-secondary text-secondary-foreground"
+                    : book.availability_status === "retired"
+                      ? "bg-destructive/10 text-destructive"
+                      : "bg-secondary text-secondary-foreground"
                 }
               >
-                {isAvailable ? "Available" : "Checked Out"}
+                {statusLabel}
               </Badge>
               {book.is_pocket_library && (
                 <Badge className="bg-primary/10 text-primary border-primary/20">
@@ -283,7 +293,7 @@ export default function BookDetailPage({
                   )}
                 </CardContent>
               </Card>
-            ) : (
+            ) : book.availability_status === "checked_out" ? (
               <div className="mt-6 flex flex-col gap-3">
                 {book.expected_return_date && (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -311,6 +321,14 @@ export default function BookDetailPage({
                   <Bell className="h-4 w-4" />
                   Notify Me When Available
                 </Button>
+              </div>
+            ) : (
+              <div className="mt-6 rounded-lg border border-border bg-muted/30 p-4">
+                <p className="text-sm text-muted-foreground">
+                  {book.availability_status === "in_transit"
+                    ? "This book is temporarily unavailable while it is being moved or processed."
+                    : "This book is currently marked as missing."}
+                </p>
               </div>
             )}
 
@@ -398,12 +416,18 @@ export default function BookDetailPage({
                           </span>
                         </TableCell>
                         <TableCell>
-                          <Link
-                            href={`/profile/${event.user_id}`}
-                            className="text-sm font-medium text-primary hover:underline"
-                          >
-                            {event.user_display_name}
-                          </Link>
+                          {event.user_id ? (
+                            <Link
+                              href={`/profile/${event.user_id}`}
+                              className="text-sm font-medium text-primary hover:underline"
+                            >
+                              {event.user_display_name || "Unknown"}
+                            </Link>
+                          ) : (
+                            <span className="text-sm font-medium text-muted-foreground">
+                              {event.user_display_name || "Unknown"}
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {event.location_text

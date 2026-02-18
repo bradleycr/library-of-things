@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
     event_type: string
     book_id: string
     book_title: string | undefined
-    user_id: string
+    user_id: string | undefined
     user_display_name: string | undefined
     location: string | undefined
     notes: string

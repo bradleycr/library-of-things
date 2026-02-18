@@ -60,7 +60,21 @@ import {
   ResponsiveContainer,
 } from "recharts"
 import { useBootstrapData } from "@/hooks/use-bootstrap-data"
-import type { Book, Node as NodeType } from "@/lib/types"
+import type { Book, Node as NodeType, User } from "@/lib/types"
+
+type StewardBookStatus = "available" | "checked_out" | "unavailable" | "missing"
+
+function toStewardStatus(status: Book["availability_status"]): StewardBookStatus {
+  if (status === "retired") return "missing"
+  if (status === "in_transit") return "unavailable"
+  return status
+}
+
+function fromStewardStatus(status: StewardBookStatus): Book["availability_status"] | "missing" {
+  if (status === "missing") return "missing"
+  if (status === "unavailable") return "in_transit"
+  return status
+}
 
 export default function StewardDashboardPage() {
   const { data, refetch } = useBootstrapData()
@@ -89,9 +103,26 @@ export default function StewardDashboardPage() {
     edition: "",
     cover_image_url: "",
     node_id: "",
+    availability_status: "available" as StewardBookStatus,
+    current_holder_id: "",
+    note: "",
     contact_required: false,
     loan_period_days: 21,
   })
+
+  // Member management state
+  const [editingMember, setEditingMember] = useState<User | null>(null)
+  const [memberSaving, setMemberSaving] = useState(false)
+  const [memberError, setMemberError] = useState<string | null>(null)
+  const [memberForm, setMemberForm] = useState({
+    display_name: "",
+    contact_opt_in: false,
+    contact_email: "",
+    phone: "",
+  })
+  const [deletingMember, setDeletingMember] = useState<User | null>(null)
+  const [memberDeleting, setMemberDeleting] = useState(false)
+  const [memberDeleteError, setMemberDeleteError] = useState<string | null>(null)
 
   // Bulk add by ISBN
   const [bulkIsbns, setBulkIsbns] = useState("")
@@ -124,12 +155,26 @@ export default function StewardDashboardPage() {
         edition: editingBook.edition ?? "",
         cover_image_url: editingBook.cover_image_url ?? "",
         node_id: editingBook.current_node_id ?? "",
+        availability_status: toStewardStatus(editingBook.availability_status),
+        current_holder_id: editingBook.current_holder_id ?? "",
+        note: "",
         contact_required: editingBook.lending_terms?.contact_required ?? false,
         loan_period_days: editingBook.lending_terms?.loan_period_days ?? 21,
       })
       setEditError(null)
     }
   }, [editingBook])
+
+  useEffect(() => {
+    if (!editingMember) return
+    setMemberForm({
+      display_name: editingMember.display_name,
+      contact_opt_in: editingMember.contact_opt_in ?? false,
+      contact_email: editingMember.contact_email ?? "",
+      phone: editingMember.phone ?? "",
+    })
+    setMemberError(null)
+  }, [editingMember])
 
   useEffect(() => {
     if (nodes.length > 0 && !bulkNodeId) setBulkNodeId(nodes[0].id)
@@ -455,6 +500,10 @@ export default function StewardDashboardPage() {
       setEditError("Title is required")
       return
     }
+    if (editForm.availability_status === "checked_out" && !editForm.current_holder_id) {
+      setEditError("Choose a member when status is checked out")
+      return
+    }
     setEditSaving(true)
     setEditError(null)
     try {
@@ -467,6 +516,9 @@ export default function StewardDashboardPage() {
           edition: editForm.edition.trim() || null,
           cover_image_url: editForm.cover_image_url.trim() || null,
           node_id: editForm.node_id || undefined,
+          availability_status: fromStewardStatus(editForm.availability_status),
+          current_holder_id: editForm.current_holder_id || null,
+          note: editForm.note.trim() || null,
           lending_terms: {
             ...editingBook.lending_terms,
             contact_required: editForm.contact_required,
@@ -484,6 +536,62 @@ export default function StewardDashboardPage() {
       setEditError(e instanceof Error ? e.message : "Update failed")
     } finally {
       setEditSaving(false)
+    }
+  }
+
+  const handleSaveMember = async () => {
+    if (!editingMember) return
+    const displayName = memberForm.display_name.trim()
+    if (!displayName) {
+      setMemberError("Display name is required")
+      return
+    }
+    setMemberSaving(true)
+    setMemberError(null)
+    try {
+      const res = await fetch(`/api/steward/members/${editingMember.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          display_name: displayName,
+          contact_opt_in: memberForm.contact_opt_in,
+          contact_email: memberForm.contact_email.trim() || null,
+          phone: memberForm.phone.trim() || null,
+        }),
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j?.error ?? "Update failed")
+      }
+      await refetch()
+      setEditingMember(null)
+    } catch (e) {
+      setMemberError(e instanceof Error ? e.message : "Update failed")
+    } finally {
+      setMemberSaving(false)
+    }
+  }
+
+  const handleDeleteMember = async () => {
+    if (!deletingMember) return
+    setMemberDeleting(true)
+    setMemberDeleteError(null)
+    try {
+      const res = await fetch(`/api/steward/members/${deletingMember.id}`, {
+        method: "DELETE",
+        credentials: "include",
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j?.error ?? "Delete failed")
+      }
+      await refetch()
+      setDeletingMember(null)
+    } catch (e) {
+      setMemberDeleteError(e instanceof Error ? e.message : "Delete failed")
+    } finally {
+      setMemberDeleting(false)
     }
   }
 
@@ -1069,12 +1177,18 @@ export default function StewardDashboardPage() {
                           className={
                             book.availability_status === "available"
                               ? "bg-accent text-accent-foreground"
-                              : ""
+                              : book.availability_status === "retired"
+                                ? "bg-destructive/10 text-destructive"
+                                : ""
                           }
                         >
                           {book.availability_status === "available"
                             ? "Available"
-                            : "Checked Out"}
+                            : book.availability_status === "checked_out"
+                              ? "Checked out"
+                              : book.availability_status === "in_transit"
+                                ? "Unavailable"
+                                : "Missing"}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
@@ -1108,6 +1222,77 @@ export default function StewardDashboardPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Member Management */}
+        <Card className="mt-8 border-border">
+          <CardHeader>
+            <CardTitle className="text-card-foreground">
+              Member Management
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Edit basic member profile details and remove members when needed.
+            </p>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Member</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Phone</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {users.map((member) => (
+                    <TableRow key={member.id}>
+                      <TableCell className="font-medium text-sm">
+                        <Link
+                          href={`/profile/${member.id}`}
+                          className="text-primary hover:underline"
+                        >
+                          {member.display_name}
+                        </Link>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {member.contact_email || "—"}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {member.phone || "—"}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-foreground"
+                            onClick={() => setEditingMember(member)}
+                          >
+                            <Edit className="h-4 w-4" />
+                            <span className="sr-only">Edit member</span>
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive"
+                            onClick={() => {
+                              setMemberDeleteError(null)
+                              setDeletingMember(member)
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            <span className="sr-only">Delete member</span>
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Edit Book Dialog */}
@@ -1116,7 +1301,7 @@ export default function StewardDashboardPage() {
           <DialogHeader>
             <DialogTitle>Edit book</DialogTitle>
             <DialogDescription>
-              Update metadata and location. Changes are saved to the database.
+              Update metadata, circulation state, and location. Operational changes are written to sharing history.
             </DialogDescription>
           </DialogHeader>
           {editingBook && (
@@ -1161,6 +1346,55 @@ export default function StewardDashboardPage() {
                 />
               </div>
               <div className="grid gap-2">
+                <Label>Availability status</Label>
+                <Select
+                  value={editForm.availability_status}
+                  onValueChange={(v) =>
+                    setEditForm((f) => ({
+                      ...f,
+                      availability_status: v as StewardBookStatus,
+                      current_holder_id:
+                        v === "checked_out" ? f.current_holder_id : "",
+                    }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="available">Available</SelectItem>
+                    <SelectItem value="checked_out">Checked out</SelectItem>
+                    <SelectItem value="unavailable">Unavailable</SelectItem>
+                    <SelectItem value="missing">Missing</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label>Current holder</Label>
+                <Select
+                  value={editForm.current_holder_id || "none"}
+                  onValueChange={(v) =>
+                    setEditForm((f) => ({
+                      ...f,
+                      current_holder_id: v === "none" ? "" : v,
+                    }))
+                  }
+                  disabled={editForm.availability_status !== "checked_out"}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select member" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— No holder —</SelectItem>
+                    {users.map((u) => (
+                      <SelectItem key={u.id} value={u.id}>
+                        {u.display_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
                 <Label>Node / location</Label>
                 <Select
                   value={editForm.node_id || "none"}
@@ -1190,6 +1424,16 @@ export default function StewardDashboardPage() {
                   onChange={(e) => setEditForm((f) => ({ ...f, loan_period_days: Number(e.target.value) || 21 }))}
                 />
               </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-note">Ledger note (optional)</Label>
+                <Textarea
+                  id="edit-note"
+                  value={editForm.note}
+                  onChange={(e) => setEditForm((f) => ({ ...f, note: e.target.value }))}
+                  placeholder="Why this change was made"
+                  className="min-h-[88px]"
+                />
+              </div>
               <div className="flex items-center gap-2">
                 <Checkbox
                   id="edit-contact"
@@ -1208,6 +1452,101 @@ export default function StewardDashboardPage() {
             </Button>
             <Button onClick={handleSaveBook} disabled={editSaving}>
               {editSaving ? "Saving…" : "Save changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Member Dialog */}
+      <Dialog open={!!editingMember} onOpenChange={(open) => !open && setEditingMember(null)}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Edit member</DialogTitle>
+            <DialogDescription>
+              Update a member's basic profile and contact settings.
+            </DialogDescription>
+          </DialogHeader>
+          {editingMember && (
+            <div className="grid gap-4 py-4">
+              {memberError && (
+                <p className="text-sm text-destructive">{memberError}</p>
+              )}
+              <div className="grid gap-2">
+                <Label htmlFor="member-display-name">Display name</Label>
+                <Input
+                  id="member-display-name"
+                  value={memberForm.display_name}
+                  onChange={(e) =>
+                    setMemberForm((f) => ({ ...f, display_name: e.target.value }))
+                  }
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="member-email">Contact email</Label>
+                <Input
+                  id="member-email"
+                  type="email"
+                  value={memberForm.contact_email}
+                  onChange={(e) =>
+                    setMemberForm((f) => ({ ...f, contact_email: e.target.value }))
+                  }
+                  placeholder="member@example.com"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="member-phone">Phone</Label>
+                <Input
+                  id="member-phone"
+                  value={memberForm.phone}
+                  onChange={(e) =>
+                    setMemberForm((f) => ({ ...f, phone: e.target.value }))
+                  }
+                  placeholder="+49 ..."
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="member-contact-opt-in"
+                  checked={memberForm.contact_opt_in}
+                  onCheckedChange={(c) =>
+                    setMemberForm((f) => ({ ...f, contact_opt_in: c === true }))
+                  }
+                />
+                <Label htmlFor="member-contact-opt-in" className="text-sm font-normal">
+                  Show contact information publicly
+                </Label>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingMember(null)} disabled={memberSaving}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveMember} disabled={memberSaving}>
+              {memberSaving ? "Saving…" : "Save member"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Member Dialog */}
+      <Dialog open={!!deletingMember} onOpenChange={(open) => !open && setDeletingMember(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete member</DialogTitle>
+            <DialogDescription>
+              This permanently deletes the member account and anonymizes their historical ledger entries.
+            </DialogDescription>
+          </DialogHeader>
+          {memberDeleteError && (
+            <p className="text-sm text-destructive">{memberDeleteError}</p>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeletingMember(null)} disabled={memberDeleting}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteMember} disabled={memberDeleting}>
+              {memberDeleting ? "Deleting…" : "Delete member"}
             </Button>
           </DialogFooter>
         </DialogContent>

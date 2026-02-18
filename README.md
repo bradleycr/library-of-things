@@ -13,7 +13,7 @@ corepack enable && pnpm install
 cp env.example .env.local
 ```
 
-Set `DATABASE_URL` in `.env.local` (Supabase Postgres). Optionally `STEWARD_PASSWORD` for the steward dashboard (default: `password123`).
+Set `DATABASE_URL` in `.env.local` (Supabase Postgres). Optionally `STEWARD_PASSWORD` for the steward dashboard (default: `password123`). Steward dashboard: edit books (metadata, status, holder, location), add optional ledger notes, and manage members; all changes appear in the public sharing history.
 
 ```bash
 pnpm db:ensure-schema    # create/update tables
