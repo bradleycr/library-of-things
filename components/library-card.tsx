@@ -20,7 +20,7 @@ export function LibraryCard({ card, className }: LibraryCardProps) {
       {/* Logos – top left */}
       <div className="absolute left-4 top-4 flex items-center gap-2">
         <img
-          src="/foresight-logo.png"
+          src="/foresight-logo.svg"
           alt="Foresight Institute"
           className="h-6 w-auto opacity-90"
         />

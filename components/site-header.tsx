@@ -78,7 +78,7 @@ export function SiteHeader() {
         <Link href="/" className="flex items-center gap-3">
           {/* Partner logos: Foresight Institute + Internet Archive Library */}
           <img
-            src="/foresight-logo.png"
+            src="/foresight-logo.svg"
             alt="Foresight Institute"
             className="h-8 w-auto"
           />

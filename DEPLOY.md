@@ -141,6 +141,13 @@ Vercel will build and deploy. The site will use the **Supabase** `DATABASE_URL` 
    - Use Supabase’s **Transaction pooler** URL with port **6543** (not 5432). In Supabase → Project Settings → Database, copy the URI that uses **port 6543** and set that as `DATABASE_URL` in Vercel.
    - Save, then **Redeploy** (Deployments → latest → ⋯ → Redeploy).
 
+## Troubleshooting: 401 Unauthorized (steward or assets)
+
+If you see **401** when using the steward dashboard (e.g. changing who has a book) or when loading the site (e.g. logos):
+
+1. **Vercel Deployment Protection** — If the project has **Settings → Deployment Protection** (or Password / Vercel Authentication) enabled, it returns 401 for requests that don’t have the protection cookie. Turn it **off** so the app is public; steward area is already protected by its own password (`STEWARD_PASSWORD`).
+2. **Steward cookie** — After logging in at `/steward/login`, the app sets a cookie with `path: /` so API calls from the dashboard are authorized. If you still had 401 after the cookie fix, log out of the steward dashboard and log in again once so the new cookie is set.
+
 ## Checklist
 
 - [ ] **Git:** Repo connected in **Settings → Git**, Production Branch = `main` (auto-deploy on push)

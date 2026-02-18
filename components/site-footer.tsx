@@ -56,7 +56,7 @@ export function SiteFooter() {
               aria-label="Foresight Institute"
             >
               <img
-                src="/foresight-logo.png"
+                src="/foresight-logo.svg"
                 alt=""
                 className="h-5 w-auto"
               />
