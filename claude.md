@@ -21,7 +21,7 @@
 |-------|---------|
 | `/` | Home; catalog stats |
 | `/explore` | Browse books |
-| `/add-book` | Add a book (node or Pocket Library); ISBN lookup |
+| `/add-book` | Add a book (node or Pocket Library); ISBN lookup; optional cover photo capture |
 | `/book/[uuid]` | Book detail; checkout link/QR |
 | `/book/[uuid]/checkout` | Checkout flow (requires library card) |
 | `/my-books` | User’s borrowed books, added books, history |
@@ -42,7 +42,7 @@
 - `app/` — App Router pages and API routes
 - `components/` — UI (site-header, modals, book cards, etc.)
 - `hooks/` — `useLibraryCard`, `useBootstrapData`
-- `lib/` — `types.ts`, `utils`; `lib/server/` — `db.ts`, `repositories.ts`
+- `lib/` — `types.ts`, `utils`, `image-utils.ts` (client-side cover photo compression); `lib/server/` — `db.ts`, `repositories.ts`
 - `scripts/` — DB provisioning, migrations, backfills
 
 ## Docs to use
@@ -61,3 +61,6 @@
 - Remove-card-from-device flow includes the “save your card and PIN” confirmation dialog.
 - Ledger: event types `added`, `checkout`, `return`, `transfer`, `report_lost`, `report_damaged`; `user_id` can be null (e.g. anonymized after member delete).
 - No mock data in runtime; all data from Postgres via bootstrap and API routes.
+- **Book cover images** — three sources: (1) OpenLibrary URL from ISBN lookup, (2) user-taken photo compressed client-side and stored as JPEG data URI in `cover_image_url`, (3) deterministic pastel-gradient SVG fallback at `/api/books/[id]/cover`; title/author on generated covers use off-black (#1a1a1a) for contrast.
+- **Add-book success** — after adding a book, user sees checkout URL (copyable), optional “Add to book” guide (NFC Tools link + printable QR via qrcode.react), and “Do this later” to collapse the guide; URL stays visible.
+- **Partner logos** — Foresight Institute (`/public/foresight-logo.png`) and Internet Archive (`/public/internet-archive-logo-sf.png`); referenced in site-header, site-footer, and library-card components.

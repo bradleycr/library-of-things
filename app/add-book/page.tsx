@@ -9,14 +9,12 @@ import {
   Check,
   CreditCard,
   ArrowRight,
-  Copy,
-  QrCode,
   MapPin,
   Mail,
   Building2,
   Package,
   Info,
-  X,
+  Camera,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -42,6 +40,8 @@ import {
 import { useBootstrapData } from "@/hooks/use-bootstrap-data"
 import { useLibraryCard } from "@/hooks/use-library-card"
 import { GetLibraryCardModal } from "@/components/get-library-card-modal"
+import { CoverPhotoCapture } from "@/components/cover-photo-capture"
+import { AddBookSuccessCard } from "@/components/add-book-success-card"
 
 export default function AddBookPage() {
   const { data } = useBootstrapData()
@@ -59,6 +59,9 @@ export default function AddBookPage() {
   const [isbnLookedUp, setIsbnLookedUp] = useState(false)
   const [lookupError, setLookupError] = useState<string | null>(null)
 
+  // Cover source: "url" for standard URL/ISBN flow, "camera" for photo capture
+  const [coverMode, setCoverMode] = useState<"url" | "camera">("url")
+
   // Location: node or pocket library
   const [locationType, setLocationType] = useState<"node" | "pocket">("node")
   const [nodeId, setNodeId] = useState("")
@@ -74,7 +77,6 @@ export default function AddBookPage() {
   const [bookCreated, setBookCreated] = useState(false)
   const [createdBookId, setCreatedBookId] = useState<string | null>(null)
   const [createdCheckoutUrl, setCreatedCheckoutUrl] = useState<string | null>(null)
-  const [urlCopied, setUrlCopied] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Node recommendation dialog for Pocket Library books
@@ -364,42 +366,91 @@ export default function AddBookPage() {
                 <div>
                   <Label>Cover Image</Label>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    From ISBN lookup, paste a URL, or leave empty for a generated pastel cover.
+                    From ISBN lookup, paste a URL, snap a photo, or leave empty for a generated cover.
                   </p>
-                  {coverImageUrl ? (
-                    <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-start">
-                      <div className="h-32 w-24 shrink-0 overflow-hidden rounded-lg border border-border bg-muted">
-                        <img
-                          src={coverImageUrl}
-                          alt="Cover preview"
-                          className="h-full w-full object-cover"
-                          onError={() => setCoverImageUrl("")}
-                        />
+
+                  {coverMode === "url" ? (
+                    /* ── URL mode (primary) ────────────────────── */
+                    coverImageUrl ? (
+                      <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-start">
+                        <div className="h-32 w-24 shrink-0 overflow-hidden rounded-lg border border-border bg-muted">
+                          <img
+                            src={coverImageUrl}
+                            alt="Cover preview"
+                            className="h-full w-full object-cover"
+                            onError={() => setCoverImageUrl("")}
+                          />
+                        </div>
+                        <div className="flex flex-1 flex-col gap-2">
+                          {!coverImageUrl.startsWith("data:") && (
+                            <Input
+                              placeholder="Cover image URL"
+                              value={coverImageUrl}
+                              onChange={(e) => setCoverImageUrl(e.target.value)}
+                              className="text-sm"
+                            />
+                          )}
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setCoverImageUrl("")}
+                            >
+                              Use generated cover instead
+                            </Button>
+                            {coverImageUrl.startsWith("data:") && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="gap-1.5"
+                                onClick={() => {
+                                  setCoverImageUrl("")
+                                  setCoverMode("camera")
+                                }}
+                              >
+                                <Camera className="h-3.5 w-3.5" />
+                                Retake
+                              </Button>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex flex-1 flex-col gap-2">
-                        <Input
-                          placeholder="Cover image URL"
-                          value={coverImageUrl}
-                          onChange={(e) => setCoverImageUrl(e.target.value)}
-                          className="text-sm"
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setCoverImageUrl("")}
-                        >
-                          Use generated pastel cover instead
-                        </Button>
+                    ) : (
+                      <div className="mt-2 flex flex-col gap-2">
+                        <div className="flex gap-2">
+                          <Input
+                            placeholder="Paste cover image URL (optional)"
+                            value={coverImageUrl}
+                            onChange={(e) => setCoverImageUrl(e.target.value)}
+                            className="text-sm"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="shrink-0 gap-1.5"
+                            onClick={() => setCoverMode("camera")}
+                            title="Take a photo of the cover"
+                          >
+                            <Camera className="h-4 w-4" />
+                            <span className="hidden sm:inline">Photo</span>
+                          </Button>
+                        </div>
                       </div>
-                    </div>
+                    )
                   ) : (
-                    <Input
-                      placeholder="Paste cover image URL (optional)"
-                      value={coverImageUrl}
-                      onChange={(e) => setCoverImageUrl(e.target.value)}
-                      className="mt-2 text-sm"
-                    />
+                    /* ── Camera mode (secondary) ───────────────── */
+                    <div className="mt-2">
+                      <CoverPhotoCapture
+                        onCapture={(dataUri) => {
+                          setCoverImageUrl(dataUri)
+                          setCoverMode("url")
+                        }}
+                        onCancel={() => setCoverMode("url")}
+                      />
+                    </div>
                   )}
                 </div>
               </CardContent>
@@ -587,67 +638,27 @@ export default function AddBookPage() {
               </Button>
             </div>
 
-            {/* Success Message */}
-            {bookCreated && (
+            {/* Success: URL + optional NFC/QR guide; "Do it later" keeps URL visible */}
+            {bookCreated && createdCheckoutUrl && (
+              <AddBookSuccessCard
+                checkoutUrl={createdCheckoutUrl}
+                bookId={createdBookId}
+                locationType={locationType}
+              />
+            )}
+            {bookCreated && !createdCheckoutUrl && createdBookId && (
               <Card className="border-primary/30 bg-primary/5">
-                <CardContent className="flex flex-col items-center p-6 text-center">
+                <CardContent className="flex flex-col items-center gap-4 p-6 text-center">
                   <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
                     <Check className="h-7 w-7 text-primary" />
                   </div>
-                  <p className="mt-4 font-medium text-foreground">
-                    {locationType === "pocket" ? "Pocket Library book added!" : "Book added to the catalog"}
-                  </p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Use the URL below for a QR code or NFC tag. When someone taps it, they'll see a simple checkout or return screen.
-                  </p>
-                  {createdCheckoutUrl && (
-                    <div className="mt-4 w-full max-w-md">
-                      <p className="mb-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        Book Checkout Link (QR / NFC)
-                      </p>
-                      <div className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2">
-                        <code className="flex-1 truncate text-left text-sm text-foreground">
-                          {typeof window !== "undefined"
-                            ? `${window.location.origin}${createdCheckoutUrl}`
-                            : createdCheckoutUrl}
-                        </code>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="shrink-0 gap-1"
-                          onClick={() => {
-                            const full = typeof window !== "undefined"
-                              ? `${window.location.origin}${createdCheckoutUrl}`
-                              : createdCheckoutUrl
-                            void navigator.clipboard.writeText(full).then(() => {
-                              setUrlCopied(true)
-                              setTimeout(() => setUrlCopied(false), 2000)
-                            })
-                          }}
-                        >
-                          {urlCopied ? (
-                            <Check className="h-4 w-4 text-accent" />
-                          ) : (
-                            <Copy className="h-4 w-4" />
-                          )}
-                          {urlCopied ? "Copied" : "Copy"}
-                        </Button>
-                      </div>
-                      <p className="mt-2 flex items-center justify-center gap-1 text-xs text-muted-foreground">
-                        <QrCode className="h-3.5 w-3.5" />
-                        Print this as a QR code or write it to an NFC tag to put on the book.
-                      </p>
-                    </div>
-                  )}
-                  {createdBookId && (
-                    <Link href={`/book/${createdBookId}`} className="mt-4">
-                      <Button variant="outline" className="gap-2">
-                        View book page
-                        <ArrowRight className="h-4 w-4" />
-                      </Button>
-                    </Link>
-                  )}
+                  <p className="font-medium text-foreground">Book added.</p>
+                  <Link href={`/book/${createdBookId}`}>
+                    <Button variant="outline" className="gap-2">
+                      View book page
+                      <ArrowRight className="h-4 w-4" />
+                    </Button>
+                  </Link>
                 </CardContent>
               </Card>
             )}

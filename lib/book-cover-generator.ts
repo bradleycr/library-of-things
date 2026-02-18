@@ -84,7 +84,8 @@ export function generateBookCoverSvg(
   const c1 = PASTEL_PALETTE[pick(h, PASTEL_PALETTE.length)]
   const c2 = PASTEL_PALETTE[pick2(h, PASTEL_PALETTE.length)]
   const c3 = PASTEL_PALETTE[pick(h + 1, PASTEL_PALETTE.length)]
-  const textColor = PASTEL_PALETTE[pick(h + 2, PASTEL_PALETTE.length)]
+  // Off-black for strong contrast on pastel backgrounds (always readable).
+  const textColor = "#1a1a1a"
 
   // Pixel grid: 16x24 blocks for chunky pixel look
   const cols = 16
