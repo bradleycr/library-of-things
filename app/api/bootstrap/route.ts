@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server"
+import { cookies } from "next/headers"
 import {
   listBooks,
   listLoanEvents,
   listNodes,
   listUsers,
 } from "@/lib/server/repositories"
+import { getStewardCookieName, stewardToken } from "@/lib/server/steward-auth"
+import type { Book } from "@/lib/types"
 
 /** Cache-Control so browsers (e.g. Safari) don't cache a partial or error response. */
 const NO_STORE_HEADERS = {
@@ -44,8 +47,20 @@ export async function GET() {
       )
     }
 
+    // Public requests: do not expose added_by_user_id for anonymously-added books.
+    // Steward (dashboard) requests get full book data so they can see who added what.
+    const cookieStore = await cookies()
+    const isSteward = cookieStore.get(getStewardCookieName())?.value === stewardToken()
+    const booksForClient: Book[] = isSteward
+      ? books
+      : books.map((b) =>
+          b.added_by_display_name === "Anonymous"
+            ? { ...b, added_by_user_id: undefined }
+            : b
+        )
+
     return NextResponse.json(
-      { books, loanEvents, nodes, users },
+      { books: booksForClient, loanEvents, nodes, users },
       { headers: NO_STORE_HEADERS }
     )
   } catch (error) {

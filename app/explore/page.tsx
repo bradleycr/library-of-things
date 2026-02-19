@@ -303,9 +303,9 @@ export default function ExplorePage() {
                   {book.author && (
                     <p className="text-sm text-muted-foreground">{book.author}</p>
                   )}
-                  {book.current_location_text && (
+                  {(book.current_node_name || book.current_location_text) && (
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {formatLocationForDisplay(book.current_location_text)}
+                      {book.current_node_name ?? formatLocationForDisplay(book.current_location_text)}
                     </p>
                   )}
                 </div>

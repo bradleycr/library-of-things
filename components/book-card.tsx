@@ -47,7 +47,7 @@ export function BookCard({ book }: { book: Book }) {
           {book.author && (
             <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">{book.author}</p>
           )}
-          {book.current_location_text && (
+          {(book.current_node_name || book.current_location_text) && (
             <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
               {book.is_pocket_library ? (
                 <Package className="h-3 w-3 shrink-0" />
@@ -55,7 +55,7 @@ export function BookCard({ book }: { book: Book }) {
                 <Building2 className="h-3 w-3 shrink-0" />
               )}
               <span className="line-clamp-1">
-                {formatLocationForDisplay(book.current_location_text)}
+                {book.current_node_name ?? formatLocationForDisplay(book.current_location_text)}
               </span>
             </div>
           )}

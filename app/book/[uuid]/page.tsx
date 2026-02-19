@@ -189,12 +189,14 @@ export default function BookDetailPage({
               </p>
             )}
 
-            {/* Added by — who contributed this book to the library; Anonymous when added anonymously */}
+            {/* Added by — link to profile only when not anonymous; never expose identity for anonymous adds */}
             <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
               <UserPlus className="h-4 w-4 text-primary" />
               <span>
                 Added by{" "}
-                {book.added_by_user_id ? (
+                {book.added_by_display_name === "Anonymous" ? (
+                  <span className="italic">Anonymous</span>
+                ) : book.added_by_user_id ? (
                   <Link
                     href={`/profile/${book.added_by_user_id}`}
                     className="font-medium text-primary hover:underline"
@@ -209,15 +211,15 @@ export default function BookDetailPage({
               </span>
             </div>
 
-            {/* Location */}
-            {book.current_location_text && (
+            {/* Location: node name for node books, address/text for Pocket Library */}
+            {(book.current_node_name || book.current_location_text) && (
               <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
                 {book.is_pocket_library ? (
                   <Package className="h-4 w-4 text-primary" />
                 ) : (
                   <Building2 className="h-4 w-4 text-primary" />
                 )}
-                <span>{formatLocationForDisplay(book.current_location_text)}</span>
+                <span>{book.current_node_name ?? formatLocationForDisplay(book.current_location_text)}</span>
               </div>
             )}
 
