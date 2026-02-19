@@ -63,6 +63,6 @@
 - No mock data in runtime; all data from Postgres via bootstrap and API routes.
 - **Book cover images** — three sources: (1) OpenLibrary URL from ISBN lookup, (2) user-taken photo compressed client-side and stored as JPEG data URI in `cover_image_url`, (3) deterministic pastel-gradient SVG fallback at `/api/books/[id]/cover`; title/author on generated covers use off-black (#1a1a1a) for contrast. Cover API cache is 24h so design updates apply within a day.
 - **Add-book success** — after adding a book, user sees checkout URL (copyable), optional “Add to book” guide (NFC Tools link + printable QR via qrcode.react), and “Do this later” to collapse the guide; URL stays visible.
-- **Partner logos** — Foresight Institute (`/foresight-logo.png`) and Internet Archive (`/internet-archive-logo-sf.png`); referenced in site-header, site-footer, and library-card. Only the PNG is used (foresight-logo.svg removed).
+- **Partner logos** — Foresight in header + footer; Internet Archive in footer (and library card) only, not in header.
 - **Book location display** — Under books (cards, explore, book detail) we always show the **node name** (e.g. "Berlin Flybrary node") when the book is at a node; only Pocket Library books show the typed address/location text.
 - **Anonymous adds** — When a book is added anonymously, public-facing views (book page, explore, etc.) show "Added by Anonymous" with no link; `added_by_user_id` is stripped from bootstrap for non-steward requests. Only the steward dashboard receives full book data (including who added anonymous books).
