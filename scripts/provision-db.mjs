@@ -51,7 +51,7 @@ const users = [
   },
 ]
 
-// Foresight nodes: Berlin (CIC) and SF (The Fold).
+// Foresight nodes: Berlin and SF (The Fold).
 const nodes = [
   {
     id: "n1",
@@ -59,7 +59,7 @@ const nodes = [
     type: "coworking",
     location_lat: 52.4940361,
     location_lng: 13.4462696,
-    location_address: "Lohmühlenstraße 65, 12435 Berlin, Germany",
+    location_address: "Lothmenstraße 56, 12435 Berlin, Germany",
     steward_id: "u1",
     public: true,
     capacity: 120,

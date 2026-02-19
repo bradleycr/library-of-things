@@ -10,7 +10,7 @@ The **Pocket Library** feature enables decentralized book sharing, allowing user
 
 Users can now add books in two ways:
 
-- **Library Node Books**: Traditional method where books are housed at a physical library location (e.g., Foresight Berlin Node)
+- **Library Node Books**: Traditional method where books are housed at a physical library location (e.g. Foresight Berlin Node)
 - **Pocket Library Books**: "Floating books" that users keep in their personal possession but share through the network
 
 ### 2. **User-Facing Add Book Page**

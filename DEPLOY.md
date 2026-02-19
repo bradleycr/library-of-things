@@ -148,6 +148,21 @@ If you see **401** when using the steward dashboard (e.g. changing who has a boo
 1. **Vercel Deployment Protection** — If the project has **Settings → Deployment Protection** (or Password / Vercel Authentication) enabled, it returns 401 for requests that don’t have the protection cookie. Turn it **off** so the app is public; steward area is already protected by its own password (`STEWARD_PASSWORD`).
 2. **Steward cookie** — After logging in at `/steward/login`, the app sets a cookie with `path: /` so API calls from the dashboard are authorized. If you still had 401 after the cookie fix, log out of the steward dashboard and log in again once so the new cookie is set.
 
+## Node names and addresses (Foresight Berlin Node / Foresight SF Node)
+
+Node titles use **Foresight Berlin Node** and **Foresight SF Node** (no other naming). Berlin node address is **Lothmenstraße 56, 12435 Berlin, Germany**. If you have an existing DB with different node names or mixed addresses on books, run once (with the same `DATABASE_URL` Vercel uses):
+
+```bash
+pnpm db:normalize-nodes
+```
+
+This updates node names/addresses and sets every book at a node to show the node name uniformly.
+
+## Renaming the repo (local + GitHub)
+
+- **GitHub:** Repo → **Settings** → **General** → **Repository name** → change (e.g. to `library-of-things` if it was something else). GitHub will redirect the old URL.
+- **Local folder:** Rename the project folder on disk if you like; then `git remote -v` still points at GitHub. If you changed the repo name on GitHub, run `git remote set-url origin https://github.com/OWNER/NEW-REPO-NAME.git`.
+
 ## Checklist
 
 - [ ] **Git:** Repo connected in **Settings → Git**, Production Branch = `main` (auto-deploy on push)
@@ -156,3 +171,4 @@ If you see **401** when using the steward dashboard (e.g. changing who has a boo
 - [ ] `STEWARD_PASSWORD` set in Vercel (production)
 - [ ] `pnpm db:ensure-schema` run once against Supabase
 - [ ] Push to `main` (or Redeploy) → live at **https://libraryofthings.vercel.app**
+- [ ] If nodes had old names: run `pnpm db:normalize-nodes` once against production DB

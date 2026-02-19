@@ -4,8 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import type { LibraryCard } from "@/lib/types"
 
 const STORAGE_KEY = "library_of_things_library_card"
-/** One-time migration from old key; read and then remove. */
-const LEGACY_STORAGE_KEY = "flybrary_library_card"
+/** One-time migration from previous app name; read once and remove. */
+const LEGACY_STORAGE_KEY = "flybrary_library_card" // do not use elsewhere; migration only
 
 /**
  * Custom event name used to synchronise card state across all
