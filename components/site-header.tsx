@@ -76,16 +76,11 @@ export function SiteHeader() {
     <header className="sticky top-0 z-50 border-b border-border/50 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/90">
       <div className="page-container flex h-14 min-h-14 items-center justify-between sm:h-16 sm:min-h-16 md:h-20 md:min-h-20">
         <Link href="/" className="flex items-center gap-3">
-          {/* Partner logos: Foresight Institute + Internet Archive Library */}
+          {/* Partner logo: Foresight Institute (Internet Archive logo only in footer) */}
           <img
             src="/foresight-logo.png"
             alt="Foresight Institute"
             className="h-8 w-auto"
-          />
-          <img
-            src="/internet-archive-logo-sf.png"
-            alt="Internet Archive"
-            className="h-7 w-auto opacity-90"
           />
           <span className="font-lot text-xl font-normal tracking-tight text-foreground">
             Library of Things
