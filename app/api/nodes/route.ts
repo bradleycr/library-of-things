@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import {
   getStewardCookieName,
-  stewardToken,
+  verifyStewardToken,
 } from "@/lib/server/steward-auth"
 import { createNode } from "@/lib/server/repositories"
 import type { Node } from "@/lib/types"
@@ -23,7 +23,7 @@ const NODE_TYPES: Node["type"][] = [
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies()
   const token = cookieStore.get(getStewardCookieName())?.value
-  if (token !== stewardToken()) {
+  if (!token || !verifyStewardToken(token)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 

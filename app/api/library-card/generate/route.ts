@@ -5,6 +5,8 @@ import {
   hashPin,
   normalizePinForAuth,
 } from "@/lib/server/repositories"
+import { createSessionToken, SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS } from "@/lib/server/session"
+import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
 
 const ADJECTIVES = [
   "Clever", "Bright", "Swift", "Curious", "Wandering", "Bold", "Gentle",
@@ -54,6 +56,15 @@ function isTransientError(err: unknown): boolean {
 }
 
 export async function POST(request: NextRequest) {
+  const ip = getClientIp(request)
+  const rl = checkRateLimit(`card-gen:${ip}`, 10, 60_000)
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { success: false, error: "Too many requests. Please wait a minute." },
+      { status: 429, headers: { "Retry-After": String(Math.ceil((rl.retryAfterMs ?? 60_000) / 1000)) } }
+    )
+  }
+
   let pseudonym = generatePseudonym()
   try {
     const body = await request.json().catch(() => null)
@@ -95,7 +106,9 @@ export async function POST(request: NextRequest) {
           status: "active" as const,
         }
 
-        return NextResponse.json({ success: true, card })
+        const res = NextResponse.json({ success: true, card })
+        res.cookies.set(SESSION_COOKIE_NAME, createSessionToken(user.id), SESSION_COOKIE_OPTIONS)
+        return res
       } catch (error) {
         lastError = error
         if (isUniqueViolation(error)) {

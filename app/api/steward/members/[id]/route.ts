@@ -4,12 +4,12 @@ import {
   deleteUserAccount,
   updateUserProfile,
 } from "@/lib/server/repositories"
-import { getStewardCookieName, stewardToken } from "@/lib/server/steward-auth"
+import { getStewardCookieName, verifyStewardToken } from "@/lib/server/steward-auth"
 
 async function assertSteward(): Promise<NextResponse | null> {
   const cookieStore = await cookies()
   const token = cookieStore.get(getStewardCookieName())?.value
-  if (token !== stewardToken()) {
+  if (!token || !verifyStewardToken(token)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
   return null

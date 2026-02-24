@@ -6,7 +6,7 @@ import {
   listNodes,
   listUsers,
 } from "@/lib/server/repositories"
-import { getStewardCookieName, stewardToken } from "@/lib/server/steward-auth"
+import { getStewardCookieName, verifyStewardToken } from "@/lib/server/steward-auth"
 import type { Book } from "@/lib/types"
 
 /** Cache-Control so browsers (e.g. Safari) don't cache a partial or error response. */
@@ -50,7 +50,8 @@ export async function GET() {
     // Public requests: do not expose added_by_user_id for anonymously-added books.
     // Steward (dashboard) requests get full book data so they can see who added what.
     const cookieStore = await cookies()
-    const isSteward = cookieStore.get(getStewardCookieName())?.value === stewardToken()
+    const stewardCookie = cookieStore.get(getStewardCookieName())?.value
+    const isSteward = !!stewardCookie && verifyStewardToken(stewardCookie)
     const booksForClient: Book[] = isSteward
       ? books
       : books.map((b) =>

@@ -1,25 +1,34 @@
 import { NextRequest, NextResponse } from "next/server"
 import {
   getStewardCookieName,
-  getStewardPassword,
   stewardToken,
+  verifyStewardPassword,
 } from "@/lib/server/steward-auth"
+import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
 
 const COOKIE_OPTIONS = {
   httpOnly: true,
   secure: process.env.NODE_ENV === "production",
   sameSite: "lax" as const,
-  path: "/", // so cookie is sent to /api/books/* and /api/steward/* when dashboard calls them
+  path: "/",
   maxAge: 60 * 60 * 24 * 7, // 7 days
 }
 
 /** POST: submit password; on success set cookie and redirect to dashboard. */
 export async function POST(request: NextRequest) {
+  const ip = getClientIp(request)
+  const rl = checkRateLimit(`steward-login:${ip}`, 5, 60_000)
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Too many login attempts. Please wait a minute." },
+      { status: 429, headers: { "Retry-After": String(Math.ceil((rl.retryAfterMs ?? 60_000) / 1000)) } }
+    )
+  }
+
   const body = await request.json().catch(() => ({}))
   const password = typeof body.password === "string" ? body.password : ""
 
-  const expected = getStewardPassword()
-  if (!expected || password !== expected) {
+  if (!verifyStewardPassword(password)) {
     return NextResponse.json({ error: "Invalid password" }, { status: 401 })
   }
 

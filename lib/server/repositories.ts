@@ -193,12 +193,13 @@ export async function updateBook(
 ): Promise<Book | null> {
   const client = await resilientConnect()
   try {
+    await client.query("begin")
     const { rows: existing } = await client.query<DbBook>(
-      "select * from books where id = $1",
+      "select * from books where id = $1 for update",
       [bookId]
     )
     const current = existing[0]
-    if (!current) return null
+    if (!current) { await client.query("rollback"); return null }
     const noteText = input.ledger_note?.trim() || null
 
     let nodeName: string | null = null
@@ -416,8 +417,10 @@ export async function updateBook(
       "select * from books where id = $1",
       [bookId]
     )
+    await client.query("commit")
     return updated[0] ? mapBook(updated[0]) : null
   } catch (error) {
+    await client.query("rollback")
     console.error("Failed to update book:", error)
     throw error
   } finally {
@@ -575,10 +578,11 @@ export async function searchBooks(params: {
   const values: unknown[] = []
 
   if (params.query) {
-    values.push(`%${params.query.toLowerCase()}%`)
+    const escaped = params.query.toLowerCase().replace(/[%_\\]/g, (c) => `\\${c}`)
+    values.push(`%${escaped}%`)
     const idx = values.length
     clauses.push(
-      `(lower(title) like $${idx} or lower(coalesce(author, '')) like $${idx} or coalesce(isbn, '') like $${idx})`
+      `(lower(title) like $${idx} escape '\\' or lower(coalesce(author, '')) like $${idx} escape '\\' or coalesce(isbn, '') like $${idx} escape '\\')`
     )
   }
 
@@ -625,19 +629,20 @@ export async function checkoutBook(params: { bookId: string; userId: string }) {
       throw new Error("Book is not available")
     }
 
+    const { rows: userRows } = await client.query<DbUser>(
+      "select display_name from users where id = $1",
+      [params.userId]
+    )
+
     const expectedReturn = new Date(Date.now() + 21 * 24 * 60 * 60 * 1000).toISOString()
     await client.query(
       `update books
          set current_holder_id = $2,
+             current_holder_name = $3,
              availability_status = 'checked_out',
-             expected_return_date = $3
+             expected_return_date = $4
        where id = $1`,
-      [params.bookId, params.userId, expectedReturn]
-    )
-
-    const { rows: userRows } = await client.query<DbUser>(
-      "select display_name from users where id = $1",
-      [params.userId]
+      [params.bookId, params.userId, userRows[0]?.display_name ?? null, expectedReturn]
     )
 
     await client.query(
@@ -886,7 +891,16 @@ export async function createBook(input: {
  *  Library cards (create user + card; login)
  * ═══════════════════════════════════════════ */
 
+const PIN_SALT = "lot-pin-v1"
+
+/** Hash a PIN with a static salt to prevent rainbow-table lookups on the 10k-entry space. */
 export function hashPin(pin: string): string {
+  const { createHash } = require("crypto")
+  return createHash("sha256").update(PIN_SALT + pin, "utf8").digest("hex")
+}
+
+/** Legacy unsalted hash — only used for backward-compatible login. */
+export function hashPinLegacy(pin: string): string {
   const { createHash } = require("crypto")
   return createHash("sha256").update(pin, "utf8").digest("hex")
 }
@@ -1004,21 +1018,33 @@ export async function getLibraryCardByNumberAndPin(
   const normalizedCard = (cardNumber ?? "").replace(/\s/g, "").trim()
   if (!normalizedCard) return null
   const normalizedPin = normalizePinForAuth(pin)
-  const pinHash = hashPin(normalizedPin)
-  const { rows } = await resilientQuery<{
-    id: string
-    card_number: string
-    pseudonym: string
-    user_id: string
-    created_at: string
-  }>(
-    "select id, card_number, pseudonym, user_id, created_at from public.library_cards where replace(card_number, ' ', '') = $1 and pin_hash = $2",
-    [normalizedCard, pinHash]
+
+  type CardRow = { id: string; card_number: string; pseudonym: string; user_id: string; created_at: string; pin_hash: string }
+
+  const { rows } = await resilientQuery<CardRow>(
+    "select id, card_number, pseudonym, user_id, created_at, pin_hash from public.library_cards where replace(card_number, ' ', '') = $1",
+    [normalizedCard]
   )
-  const row = rows[0]
+  if (rows.length === 0) return null
+
+  const saltedHash = hashPin(normalizedPin)
+  const legacyHash = hashPinLegacy(normalizedPin)
+  const row = rows.find((r) => r.pin_hash === saltedHash || r.pin_hash === legacyHash)
   if (!row) return null
+
+  // Migrate legacy hash to salted hash on successful login
+  if (row.pin_hash === legacyHash && row.pin_hash !== saltedHash) {
+    await resilientQuery(
+      "update public.library_cards set pin_hash = $1 where id = $2",
+      [saltedHash, row.id]
+    ).catch((err) => console.warn("[auth] pin hash migration failed:", err.message))
+  }
+
   return {
-    ...row,
+    id: row.id,
+    card_number: row.card_number,
+    pseudonym: row.pseudonym,
+    user_id: row.user_id,
     created_at: new Date(row.created_at).toISOString(),
   }
 }

@@ -65,9 +65,11 @@ function getPool(): Pool {
     )
   }
 
+  const connStr = cleanConnectionString(raw)
+  const isLocalhost = /localhost|127\.0\.0\.1|::1/.test(connStr)
   const pool = new Pool({
-    connectionString: cleanConnectionString(raw),
-    ssl: { rejectUnauthorized: false },
+    connectionString: connStr,
+    ...(isLocalhost ? {} : { ssl: { rejectUnauthorized: true } }),
     max: 1,
     idleTimeoutMillis: 20_000,
     connectionTimeoutMillis: 8_000,

@@ -32,7 +32,11 @@ export async function GET(request: NextRequest) {
     const headers = Object.keys(data[0] || {}).join(",")
     const rows = data.map((row: ExportRow) =>
       Object.values(row)
-        .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+        .map((v) => {
+          let s = String(v).replace(/"/g, '""')
+          if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`
+          return `"${s}"`
+        })
         .join(",")
     )
     const csv = [headers, ...rows].join("\n")

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { checkoutBook } from "@/lib/server/repositories"
+import { getSessionUserId } from "@/lib/server/session"
 
 export async function POST(request: NextRequest) {
   const body = await request.json()
@@ -13,6 +14,11 @@ export async function POST(request: NextRequest) {
       { error: "book_id and user_id are required" },
       { status: 400 }
     )
+  }
+
+  const sessionUserId = await getSessionUserId()
+  if (!sessionUserId || sessionUserId !== user_id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
   try {

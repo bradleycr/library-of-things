@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import type { LendingTerms } from "@/lib/types"
 import { createBook } from "@/lib/server/repositories"
+import { getSessionUserId } from "@/lib/server/session"
 
 export async function POST(request: NextRequest) {
   const body = await request.json()
@@ -79,6 +80,14 @@ export async function POST(request: NextRequest) {
     )
   }
 
+  // If a user id is claimed, verify it matches the session
+  if (added_by_user_id) {
+    const sessionUserId = await getSessionUserId()
+    if (!sessionUserId || sessionUserId !== added_by_user_id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+  }
+
   const defaultTerms: LendingTerms = {
     type: "borrow",
     is_free: true,
@@ -125,12 +134,15 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ success: true, ...created })
 }
 
-/** Accept data-URI photos (up to ~500 KB base64) or regular URLs (up to 2 048 chars). */
+/** Accept data-URI photos (up to ~500 KB base64) or https/http URLs (up to 2048 chars). */
 function sanitizeCoverUrl(raw: string): string {
   const v = raw.trim()
   if (v.startsWith("data:image/")) {
     const MAX_DATA_URI = 512_000
     return v.length <= MAX_DATA_URI ? v : ""
   }
-  return v.slice(0, 2048)
+  if (/^https?:\/\//i.test(v)) {
+    return v.slice(0, 2048)
+  }
+  return ""
 }

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getLibraryCardByNumberAndPin } from "@/lib/server/repositories"
+import { createSessionToken, SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS } from "@/lib/server/session"
+import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
 
 function toNonEmptyString(value: unknown): string {
   if (value == null) return ""
@@ -8,6 +10,15 @@ function toNonEmptyString(value: unknown): string {
 }
 
 export async function POST(request: NextRequest) {
+  const ip = getClientIp(request)
+  const rl = checkRateLimit(`card-login:${ip}`, 10, 60_000)
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { success: false, error: "Too many login attempts. Please wait a minute." },
+      { status: 429, headers: { "Retry-After": String(Math.ceil((rl.retryAfterMs ?? 60_000) / 1000)) } }
+    )
+  }
+
   try {
     const body = await request.json().catch(() => ({}))
     const cardNumber = toNonEmptyString(body?.card_number ?? body?.cardNumber)
@@ -29,7 +40,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       success: true,
       card: {
         id: card.id,
@@ -42,6 +53,8 @@ export async function POST(request: NextRequest) {
       },
       user_id: card.user_id,
     })
+    res.cookies.set(SESSION_COOKIE_NAME, createSessionToken(card.user_id), SESSION_COOKIE_OPTIONS)
+    return res
   } catch (error) {
     console.error("Library card login error:", error)
     const message =

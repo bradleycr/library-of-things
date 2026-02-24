@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { updateUserProfile, deleteUserAccount } from "@/lib/server/repositories"
+import { getSessionUserId } from "@/lib/server/session"
 
 /** PATCH /api/users/[id] — update profile (display name and/or optional contact info). */
 export async function PATCH(
@@ -8,6 +9,10 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params
+    const sessionUserId = await getSessionUserId()
+    if (!sessionUserId || sessionUserId !== id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
     const body = await request.json() as Record<string, unknown>
 
     const updates: Parameters<typeof updateUserProfile>[1] = {}
@@ -103,6 +108,10 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params
+    const sessionUserId = await getSessionUserId()
+    if (!sessionUserId || sessionUserId !== id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
     const result = await deleteUserAccount(id)
 
     if (!result.ok) {
