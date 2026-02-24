@@ -53,6 +53,16 @@
 - **POCKET_LIBRARY_FEATURE.md** — Pocket Library design
 - **CONTRIBUTING.md** — PRs, code style
 
+## Security
+
+- **Session auth**: Protected endpoints (`/api/users/[id]`, `/api/books/checkout`, `/api/books/return`, `/api/books/create`) require a valid `lot_session` cookie set during card generation/login. HMAC-signed stateless tokens derived from `DATABASE_URL`.
+- **Rate limiting**: Card generation and login are limited to 10 req/min per IP; steward login to 5 req/min.
+- **Timing-safe comparisons**: Steward password and cookie token checks use constant-time comparison.
+- **Salted PIN hashing**: PINs are hashed with a static salt; legacy unsalted hashes migrate on login.
+- **Cover URL sanitization**: Only `https://`, `http://`, and `data:image/` URLs accepted; `javascript:` and other protocols blocked.
+- **CSV export**: Formula injection prevented by prefixing dangerous characters with `'`.
+- **Health endpoint**: DB error details logged server-side only; generic message returned to client.
+
 ## Current state (as of last update)
 
 - App is deployable; main branch drives Vercel.

@@ -25,3 +25,11 @@ Library of Things is a single Next.js 16 full-stack app (App Router, React 19, T
 - **DB scripts use `--env-file`**: All `pnpm db:*` scripts load env from `.env.local` via Node's `--env-file` flag. The `.env.local` file must exist for these to work.
 - **Schema before first run**: Run `pnpm db:ensure-schema` before the first `pnpm dev` to create tables. Optionally `pnpm db:provision` to seed demo data (destructive).
 - **No automated test suite**: The project has no unit/integration tests. Validation is done via `pnpm build` (TypeScript + Next.js compilation).
+
+### Authentication model
+
+- **Steward auth**: password → SHA-256 cookie token. Middleware + API routes verify via timing-safe comparison.
+- **User auth**: Library card login/generation sets an `lot_session` httpOnly cookie containing an HMAC-signed token (user id + timestamp). Protected endpoints (`/api/users/[id]`, `/api/books/checkout`, `/api/books/return`, `/api/books/create` when `added_by_user_id` is claimed) verify this session cookie and reject mismatches.
+- **Session secret** is derived from `DATABASE_URL` via HMAC — no extra env var needed.
+- **Rate limiting**: In-memory sliding-window limiter on card generation (10/min), card login (10/min), and steward login (5/min). Resets on cold start (acceptable for serverless).
+- **PIN hashing**: Salted SHA-256 with backward-compatible migration — legacy unsalted hashes are upgraded on successful login.
