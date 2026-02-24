@@ -17,6 +17,7 @@ Library of Things is a single Next.js 16 full-stack app (App Router, React 19, T
 
 - `.env.local` must contain `DATABASE_URL` (PostgreSQL connection string) and optionally `STEWARD_PASSWORD` (defaults to `password123`).
 - For local PostgreSQL: `DATABASE_URL=postgresql://lotdev:lotdev@localhost:5432/library_of_things`
+- `DB_SSL` controls TLS mode: unset = encrypted/no CA check (Supabase default), `strict` = full cert verification (self-hosted), `none` = no SSL (local dev).
 
 ### Non-obvious caveats
 
