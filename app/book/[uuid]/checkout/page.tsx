@@ -384,10 +384,14 @@ function AvailableFlow({
       const res = await fetch("/api/books/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ book_id: uuid, user_id: cardUserId }),
       })
       if (res.ok) setCheckoutComplete(true)
-      else alert("Checkout failed. Please try again.")
+      else {
+        const j = await res.json().catch(() => ({}))
+        alert(j?.error === "Unauthorized" ? "Session expired — please reload and try again." : "Checkout failed. Please try again.")
+      }
     } catch (e) {
       console.error(e)
       alert("Something went wrong. Please try again.")
@@ -527,6 +531,7 @@ function ReturnFlow({
       const res = await fetch("/api/books/return", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           book_id: book.id,
           user_id: userId,

@@ -80,11 +80,14 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  // If a user id is claimed, verify it matches the session
+  // Verify user attribution against session; fall back to anonymous if unverified
+  let verifiedUserId = added_by_user_id
+  let verifiedDisplayName = added_by_display_name
   if (added_by_user_id) {
     const sessionUserId = await getSessionUserId()
     if (!sessionUserId || sessionUserId !== added_by_user_id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      verifiedUserId = undefined
+      verifiedDisplayName = "Anonymous"
     }
   }
 
@@ -124,8 +127,8 @@ export async function POST(request: NextRequest) {
     coverImageUrl: typeof cover_image_url === "string"
       ? sanitizeCoverUrl(cover_image_url) || undefined
       : undefined,
-    addedByUserId: added_by_user_id,
-    addedByDisplayName: added_by_display_name,
+    addedByUserId: verifiedUserId,
+    addedByDisplayName: verifiedDisplayName,
     isPocketLibrary: is_pocket_library ?? false,
     ownerContactEmail: typeof owner_contact_email === "string" ? owner_contact_email.trim() || undefined : undefined,
     currentLocationText: typeof current_location_text === "string" ? current_location_text.trim() || undefined : undefined,

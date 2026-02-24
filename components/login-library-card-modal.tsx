@@ -42,6 +42,7 @@ export function LoginLibraryCardModal({ open, onOpenChange, initialCardNumber, o
       const res = await fetch("/api/library-card/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ card_number: numberToSend, pin: String(pin).trim() }),
       })
       const data = await res.json()

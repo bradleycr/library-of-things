@@ -100,6 +100,7 @@ export default function SettingsPage() {
       const res = await fetch(`/api/users/${currentUser.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           display_name: displayName.trim(),
           contact_opt_in: contactOptIn,
@@ -133,6 +134,7 @@ export default function SettingsPage() {
       const res = await fetch(`/api/users/${currentUser.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           contact_opt_in: contactOptIn,
           contact_email: contactEmail.trim() || null,
@@ -165,7 +167,7 @@ export default function SettingsPage() {
     if (!currentUser) return
     setDeleting(true)
     try {
-      const res = await fetch(`/api/users/${currentUser.id}`, { method: "DELETE" })
+      const res = await fetch(`/api/users/${currentUser.id}`, { method: "DELETE", credentials: "include" })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? "Failed to delete account")
 

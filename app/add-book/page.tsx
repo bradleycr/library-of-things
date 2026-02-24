@@ -178,9 +178,8 @@ export default function AddBookPage() {
     try {
       const response = await fetch("/api/books/create", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           isbn: isbn || undefined,
           title,

@@ -15,6 +15,7 @@ export type BootstrapPayload = {
 export async function fetchBootstrapData(): Promise<BootstrapPayload> {
   const response = await fetch("/api/bootstrap", {
     cache: "no-store",
+    credentials: "include",
     headers: { Pragma: "no-cache" },
   })
 

@@ -58,6 +58,7 @@ export function GetLibraryCardModal({ open, onOpenChange, mode }: GetLibraryCard
       const res = await fetch("/api/library-card/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({}),
       })
       const data = await res.json()

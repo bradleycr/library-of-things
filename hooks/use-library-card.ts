@@ -22,14 +22,14 @@ function broadcastCardChange(card: LibraryCard | null) {
 }
 
 /**
- * If the stored card has card_number + pin but no user_id (e.g. old or corrupted save),
- * re-login once to get the full card with user_id so Profile/Settings recognise the user.
+ * Call login to (a) fill in missing user_id and (b) refresh the session
+ * cookie so protected API endpoints accept this user's requests.
+ * Silently falls back to the stored card if the server is unreachable.
  */
-async function hydrateCardIfNeeded(
+async function refreshSession(
   parsed: LibraryCard,
   saveCard: (c: LibraryCard) => boolean
 ): Promise<LibraryCard | null> {
-  if (parsed.user_id) return parsed
   const cardNumber = (parsed.card_number ?? "").replace(/\s/g, "").trim()
   const pin = typeof parsed.pin === "string" ? parsed.pin : ""
   if (!cardNumber || !pin) return parsed
@@ -37,6 +37,7 @@ async function hydrateCardIfNeeded(
     const res = await fetch("/api/library-card/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify({ card_number: cardNumber, pin }),
     })
     const data = await res.json()
@@ -120,12 +121,11 @@ export function useLibraryCard() {
           return
         }
         const parsed = JSON.parse(stored) as LibraryCard
-        if (!parsed.user_id && parsed.card_number && parsed.pin && !hydratedRef.current) {
+        setCard(parsed)
+        if (parsed.card_number && parsed.pin && !hydratedRef.current) {
           hydratedRef.current = true
-          const updated = await hydrateCardIfNeeded(parsed, saveCard)
-          if (!cancelled) setCard(updated)
-        } else {
-          setCard(parsed)
+          const updated = await refreshSession(parsed, saveCard)
+          if (!cancelled && updated) setCard(updated)
         }
       } catch {
         if (!cancelled) setCard(null)

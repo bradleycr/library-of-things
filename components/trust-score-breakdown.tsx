@@ -76,7 +76,7 @@ export function TrustScoreWithBreakdown({
     if (events !== null) return
     setLoading(true)
     try {
-      const res = await fetch(`/api/users/${userId}/trust-history`)
+      const res = await fetch(`/api/users/${userId}/trust-history`, { credentials: "include" })
       const data = await res.json()
       if (res.ok && Array.isArray(data.events)) setEvents(data.events)
       else setEvents([])
