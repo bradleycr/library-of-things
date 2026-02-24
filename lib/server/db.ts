@@ -10,6 +10,28 @@ function cleanConnectionString(raw: string): string {
   return raw.replace(/\\n/g, "").replace(/[\r\n]+/g, "").trim()
 }
 
+/* ─── SSL configuration ───
+ * Strategy:
+ *   - Localhost / unix sockets   → no SSL (false)
+ *   - DB_SSL=none env override   → no SSL (for non-TLS self-hosted setups)
+ *   - DB_SSL=strict env override → full cert verification (verify-full)
+ *   - Everything else (default)  → SSL on, but don't verify the CA chain.
+ *     This is "sslmode=require" in Postgres terms: encrypted in transit,
+ *     but the server cert isn't checked against a CA.  Required for
+ *     Supabase's connection pooler whose cert doesn't chain to a public CA.
+ *
+ * When you move to self-hosting with your own cert, set DB_SSL=strict.
+ */
+function sslConfig(connStr: string): boolean | { rejectUnauthorized: boolean } {
+  const isLocal = /localhost|127\.0\.0\.1|::1/.test(connStr)
+  const override = (process.env.DB_SSL ?? "").toLowerCase()
+
+  if (isLocal || override === "none") return false
+  if (override === "strict") return { rejectUnauthorized: true }
+
+  return { rejectUnauthorized: false }
+}
+
 /* ─── Transient-error detection ───
  * These are the failures where retrying (after a brief pause) has a real
  * chance of succeeding — mostly network / pooler hiccups in serverless.
@@ -66,10 +88,9 @@ function getPool(): Pool {
   }
 
   const connStr = cleanConnectionString(raw)
-  const isLocalhost = /localhost|127\.0\.0\.1|::1/.test(connStr)
   const pool = new Pool({
     connectionString: connStr,
-    ...(isLocalhost ? {} : { ssl: { rejectUnauthorized: true } }),
+    ssl: sslConfig(connStr),
     max: 1,
     idleTimeoutMillis: 20_000,
     connectionTimeoutMillis: 8_000,
