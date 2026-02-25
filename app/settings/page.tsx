@@ -29,11 +29,17 @@ export default function SettingsPage() {
   const router = useRouter()
   const { toast } = useToast()
   const { data, refetch, loading } = useBootstrapData()
-  const { card, updatePseudonym, clearCard } = useLibraryCard()
+  const { card, updatePseudonym, clearCard, sessionError } = useLibraryCard()
 
   const users = data?.users ?? []
   const currentUser = card?.user_id ? users.find((u) => u.id === card.user_id) ?? null : null
   const refetchOnMissingUser = useRef(false)
+
+  useEffect(() => {
+    if (sessionError) {
+      toast({ variant: "destructive", title: "Session expired", description: sessionError })
+    }
+  }, [sessionError, toast])
 
   /* ── Modal toggles ── */
   const [getCardModalOpen, setGetCardModalOpen] = useState(false)

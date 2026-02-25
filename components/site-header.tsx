@@ -54,7 +54,7 @@ export function SiteHeader() {
   const [libraryCardModalMode, setLibraryCardModalMode] = useState<GetLibraryCardModalMode>("view")
   const [loginModalOpen, setLoginModalOpen] = useState(false)
   const [removeCardConfirmOpen, setRemoveCardConfirmOpen] = useState(false)
-  const { card, clearCard } = useLibraryCard()
+  const { card, clearCard, sessionError } = useLibraryCard()
 
   const handleRemoveCardClick = () => {
     setRemoveCardConfirmOpen(true)
