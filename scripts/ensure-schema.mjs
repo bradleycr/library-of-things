@@ -16,12 +16,14 @@ if (!connectionString) {
   process.exit(1)
 }
 
+const isLocal = /localhost|127\.0\.0\.1|::1/.test(connectionString)
 const pool = new Pool({
   connectionString,
-  ssl: { rejectUnauthorized: false },
+  ssl: isLocal ? false : { rejectUnauthorized: false },
 })
 
 async function main() {
+  console.log(`[ensure-schema] Target: ${isLocal ? "local" : "remote"} database (safe — no data deleted)`)
   const client = await pool.connect()
   try {
     await client.query("begin")

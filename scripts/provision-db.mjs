@@ -1,4 +1,5 @@
 import { Pool } from "pg"
+import { createInterface } from "readline"
 
 const connectionString = process.env.DATABASE_URL
 
@@ -7,9 +8,31 @@ if (!connectionString) {
   process.exit(1)
 }
 
+/* ─── Production safety guard ───
+ * This script TRUNCATES all tables and reseeds with demo data.
+ * It must NEVER run against a production database by accident.
+ */
+const isLocal = /localhost|127\.0\.0\.1|::1/.test(connectionString)
+if (!isLocal) {
+  const rl = createInterface({ input: process.stdin, output: process.stdout })
+  const answer = await new Promise((resolve) => {
+    console.error("\n╔══════════════════════════════════════════════════════════════╗")
+    console.error("║  ⚠  WARNING: This will DESTROY ALL DATA and reseed.         ║")
+    console.error("║  The DATABASE_URL points to a REMOTE database.              ║")
+    console.error("║  This is almost certainly your production database.          ║")
+    console.error("╚══════════════════════════════════════════════════════════════╝\n")
+    rl.question("Type 'DESTROY ALL DATA' to proceed (anything else will abort): ", resolve)
+  })
+  rl.close()
+  if (answer !== "DESTROY ALL DATA") {
+    console.log("Aborted. No changes made.")
+    process.exit(0)
+  }
+}
+
 const pool = new Pool({
   connectionString,
-  ssl: { rejectUnauthorized: false },
+  ssl: isLocal ? false : { rejectUnauthorized: false },
 })
 
 const users = [
