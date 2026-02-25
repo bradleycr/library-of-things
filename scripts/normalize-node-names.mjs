@@ -15,9 +15,10 @@ if (!connectionString) {
   process.exit(1)
 }
 
+const isLocal = /localhost|127\.0\.0\.1|::1/.test(connectionString)
 const pool = new Pool({
   connectionString,
-  ssl: { rejectUnauthorized: false },
+  ssl: isLocal ? false : { rejectUnauthorized: false },
 })
 
 const BERLIN_ADDRESS = "Lothmenstraße 56, 12435 Berlin, Germany"
