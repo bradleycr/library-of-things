@@ -76,3 +76,17 @@
 - **Partner logos** — Foresight in header + footer; Internet Archive in footer (and library card) only, not in header.
 - **Book location display** — Under books (cards, explore, book detail) we always show the **node name** (e.g. "Foresight Berlin Node") when the book is at a node; only Pocket Library books show the typed address/location text.
 - **Anonymous adds** — When a book is added anonymously, public-facing views (book page, explore, etc.) show "Added by Anonymous" with no link; `added_by_user_id` is stripped from bootstrap for non-steward requests. Only the steward dashboard receives full book data (including who added anonymous books).
+- **Return flow** — My Books “Return” opens a dialog; user picks return node and optional notes, then “Confirm Return” calls `POST /api/books/return`, refetches bootstrap, and shows a success toast.
+- **Notify when available** — On book detail, “Notify Me When Available” stores the book id in localStorage and shows a toast; button state reflects that. Email delivery not yet implemented.
+- **Notification preferences** — Settings notification toggles (return reminders, book availability, newsletter) persist to localStorage and show a save toast; backend/email not yet implemented.
+- **API robustness** — `/api/books/[id]/cover`, `/api/books/search`, `/api/books/[id]/tap`, `/api/auth/generate-pseudonym`, `/api/ledger/export`, and `/api/users/[id]/trust-history` wrap handlers in try/catch and return 500 on error to avoid unhandled crashes.
+- **Schema** — `books.availability_status` CHECK allows `available`, `checked_out`, `in_transit`, `retired`, `unavailable`, `missing` (steward UI uses unavailable/missing; API normalizes to in_transit/retired when writing).
+- **Server validation** — Shared `lib/server/validate.ts`: `isUuid()`, `parseJsonBody()` (400 on invalid JSON), `LIMITS` and `clampString()` for input length. Used in books create/checkout/return, books [id] PATCH; cover URLs sanitized via `lib/server/sanitize-cover-url.ts` on create and PATCH.
+- **Atomic card creation** — Library card generation uses `createUserAndLibraryCard()` (single transaction); no orphan users if card insert fails.
+- **Explore** — Bootstrap `error` state shown with retry; distance filter filters by user location when available; view toggles 44px touch targets; clear-search has `aria-label`.
+- **No alert()** — Add-book and checkout/return flows use toast for errors. Tap fetch uses AbortController for cleanup on unmount.
+- **DB indexes** — `ensure-schema` adds `idx_books_availability_status`, `idx_books_current_node_id`, `idx_books_current_holder_id`, `idx_loan_events_book_timestamp`, `idx_loan_events_user_timestamp`. Backfill script documented as idempotent.
+- **Steward auth** — Invalid JSON body returns 400. Mobile menu and profile button: menu closes on pathname change; profile button has `aria-label` and 44px touch target.
+- **Default loan period** — 60 days (2 months), not 21 days. Applied in checkoutBook, steward edit, book create defaults, and all UI fallbacks.
+- **Tap without card** — Checkout page shows "Get Library Card or Log In" (links to `/settings`) instead of "Go to Library of Things" when user has no library card.
+- **Dialog scroll** — DialogContent capped at 85vh with overflow-y scroll so bottom buttons (e.g. Confirm Return) are reachable on mobile.

@@ -249,7 +249,7 @@ export async function updateBook(
         : current.availability_status
     const loanPeriodDays = Math.max(
       1,
-      Number(lending_terms_obj?.loan_period_days) || 21
+      Number(lending_terms_obj?.loan_period_days) || 60
     )
     const expected_return_date =
       availability_status === "checked_out"
@@ -634,7 +634,8 @@ export async function checkoutBook(params: { bookId: string; userId: string }) {
       [params.userId]
     )
 
-    const expectedReturn = new Date(Date.now() + 21 * 24 * 60 * 60 * 1000).toISOString()
+    const loanDays = Number(book.lending_terms?.loan_period_days) || 60
+    const expectedReturn = new Date(Date.now() + loanDays * 24 * 60 * 60 * 1000).toISOString()
     await client.query(
       `update books
          set current_holder_id = $2,
@@ -919,6 +920,56 @@ export async function createUserForLibraryCard(pseudonym: string): Promise<User>
     trust_score: 50,
     community_memberships: [],
     created_at: new Date().toISOString(),
+  }
+}
+
+/**
+ * Create user and library card in a single transaction so we never leave
+ * an orphan user if card creation fails (2026 best practice: atomic writes).
+ */
+export async function createUserAndLibraryCard(params: {
+  pseudonym: string
+  cardNumber: string
+  pinHash: string
+}): Promise<{ user: User; cardId: string }> {
+  const client = await resilientConnect()
+  try {
+    await client.query("begin")
+    const userId = crypto.randomUUID()
+    await client.query(
+      `insert into public.users (id, display_name, auth_provider, trust_score, community_memberships, created_at)
+       values ($1, $2, 'library_card', 50, '{}', now())`,
+      [userId, params.pseudonym]
+    )
+    const cardId = crypto.randomUUID()
+    await client.query(
+      `insert into public.library_cards (id, card_number, pin_hash, user_id, pseudonym, created_at)
+       values ($1, $2, $3, $4, $5, now())`,
+      [
+        cardId,
+        params.cardNumber,
+        params.pinHash,
+        userId,
+        params.pseudonym,
+      ]
+    )
+    await client.query("commit")
+    return {
+      user: {
+        id: userId,
+        display_name: params.pseudonym,
+        auth_provider: "library_card",
+        trust_score: 50,
+        community_memberships: [],
+        created_at: new Date().toISOString(),
+      },
+      cardId,
+    }
+  } catch (err) {
+    await client.query("rollback").catch(() => {})
+    throw err
+  } finally {
+    client.release()
   }
 }
 

@@ -23,6 +23,7 @@ import { getBookCoverUrl } from "@/lib/book-cover-generator"
 import { useBootstrapData } from "@/hooks/use-bootstrap-data"
 import { useLibraryCard } from "@/hooks/use-library-card"
 import { useReturnLocation } from "@/hooks/use-return-location"
+import { useToast } from "@/hooks/use-toast"
 import type { Book, Node } from "@/lib/types"
 
 // ---------------------------------------------------------------------------
@@ -54,24 +55,19 @@ export default function CheckoutPage({
       setTapLoading(false)
       return
     }
-    let cancelled = false
-    fetch(`/api/books/${uuid}/tap?token=${encodeURIComponent(token)}`)
+    const ac = new AbortController()
+    fetch(`/api/books/${uuid}/tap?token=${encodeURIComponent(token)}`, { signal: ac.signal })
       .then((res) => {
         if (!res.ok) throw new Error(res.status === 403 ? "Invalid or expired link" : "Book not found")
         return res.json() as Promise<TapPayload>
       })
-      .then((payload) => {
-        if (!cancelled) setTapData(payload)
-      })
+      .then((payload) => setTapData(payload))
       .catch((err) => {
-        if (!cancelled) setTapError(err instanceof Error ? err.message : "Something went wrong")
+        if (err?.name === "AbortError") return
+        setTapError(err instanceof Error ? err.message : "Something went wrong")
       })
-      .finally(() => {
-        if (!cancelled) setTapLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
+      .finally(() => setTapLoading(false))
+    return () => ac.abort()
   }, [uuid, token])
 
   const book = tapData?.book ?? (data?.books ?? []).find((b) => b.id === uuid)
@@ -176,7 +172,7 @@ export default function CheckoutPage({
         message={
           <>
             You checked out <strong>{book.title}</strong>. Suggested return within{" "}
-            {book.lending_terms?.loan_period_days ?? 21} days.
+            {book.lending_terms?.loan_period_days ?? 60} days.
           </>
         }
         action={
@@ -214,8 +210,8 @@ export default function CheckoutPage({
         title="Library card required"
         message="Get a free library card or log in to check out this book."
         action={
-          <Link href="/">
-            <Button className="gap-2">Go to Library of Things</Button>
+          <Link href="/settings">
+            <Button className="gap-2">Get Library Card or Log In</Button>
           </Link>
         }
       />
@@ -374,6 +370,7 @@ function AvailableFlow({
   setCheckoutComplete: (b: boolean) => void
   isTapEntry: boolean
 }) {
+  const { toast } = useToast()
   const [step, setStep] = useState<"ask" | "confirm">("ask")
 
   const handleCheckout = async () => {
@@ -390,11 +387,19 @@ function AvailableFlow({
       if (res.ok) setCheckoutComplete(true)
       else {
         const j = await res.json().catch(() => ({}))
-        alert(j?.error === "Unauthorized" ? "Session expired — please reload and try again." : "Checkout failed. Please try again.")
+        toast({
+          variant: "destructive",
+          title: j?.error === "Unauthorized" ? "Session expired" : "Checkout failed",
+          description: j?.error === "Unauthorized" ? "Please reload and try again." : "Please try again.",
+        })
       }
     } catch (e) {
       console.error(e)
-      alert("Something went wrong. Please try again.")
+      toast({
+        variant: "destructive",
+        title: "Something went wrong",
+        description: "Please try again.",
+      })
     } finally {
       setIsProcessing(false)
     }
@@ -471,7 +476,7 @@ function AvailableFlow({
                     onCheckedChange={(c) => setAgreedToTerms(c === true)}
                   />
                   <label htmlFor="terms" className="cursor-pointer text-sm text-muted-foreground">
-                    I’ll return it within {book.lending_terms?.loan_period_days ?? 21} days and treat it with care.
+                    I’ll return it within {book.lending_terms?.loan_period_days ?? 60} days and treat it with care.
                   </label>
                 </div>
                 <Button
@@ -521,6 +526,7 @@ function ReturnFlow({
   setReturningNodeId: (id: string | null) => void
   isTapEntry: boolean
 }) {
+  const { toast } = useToast()
   const { nearbyNodeIds, hasLocation } = useReturnLocation(nodes)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -541,11 +547,19 @@ function ReturnFlow({
       if (res.ok) onReturnComplete()
       else {
         const j = await res.json().catch(() => ({}))
-        alert(j?.error ?? "Return failed. Please try again.")
+        toast({
+          variant: "destructive",
+          title: "Return failed",
+          description: (j?.error as string) ?? "Please try again.",
+        })
       }
     } catch (e) {
       console.error(e)
-      alert("Something went wrong. Please try again.")
+      toast({
+        variant: "destructive",
+        title: "Something went wrong",
+        description: "Please try again.",
+      })
     } finally {
       setIsSubmitting(false)
       setReturningNodeId(null)

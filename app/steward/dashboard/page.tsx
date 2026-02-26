@@ -107,7 +107,7 @@ export default function StewardDashboardPage() {
     current_holder_id: "",
     note: "",
     contact_required: false,
-    loan_period_days: 21,
+    loan_period_days: 60,
   })
 
   // Member management state
@@ -159,7 +159,7 @@ export default function StewardDashboardPage() {
         current_holder_id: editingBook.current_holder_id ?? "",
         note: "",
         contact_required: editingBook.lending_terms?.contact_required ?? false,
-        loan_period_days: editingBook.lending_terms?.loan_period_days ?? 21,
+        loan_period_days: editingBook.lending_terms?.loan_period_days ?? 60,
       })
       setEditError(null)
     }
@@ -524,7 +524,7 @@ export default function StewardDashboardPage() {
           lending_terms: {
             ...editingBook.lending_terms,
             contact_required: editForm.contact_required,
-            loan_period_days: Math.max(1, Math.min(365, Number(editForm.loan_period_days) || 21)),
+            loan_period_days: Math.max(1, Math.min(365, Number(editForm.loan_period_days) || 60)),
           },
         }),
       })
@@ -1423,7 +1423,7 @@ export default function StewardDashboardPage() {
                   min={1}
                   max={365}
                   value={editForm.loan_period_days}
-                  onChange={(e) => setEditForm((f) => ({ ...f, loan_period_days: Number(e.target.value) || 21 }))}
+                  onChange={(e) => setEditForm((f) => ({ ...f, loan_period_days: Number(e.target.value) || 60 }))}
                 />
               </div>
               <div className="grid gap-2">

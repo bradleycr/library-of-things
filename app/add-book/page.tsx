@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/dialog"
 import { useBootstrapData } from "@/hooks/use-bootstrap-data"
 import { useLibraryCard } from "@/hooks/use-library-card"
+import { useToast } from "@/hooks/use-toast"
 import { GetLibraryCardModal } from "@/components/get-library-card-modal"
 import { CoverPhotoCapture } from "@/components/cover-photo-capture"
 import { AddBookSuccessCard } from "@/components/add-book-success-card"
@@ -46,6 +47,7 @@ import { AddBookSuccessCard } from "@/components/add-book-success-card"
 export default function AddBookPage() {
   const { data } = useBootstrapData()
   const { card, mounted } = useLibraryCard()
+  const { toast } = useToast()
   const [libraryCardModalOpen, setLibraryCardModalOpen] = useState(false)
   const nodes = data?.nodes ?? []
 
@@ -82,21 +84,26 @@ export default function AddBookPage() {
   // Node recommendation dialog for Pocket Library books
   const [showNodeRecommendation, setShowNodeRecommendation] = useState(false)
 
-  // Auto-detect geolocation for Pocket Library books
+  // Auto-detect geolocation for Pocket Library books (with cleanup on unmount)
   useEffect(() => {
-    if (locationType === "pocket" && !currentLocation) {
-      if ("geolocation" in navigator) {
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            const { latitude, longitude } = position.coords
-            setCurrentLocation(`${latitude.toFixed(6)}, ${longitude.toFixed(6)}`)
-          },
-          (error) => {
-            console.log("Geolocation not available:", error)
-            // Silently fail - user can enter location manually
-          }
-        )
-      }
+    if (locationType !== "pocket" || currentLocation) return
+    if (!("geolocation" in navigator)) return
+
+    let cancelled = false
+    const id = navigator.geolocation.watchPosition(
+      (position) => {
+        if (cancelled) return
+        const { latitude, longitude } = position.coords
+        setCurrentLocation(`${latitude.toFixed(6)}, ${longitude.toFixed(6)}`)
+      },
+      () => {
+        if (!cancelled) console.log("Geolocation not available")
+      },
+      { timeout: 10_000, maximumAge: 60_000 }
+    )
+    return () => {
+      cancelled = true
+      navigator.geolocation.clearWatch(id)
     }
   }, [locationType, currentLocation])
 
@@ -223,7 +230,11 @@ export default function AddBookPage() {
         setShowNodeRecommendation(true)
       }
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Failed to add book")
+      toast({
+        variant: "destructive",
+        title: "Could not add book",
+        description: error instanceof Error ? error.message : "Failed to add book. Please try again.",
+      })
     } finally {
       setIsSubmitting(false)
     }
@@ -571,7 +582,7 @@ export default function AddBookPage() {
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
                 <p className="text-sm text-muted-foreground">
-                  Suggested return period is 3 weeks (21 days). Borrowers see this as a guideline, not a strict due date.
+                  Suggested return period is 2 months (60 days). Borrowers see this as a guideline, not a strict due date.
                 </p>
 
                 <div className="flex flex-col gap-3">

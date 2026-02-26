@@ -319,10 +319,19 @@ export default function BookDetailPage({
                     </span>
                   </div>
                 )}
-                <Button variant="outline" className="w-fit gap-2 text-foreground bg-transparent">
+                <Button
+                  variant="outline"
+                  className="w-fit gap-2 text-foreground bg-transparent"
+                  disabled
+                  title="Email reminders are not set up yet"
+                  aria-describedby="notify-caption"
+                >
                   <Bell className="h-4 w-4" />
-                  Notify Me When Available
+                  Notify when available (coming soon)
                 </Button>
+                <p id="notify-caption" className="sr-only">
+                  Email notifications for when this book is back will be available in a future update.
+                </p>
               </div>
             ) : (
               <div className="mt-6 rounded-lg border border-border bg-muted/30 p-4">
@@ -346,7 +355,7 @@ export default function BookDetailPage({
                   <div className="flex items-center gap-2 text-card-foreground">
                     <Clock className="h-4 w-4 text-muted-foreground" />
                     <span>
-                      {book.lending_terms?.loan_period_days ?? 21} day borrow period (suggested)
+                      {book.lending_terms?.loan_period_days ?? 60} day borrow period (suggested)
                     </span>
                   </div>
                   <div className="flex items-center gap-2 text-card-foreground">

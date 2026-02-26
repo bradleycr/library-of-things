@@ -2,9 +2,14 @@ import { NextRequest, NextResponse } from "next/server"
 import type { LendingTerms } from "@/lib/types"
 import { createBook } from "@/lib/server/repositories"
 import { getSessionUserId } from "@/lib/server/session"
+import { parseJsonBody, isUuid, LIMITS, clampString } from "@/lib/server/validate"
+import { sanitizeCoverUrl } from "@/lib/server/sanitize-cover-url"
 
 export async function POST(request: NextRequest) {
-  const body = await request.json()
+  const parsed = await parseJsonBody<Record<string, unknown>>(request)
+  if (!parsed.ok) return parsed.response
+
+  const body = parsed.data
   const {
     isbn,
     title,
@@ -49,7 +54,7 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     )
   }
-  if (trimmedTitle.length > 1000) {
+  if (trimmedTitle.length > LIMITS.title) {
     return NextResponse.json(
       { error: "title is too long" },
       { status: 400 }
@@ -72,12 +77,20 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  // For node-based books, node_id is required
-  if (!is_pocket_library && (!node_id || typeof node_id !== "string")) {
-    return NextResponse.json(
-      { error: "node_id is required for node-based books" },
-      { status: 400 }
-    )
+  // For node-based books, node_id is required and must be a valid UUID
+  if (!is_pocket_library) {
+    if (!node_id || typeof node_id !== "string") {
+      return NextResponse.json(
+        { error: "node_id is required for node-based books" },
+        { status: 400 }
+      )
+    }
+    if (!isUuid(node_id)) {
+      return NextResponse.json(
+        { error: "Invalid node_id" },
+        { status: 400 }
+      )
+    }
   }
 
   // Verify user attribution against session; fall back to anonymous if unverified
@@ -97,7 +110,7 @@ export async function POST(request: NextRequest) {
     requires_id: false,
     pseudonymous_allowed: true,
     contact_required: false,
-    loan_period_days: 21,
+    loan_period_days: 60,
     shipping_allowed: false,
     local_only: true,
     contact_opt_in: true,
@@ -116,36 +129,31 @@ export async function POST(request: NextRequest) {
   mergedTerms.shipping_allowed = false
   mergedTerms.local_only = true
 
-  const created = await createBook({
-    isbn: typeof isbn === "string" ? isbn.trim().slice(0, 20) || undefined : undefined,
-    title: trimmedTitle,
-    author: typeof author === "string" ? author.trim().slice(0, 500) || undefined : undefined,
-    edition: typeof edition === "string" ? edition.trim().slice(0, 200) || undefined : undefined,
-    description: typeof description === "string" ? description.trim().slice(0, 3000) || undefined : undefined,
-    nodeId: node_id,
-    lendingTerms: mergedTerms,
-    coverImageUrl: typeof cover_image_url === "string"
-      ? sanitizeCoverUrl(cover_image_url) || undefined
-      : undefined,
-    addedByUserId: verifiedUserId,
-    addedByDisplayName: verifiedDisplayName,
-    isPocketLibrary: is_pocket_library ?? false,
-    ownerContactEmail: typeof owner_contact_email === "string" ? owner_contact_email.trim() || undefined : undefined,
-    currentLocationText: typeof current_location_text === "string" ? current_location_text.trim() || undefined : undefined,
-  })
+  try {
+    const created = await createBook({
+      isbn: clampString(isbn, LIMITS.isbn) ?? undefined,
+      title: trimmedTitle,
+      author: clampString(author, LIMITS.author) ?? undefined,
+      edition: clampString(edition, LIMITS.edition) ?? undefined,
+      description: clampString(description, LIMITS.description) ?? undefined,
+      nodeId: node_id,
+      lendingTerms: mergedTerms,
+      coverImageUrl: typeof cover_image_url === "string"
+        ? sanitizeCoverUrl(cover_image_url) || undefined
+        : undefined,
+      addedByUserId: verifiedUserId,
+      addedByDisplayName: verifiedDisplayName,
+      isPocketLibrary: is_pocket_library ?? false,
+      ownerContactEmail: typeof owner_contact_email === "string" ? owner_contact_email.trim().slice(0, LIMITS.url) || undefined : undefined,
+      currentLocationText: clampString(current_location_text, LIMITS.description) ?? undefined,
+    })
 
-  return NextResponse.json({ success: true, ...created })
-}
-
-/** Accept data-URI photos (up to ~500 KB base64) or https/http URLs (up to 2048 chars). */
-function sanitizeCoverUrl(raw: string): string {
-  const v = raw.trim()
-  if (v.startsWith("data:image/")) {
-    const MAX_DATA_URI = 512_000
-    return v.length <= MAX_DATA_URI ? v : ""
+    return NextResponse.json({ success: true, ...created })
+  } catch (err) {
+    console.error("[api/books/create]", err)
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Failed to create book" },
+      { status: 500 }
+    )
   }
-  if (/^https?:\/\//i.test(v)) {
-    return v.slice(0, 2048)
-  }
-  return ""
 }

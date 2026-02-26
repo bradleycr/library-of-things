@@ -11,7 +11,7 @@ export const TRUST = {
   INITIAL: 50,
   MIN: 0,
   MAX: 100,
-  /** Returned on or before suggested date (e.g. 21 days). */
+  /** Returned on or before suggested date (default 60 days). */
   DELTA_RETURN_ON_TIME: 2,
   /** Returned late but within 2 months of checkout. */
   DELTA_RETURN_LATE: -3,
@@ -80,7 +80,7 @@ export async function applyTrustChange(
 
 /**
  * Classifies a return as on-time, late, or very late based on expected return date.
- * Suggested period is 21 days; "very late" = 60+ days after expected (≈ 2 months from checkout).
+ * Suggested period is 60 days (2 months); "very late" = 60+ days after expected return date.
  */
 export function classifyReturn(
   expectedReturnDate: string | Date | null | undefined

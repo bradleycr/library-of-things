@@ -111,7 +111,7 @@ const defaultTerms = {
   requires_id: false,
   pseudonymous_allowed: true,
   contact_required: false,
-  loan_period_days: 21,
+  loan_period_days: 60,
   shipping_allowed: false,
   local_only: true,
   contact_opt_in: true,
