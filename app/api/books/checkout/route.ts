@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { checkoutBook } from "@/lib/server/repositories"
+import { checkoutBook, getBookById, getUserById } from "@/lib/server/repositories"
 import { getSessionUserId } from "@/lib/server/session"
 import { parseJsonBody, isUuid } from "@/lib/server/validate"
 
@@ -28,6 +28,28 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    // Enforce contact-required lending terms server-side
+    const book = await getBookById(book_id)
+    if (!book) {
+      return NextResponse.json({ error: "Book not found" }, { status: 404 })
+    }
+    if (book.lending_terms?.contact_required) {
+      const user = await getUserById(user_id)
+      const hasContact = !!(
+        user?.contact_email?.trim() ||
+        user?.phone?.trim() ||
+        user?.twitter_url?.trim() ||
+        user?.linkedin_url?.trim() ||
+        user?.website_url?.trim()
+      )
+      if (!hasContact) {
+        return NextResponse.json(
+          { error: "This book requires contact info. Add yours in Settings before checking out." },
+          { status: 403 }
+        )
+      }
+    }
+
     await checkoutBook({ bookId: book_id, userId: user_id })
     return NextResponse.json({ success: true })
   } catch (error) {

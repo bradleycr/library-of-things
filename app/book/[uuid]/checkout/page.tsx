@@ -94,8 +94,9 @@ export default function CheckoutPage({
     : false
   const contactRequired = book?.lending_terms?.contact_required ?? false
   const bootstrapLoaded = data !== undefined
-  const blockedByContactRequirement =
-    contactRequired && bootstrapLoaded && !hasContactInfo
+  const blockedByContactRequirement = contactRequired && !hasContactInfo
+  // While bootstrap is loading we can't verify contact info — hold off on checkout
+  const contactCheckPending = contactRequired && !bootstrapLoaded
   const isAvailable = book?.availability_status === "available"
   const isHolder = !!(book && card?.user_id && book.current_holder_id === card.user_id)
 
@@ -214,6 +215,18 @@ export default function CheckoutPage({
             <Button className="gap-2">Get Library Card or Log In</Button>
           </Link>
         }
+      />
+    )
+  }
+
+  // Available: contact requirement — still verifying (bootstrap loading)
+  if (isAvailable && contactCheckPending) {
+    return (
+      <MinimalScreen
+        book={book}
+        icon={<Loader2 className="h-12 w-12 animate-spin text-muted-foreground" />}
+        title="Checking your profile…"
+        message="This book requires contact info. Verifying your account."
       />
     )
   }
