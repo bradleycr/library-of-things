@@ -4,6 +4,29 @@ Use this to verify the latest UX changes on **Android**, **iOS**, and **desktop*
 
 ---
 
+## Post-deploy verification (uploads, checkouts, profile names)
+
+After deploying, quickly confirm these flows:
+
+1. **Profile / display name**
+   - Log in with a library card → **Settings** → update **Display name** (and/or contact info) → Save.
+   - Open a book you added (or that shows “Added by [you]”). It should show the **new** name, not the old one.
+   - Check **My Books** and any “current holder” text — all should show the updated name.
+
+2. **Checkout (including contact-required)**
+   - **Normal book:** Open a book’s checkout URL (with `?token=...`). With a valid card, you should be able to complete checkout.
+   - **Contact-required book:** If the book has “Require contact info to borrow”, user without contact info should see “Contact info required” and **not** be able to complete checkout until they add contact in Settings. After adding contact, checkout should succeed.
+
+3. **Cover upload (steward)**
+   - **Steward dashboard** → Book Management → **Show more** if needed → Edit a book.
+   - **Cover image:** Paste a URL (e.g. OpenLibrary) **or** click “Upload photo” and choose an image. Save.
+   - Book detail and explore should show the new cover (and URL pastes should still work).
+
+4. **Add book (node selection)**
+   - **Add book** → choose “Library node” → select a node → fill title and submit. Should create the book without “Invalid node_id”.
+
+---
+
 ## 1. Tap without card — “Get Library Card or Log In”
 
 **Steps**
