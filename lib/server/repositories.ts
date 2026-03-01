@@ -428,6 +428,47 @@ export async function updateBook(
   }
 }
 
+/**
+ * Delete a book from the library (steward only). Records a "removed" ledger event
+ * first so the deletion appears in sharing history; then deletes the book.
+ * Depends on loan_events.book_id FK being ON DELETE SET NULL so the new event row survives.
+ */
+export async function deleteBook(
+  bookId: string,
+  options?: { note?: string | null; actor_display_name?: string }
+): Promise<boolean> {
+  const book = await getBookById(bookId)
+  if (!book) return false
+
+  const client = await resilientConnect()
+  try {
+    await client.query("begin")
+
+    await client.query(
+      `insert into loan_events
+        (id, event_type, book_id, book_title, user_id, user_display_name, timestamp, notes)
+       values ($1, 'removed', $2, $3, null, $4, now(), $5)`,
+      [
+        crypto.randomUUID(),
+        bookId,
+        book.title,
+        options?.actor_display_name ?? "Steward",
+        options?.note?.trim() || null,
+      ]
+    )
+
+    await client.query("delete from books where id = $1", [bookId])
+    await client.query("commit")
+    return true
+  } catch (error) {
+    await client.query("rollback")
+    console.error("Failed to delete book:", error)
+    throw error
+  } finally {
+    client.release()
+  }
+}
+
 export async function getUserById(id: string) {
   const { rows } = await resilientQuery<DbUser>("select * from public.users where id = $1", [id])
   return rows[0] ? mapUser(rows[0]) : null

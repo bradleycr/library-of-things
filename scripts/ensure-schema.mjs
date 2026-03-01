@@ -149,7 +149,7 @@ async function main() {
     await client.query(`
       create table if not exists loan_events (
         id text primary key,
-        event_type text not null check (event_type in ('added','checkout','return','transfer','report_lost','report_damaged')),
+        event_type text not null check (event_type in ('added','checkout','return','transfer','report_lost','report_damaged','removed')),
         book_id text not null references books(id) on delete cascade,
         book_title text,
         user_id text references users(id) on delete set null,
@@ -169,7 +169,7 @@ async function main() {
     await client.query(`
       alter table loan_events drop constraint if exists loan_events_event_type_check;
       alter table loan_events add constraint loan_events_event_type_check
-        check (event_type in ('added','checkout','return','transfer','report_lost','report_damaged'));
+        check (event_type in ('added','checkout','return','transfer','report_lost','report_damaged','removed'));
     `)
 
     // Migration: make loan_events.user_id nullable + change FK from RESTRICT to SET NULL.
@@ -191,6 +191,26 @@ async function main() {
           ALTER TABLE loan_events
             ADD CONSTRAINT loan_events_user_id_fkey
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL;
+        END IF;
+      END $$;
+    `)
+
+    // Migration: make loan_events.book_id nullable + ON DELETE SET NULL.
+    // So when a book is deleted, its ledger rows stay with book_id = null (book_title preserved).
+    await client.query(`
+      DO $$
+      BEGIN
+        ALTER TABLE loan_events ALTER COLUMN book_id DROP NOT NULL;
+        IF EXISTS (
+          SELECT 1 FROM information_schema.table_constraints
+           WHERE constraint_name = 'loan_events_book_id_fkey'
+             AND table_name = 'loan_events'
+             AND table_schema = 'public'
+        ) THEN
+          ALTER TABLE loan_events DROP CONSTRAINT loan_events_book_id_fkey;
+          ALTER TABLE loan_events
+            ADD CONSTRAINT loan_events_book_id_fkey
+            FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE SET NULL;
         END IF;
       END $$;
     `)

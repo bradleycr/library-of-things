@@ -139,12 +139,16 @@ export default function MembersPage() {
                           <ul className="space-y-0.5 text-sm text-muted-foreground">
                             {recentEvents.slice(0, 3).map((e) => (
                               <li key={e.id} className="truncate">
-                                <Link
-                                  href={`/book/${e.book_id}`}
-                                  className="text-primary hover:underline"
-                                >
-                                  {e.book_title}
-                                </Link>
+                                {e.book_id ? (
+                                  <Link
+                                    href={`/book/${e.book_id}`}
+                                    className="text-primary hover:underline"
+                                  >
+                                    {e.book_title}
+                                  </Link>
+                                ) : (
+                                  <span>{e.book_title}</span>
+                                )}
                                 <span className="ml-1 capitalize">
                                   — {e.event_type.replace("_", " ")}
                                 </span>

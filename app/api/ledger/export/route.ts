@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
     type ExportRow = {
       timestamp: string | undefined
       event_type: string
-      book_id: string
+      book_id: string | undefined
       book_title: string | undefined
       user_id: string | undefined
       user_display_name: string | undefined

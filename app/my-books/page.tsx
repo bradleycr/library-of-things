@@ -410,12 +410,16 @@ export default function MyBooksPage() {
                               {event.event_type.replace("_", " ")}
                             </span>
                             {" — "}
-                            <Link
-                              href={`/book/${event.book_id}`}
-                              className="font-medium text-primary hover:underline"
-                            >
-                              {event.book_title}
-                            </Link>
+                            {event.book_id ? (
+                              <Link
+                                href={`/book/${event.book_id}`}
+                                className="font-medium text-primary hover:underline"
+                              >
+                                {event.book_title}
+                              </Link>
+                            ) : (
+                              <span>{event.book_title}</span>
+                            )}
                           </p>
                           <p className="text-xs text-muted-foreground">
                             {new Date(event.timestamp).toLocaleDateString(

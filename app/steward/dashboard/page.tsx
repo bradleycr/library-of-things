@@ -126,6 +126,12 @@ export default function StewardDashboardPage() {
   const [memberDeleting, setMemberDeleting] = useState(false)
   const [memberDeleteError, setMemberDeleteError] = useState<string | null>(null)
 
+  // Delete book state
+  const [deletingBook, setDeletingBook] = useState<Book | null>(null)
+  const [bookDeleting, setBookDeleting] = useState(false)
+  const [bookDeleteError, setBookDeleteError] = useState<string | null>(null)
+  const [bookDeleteNote, setBookDeleteNote] = useState("")
+
   // Bulk add by ISBN
   const [bulkIsbns, setBulkIsbns] = useState("")
   const [bulkNodeId, setBulkNodeId] = useState("")
@@ -608,6 +614,31 @@ export default function StewardDashboardPage() {
       setMemberDeleteError(e instanceof Error ? e.message : "Delete failed")
     } finally {
       setMemberDeleting(false)
+    }
+  }
+
+  const handleDeleteBook = async () => {
+    if (!deletingBook) return
+    setBookDeleting(true)
+    setBookDeleteError(null)
+    try {
+      const res = await fetch(`/api/books/${deletingBook.id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ note: bookDeleteNote.trim() || undefined }),
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j?.error ?? "Delete failed")
+      }
+      await refetch()
+      setDeletingBook(null)
+      setBookDeleteNote("")
+    } catch (e) {
+      setBookDeleteError(e instanceof Error ? e.message : "Delete failed")
+    } finally {
+      setBookDeleting(false)
     }
   }
 
@@ -1251,6 +1282,11 @@ export default function StewardDashboardPage() {
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 text-destructive"
+                            onClick={() => {
+                              setBookDeleteError(null)
+                              setBookDeleteNote("")
+                              setDeletingBook(book)
+                            }}
                           >
                             <Trash2 className="h-4 w-4" />
                             <span className="sr-only">Delete</span>
@@ -1610,6 +1646,45 @@ export default function StewardDashboardPage() {
             </Button>
             <Button onClick={handleSaveBook} disabled={editSaving}>
               {editSaving ? "Saving…" : "Save changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Book Dialog */}
+      <Dialog open={!!deletingBook} onOpenChange={(open) => !open && setDeletingBook(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete book from library</DialogTitle>
+            <DialogDescription>
+              This permanently removes the book from the catalog. A "removed" entry will be added to the sharing history (ledger). This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          {deletingBook && (
+            <p className="text-sm text-muted-foreground">
+              <strong>{deletingBook.title}</strong>
+              {deletingBook.author ? ` — ${deletingBook.author}` : ""}
+            </p>
+          )}
+          <div className="grid gap-2 py-2">
+            <Label htmlFor="book-delete-note">Ledger note (optional)</Label>
+            <Textarea
+              id="book-delete-note"
+              value={bookDeleteNote}
+              onChange={(e) => setBookDeleteNote(e.target.value)}
+              placeholder="Why this book was removed"
+              className="min-h-[80px]"
+            />
+          </div>
+          {bookDeleteError && (
+            <p className="text-sm text-destructive">{bookDeleteError}</p>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeletingBook(null)} disabled={bookDeleting}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteBook} disabled={bookDeleting}>
+              {bookDeleting ? "Deleting…" : "Delete from library"}
             </Button>
           </DialogFooter>
         </DialogContent>

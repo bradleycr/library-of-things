@@ -449,12 +449,16 @@ export default function ProfilePage({
                       >
                         {event.event_type.replace("_", " ")}
                       </span>
-                      <Link
-                        href={`/book/${event.book_id}`}
-                        className="font-medium text-primary hover:underline"
-                      >
-                        {event.book_title}
-                      </Link>
+                      {event.book_id ? (
+                        <Link
+                          href={`/book/${event.book_id}`}
+                          className="font-medium text-primary hover:underline"
+                        >
+                          {event.book_title}
+                        </Link>
+                      ) : (
+                        <span className="font-medium">{event.book_title}</span>
+                      )}
                       <span className="ml-auto text-xs text-muted-foreground">
                         {new Date(event.timestamp).toLocaleDateString("en-US", {
                           month: "short",

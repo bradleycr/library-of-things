@@ -1,10 +1,55 @@
 import { NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import type { LendingTerms } from "@/lib/types"
-import { updateBook } from "@/lib/server/repositories"
+import { updateBook, deleteBook } from "@/lib/server/repositories"
 import { getStewardCookieName, verifyStewardToken } from "@/lib/server/steward-auth"
 import { parseJsonBody, isUuid } from "@/lib/server/validate"
 import { sanitizeCoverUrl } from "@/lib/server/sanitize-cover-url"
+
+/**
+ * DELETE /api/books/[id]
+ * Steward-only: remove book from library. Records a "removed" ledger event then deletes the book.
+ */
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const cookieStore = await cookies()
+  const token = cookieStore.get(getStewardCookieName())?.value
+  if (!token || !verifyStewardToken(token)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  const { id } = await params
+  if (!id || !isUuid(id)) {
+    return NextResponse.json({ error: "Invalid book id" }, { status: 400 })
+  }
+
+  let note: string | null = null
+  try {
+    const text = await request.text()
+    if (text?.trim()) {
+      const body = JSON.parse(text) as { note?: string }
+      note = typeof body.note === "string" ? body.note.trim() || null : null
+    }
+  } catch {
+    // no body or invalid JSON is fine; note stays null
+  }
+
+  try {
+    const deleted = await deleteBook(id, { note, actor_display_name: "Steward" })
+    if (!deleted) {
+      return NextResponse.json({ error: "Book not found" }, { status: 404 })
+    }
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error("Book delete error:", error)
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Delete failed" },
+      { status: 500 }
+    )
+  }
+}
 
 /**
  * PATCH /api/books/[id]

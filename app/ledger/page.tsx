@@ -31,6 +31,7 @@ const eventTypeStyles: Record<string, string> = {
   transfer: "bg-secondary text-secondary-foreground",
   report_lost: "bg-destructive/10 text-destructive",
   report_damaged: "bg-destructive/10 text-destructive",
+  removed: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
 }
 
 function formatDateTime(dateStr: string) {
@@ -221,6 +222,7 @@ export default function LedgerPage() {
                     <SelectItem value="report_damaged">
                       Damage Reports
                     </SelectItem>
+                    <SelectItem value="removed">Removed from library</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -257,12 +259,18 @@ export default function LedgerPage() {
                         </span>
                       </TableCell>
                       <TableCell>
-                        <Link
-                          href={`/book/${event.book_id}`}
-                          className="text-sm font-medium text-primary hover:underline"
-                        >
-                          {event.book_title}
-                        </Link>
+                        {event.book_id ? (
+                          <Link
+                            href={`/book/${event.book_id}`}
+                            className="text-sm font-medium text-primary hover:underline"
+                          >
+                            {event.book_title}
+                          </Link>
+                        ) : (
+                          <span className="text-sm font-medium text-muted-foreground">
+                            {event.book_title || "—"}
+                          </span>
+                        )}
                       </TableCell>
                       <TableCell>
                         {event.user_id ? (
