@@ -1,7 +1,8 @@
 "use client"
 
 import Link from "next/link"
-import { useState } from "react"
+import { usePathname } from "next/navigation"
+import { useState, useEffect } from "react"
 import {
   Menu,
   X,
@@ -49,12 +50,17 @@ const adminLinks = [
 ]
 
 export function SiteHeader() {
+  const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [libraryCardModalOpen, setLibraryCardModalOpen] = useState(false)
   const [libraryCardModalMode, setLibraryCardModalMode] = useState<GetLibraryCardModalMode>("view")
   const [loginModalOpen, setLoginModalOpen] = useState(false)
   const [removeCardConfirmOpen, setRemoveCardConfirmOpen] = useState(false)
   const { card, clearCard, sessionError } = useLibraryCard()
+
+  useEffect(() => {
+    setMobileOpen(false)
+  }, [pathname])
 
   const handleRemoveCardClick = () => {
     setRemoveCardConfirmOpen(true)
@@ -139,9 +145,8 @@ export function SiteHeader() {
           )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="text-foreground">
+              <Button variant="ghost" size="icon" className="text-foreground min-h-11 min-w-11 touch-manipulation" aria-label="Profile and settings">
                 <User className="h-5 w-5" />
-                <span className="sr-only">Profile & settings</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">

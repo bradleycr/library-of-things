@@ -1,17 +1,23 @@
 import { NextRequest, NextResponse } from "next/server"
 import { checkoutBook } from "@/lib/server/repositories"
 import { getSessionUserId } from "@/lib/server/session"
+import { parseJsonBody, isUuid } from "@/lib/server/validate"
 
 export async function POST(request: NextRequest) {
-  const body = await request.json()
-  const { book_id, user_id } = body as {
-    book_id: string
-    user_id: string
-  }
+  const parsed = await parseJsonBody<{ book_id: string; user_id: string }>(request)
+  if (!parsed.ok) return parsed.response
+
+  const { book_id, user_id } = parsed.data
 
   if (!book_id || !user_id) {
     return NextResponse.json(
       { error: "book_id and user_id are required" },
+      { status: 400 }
+    )
+  }
+  if (!isUuid(book_id) || !isUuid(user_id)) {
+    return NextResponse.json(
+      { error: "Invalid book_id or user_id" },
       { status: 400 }
     )
   }

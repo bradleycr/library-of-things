@@ -534,10 +534,35 @@ export async function updateUserProfile(
   idx += 1
   values.push(userId)
   const sql = `update users set ${setParts.join(", ")} where id = $${idx}`
+
+  const newDisplayName = updates.display_name !== undefined
+    ? String(updates.display_name).trim()
+    : null
+
   try {
     const result = await resilientQuery(sql, values)
     const rowCount = typeof result.rowCount === "number" ? result.rowCount : 0
     if (rowCount === 0) return { ok: false, reason: "not_found" }
+
+    // Propagate the new name to denormalized columns so "Added by" / "Holder"
+    // labels stay current across the whole app without a full re-bootstrap.
+    if (newDisplayName) {
+      await Promise.all([
+        resilientQuery(
+          "update books set added_by_display_name = $1 where added_by_user_id = $2",
+          [newDisplayName, userId],
+        ),
+        resilientQuery(
+          "update books set current_holder_name = $1 where current_holder_id = $2",
+          [newDisplayName, userId],
+        ),
+        resilientQuery(
+          "update loan_events set user_display_name = $1 where user_id = $2",
+          [newDisplayName, userId],
+        ),
+      ])
+    }
+
     return { ok: true }
   } catch (error) {
     if (isUniqueViolation(error)) {

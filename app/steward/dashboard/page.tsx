@@ -16,6 +16,7 @@ import {
   Loader2,
   ListOrdered,
   Building2,
+  Upload,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -60,6 +61,7 @@ import {
   ResponsiveContainer,
 } from "recharts"
 import { useBootstrapData } from "@/hooks/use-bootstrap-data"
+import { compressBookCoverPhoto } from "@/lib/image-utils"
 import type { Book, Node as NodeType, User } from "@/lib/types"
 
 type StewardBookStatus = "available" | "checked_out" | "unavailable" | "missing"
@@ -130,6 +132,15 @@ export default function StewardDashboardPage() {
   const [bulkAdding, setBulkAdding] = useState(false)
   const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number } | null>(null)
   const [bulkResult, setBulkResult] = useState<{ added: number; failed: string[] } | null>(null)
+
+  // Pagination: progressive disclosure for each section
+  const PAGE_SIZE = 10
+  const [booksShown, setBooksShown] = useState(PAGE_SIZE)
+  const [nfcBooksShown, setNfcBooksShown] = useState(PAGE_SIZE)
+  const [membersShown, setMembersShown] = useState(PAGE_SIZE)
+
+  // Cover image upload state
+  const [coverUploading, setCoverUploading] = useState(false)
 
   // Add node form
   const [addNodeOpen, setAddNodeOpen] = useState(false)
@@ -292,6 +303,9 @@ export default function StewardDashboardPage() {
   const filteredBooks = selectedNodeId === "all" 
     ? books 
     : books.filter((b) => b.current_node_id === selectedNodeId)
+
+  // Reset NFC pagination when the node filter changes
+  useEffect(() => { setNfcBooksShown(PAGE_SIZE) }, [selectedNodeId])
   
   const handleToggleBook = (bookId: string) => {
     const newSet = new Set(selectedBookIds)
@@ -1005,7 +1019,7 @@ export default function StewardDashboardPage() {
                 )}
               </Button>
             </div>
-            <div className="max-h-96 overflow-y-auto border border-border rounded-lg">
+            <div className="border border-border rounded-lg">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -1029,7 +1043,7 @@ export default function StewardDashboardPage() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredBooks.map((book) => (
+                    filteredBooks.slice(0, nfcBooksShown).map((book) => (
                       <TableRow key={book.id}>
                         <TableCell>
                           <Checkbox
@@ -1056,6 +1070,29 @@ export default function StewardDashboardPage() {
                   )}
                 </TableBody>
               </Table>
+              {nfcBooksShown < filteredBooks.length && (
+                <div className="flex justify-center border-t border-border p-4">
+                  <Button
+                    variant="outline"
+                    onClick={() => setNfcBooksShown((n) => Math.min(n + PAGE_SIZE, filteredBooks.length))}
+                    className="gap-2"
+                  >
+                    Show more ({Math.min(PAGE_SIZE, filteredBooks.length - nfcBooksShown)} of {filteredBooks.length - nfcBooksShown} remaining)
+                  </Button>
+                </div>
+              )}
+              {nfcBooksShown >= filteredBooks.length && filteredBooks.length > PAGE_SIZE && (
+                <div className="flex justify-center border-t border-border p-4">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setNfcBooksShown(PAGE_SIZE)}
+                    className="text-muted-foreground"
+                  >
+                    Collapse
+                  </Button>
+                </div>
+              )}
             </div>
             <p className="mt-3 text-xs text-muted-foreground">
               💡 <strong>Tip:</strong> Copied text is one URL per line—paste directly into your NFC app (e.g. NFC Tools → Write → Add record → URL) to write each tag.
@@ -1142,6 +1179,9 @@ export default function StewardDashboardPage() {
             <CardTitle className="text-card-foreground">
               Book Management
             </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              {books.length} book{books.length !== 1 ? "s" : ""} total
+            </p>
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
@@ -1156,7 +1196,7 @@ export default function StewardDashboardPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {books.slice(0, 15).map((book) => (
+                  {books.slice(0, booksShown).map((book) => (
                     <TableRow key={book.id}>
                       <TableCell>
                         <Link
@@ -1222,6 +1262,29 @@ export default function StewardDashboardPage() {
                 </TableBody>
               </Table>
             </div>
+            {booksShown < books.length && (
+              <div className="flex justify-center border-t border-border p-4">
+                <Button
+                  variant="outline"
+                  onClick={() => setBooksShown((n) => Math.min(n + PAGE_SIZE, books.length))}
+                  className="gap-2"
+                >
+                  Show more ({Math.min(PAGE_SIZE, books.length - booksShown)} of {books.length - booksShown} remaining)
+                </Button>
+              </div>
+            )}
+            {booksShown >= books.length && books.length > PAGE_SIZE && (
+              <div className="flex justify-center border-t border-border p-4">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setBooksShown(PAGE_SIZE)}
+                  className="text-muted-foreground"
+                >
+                  Collapse
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -1232,7 +1295,7 @@ export default function StewardDashboardPage() {
               Member Management
             </CardTitle>
             <p className="text-sm text-muted-foreground">
-              Edit basic member profile details and remove members when needed.
+              {users.length} member{users.length !== 1 ? "s" : ""} — edit profile details or remove members.
             </p>
           </CardHeader>
           <CardContent className="p-0">
@@ -1247,7 +1310,7 @@ export default function StewardDashboardPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {users.map((member) => (
+                  {users.slice(0, membersShown).map((member) => (
                     <TableRow key={member.id}>
                       <TableCell className="font-medium text-sm">
                         <Link
@@ -1293,6 +1356,29 @@ export default function StewardDashboardPage() {
                 </TableBody>
               </Table>
             </div>
+            {membersShown < users.length && (
+              <div className="flex justify-center border-t border-border p-4">
+                <Button
+                  variant="outline"
+                  onClick={() => setMembersShown((n) => Math.min(n + PAGE_SIZE, users.length))}
+                  className="gap-2"
+                >
+                  Show more ({Math.min(PAGE_SIZE, users.length - membersShown)} of {users.length - membersShown} remaining)
+                </Button>
+              </div>
+            )}
+            {membersShown >= users.length && users.length > PAGE_SIZE && (
+              <div className="flex justify-center border-t border-border p-4">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setMembersShown(PAGE_SIZE)}
+                  className="text-muted-foreground"
+                >
+                  Collapse
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -1339,13 +1425,83 @@ export default function StewardDashboardPage() {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="edit-cover">Cover image URL</Label>
-                <Input
-                  id="edit-cover"
-                  value={editForm.cover_image_url}
-                  onChange={(e) => setEditForm((f) => ({ ...f, cover_image_url: e.target.value }))}
-                  placeholder="https://..."
-                />
+                <Label>Cover image</Label>
+                {/* Live preview of current / new cover */}
+                {editForm.cover_image_url && (
+                  <div className="relative mx-auto w-28 h-40 rounded-md overflow-hidden border border-border bg-muted">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={editForm.cover_image_url}
+                      alt="Cover preview"
+                      className="h-full w-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = "none"
+                      }}
+                    />
+                  </div>
+                )}
+                {editForm.cover_image_url.startsWith("data:") ? (
+                  <p className="text-sm text-muted-foreground italic px-3 py-2 border border-border rounded-md bg-muted/50">
+                    Uploaded photo — remove to enter a URL instead
+                  </p>
+                ) : (
+                  <Input
+                    id="edit-cover"
+                    value={editForm.cover_image_url}
+                    onChange={(e) => setEditForm((f) => ({ ...f, cover_image_url: e.target.value }))}
+                    placeholder="https://covers.openlibrary.org/..."
+                    disabled={coverUploading}
+                  />
+                )}
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    disabled={coverUploading}
+                    onClick={() => {
+                      const input = document.createElement("input")
+                      input.type = "file"
+                      input.accept = "image/*"
+                      input.onchange = async () => {
+                        const file = input.files?.[0]
+                        if (!file) return
+                        setCoverUploading(true)
+                        try {
+                          const dataUri = await compressBookCoverPhoto(file)
+                          setEditForm((f) => ({ ...f, cover_image_url: dataUri }))
+                        } catch {
+                          setEditError("Failed to process image — try a different file.")
+                        } finally {
+                          setCoverUploading(false)
+                        }
+                      }
+                      input.click()
+                    }}
+                  >
+                    {coverUploading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Upload className="h-4 w-4" />
+                    )}
+                    {coverUploading ? "Processing…" : "Upload photo"}
+                  </Button>
+                  {editForm.cover_image_url && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-muted-foreground"
+                      onClick={() => setEditForm((f) => ({ ...f, cover_image_url: "" }))}
+                    >
+                      Remove
+                    </Button>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Paste a URL or upload a photo. Uploaded images are compressed to ~30 KB for fast loading.
+                </p>
               </div>
               <div className="grid gap-2">
                 <Label>Availability status</Label>

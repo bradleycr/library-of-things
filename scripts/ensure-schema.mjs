@@ -103,11 +103,18 @@ async function main() {
         current_node_name text,
         added_by_user_id text references users(id) on delete set null,
         added_by_display_name text,
-        availability_status text not null check (availability_status in ('available','checked_out','in_transit','retired')),
+        availability_status text not null check (availability_status in ('available','checked_out','in_transit','retired','unavailable','missing')),
         lending_terms jsonb not null,
         created_at timestamptz not null default now(),
         expected_return_date timestamptz
       );
+    `)
+
+    // Allow steward UI values 'unavailable' and 'missing' in existing DBs (API normalizes to in_transit/retired; schema accepts both for flexibility)
+    await client.query(`
+      alter table books drop constraint if exists books_availability_status_check;
+      alter table books add constraint books_availability_status_check
+        check (availability_status in ('available','checked_out','in_transit','retired','unavailable','missing'));
     `)
 
     await client.query(`
@@ -190,6 +197,17 @@ async function main() {
 
     await client.query(`
       create index if not exists idx_books_added_by_user_id on books(added_by_user_id)
+    `)
+
+    await client.query(`
+      create index if not exists idx_books_availability_status on books(availability_status);
+      create index if not exists idx_books_current_node_id on books(current_node_id);
+      create index if not exists idx_books_current_holder_id on books(current_holder_id);
+    `)
+
+    await client.query(`
+      create index if not exists idx_loan_events_book_timestamp on loan_events(book_id, timestamp desc);
+      create index if not exists idx_loan_events_user_timestamp on loan_events(user_id, timestamp desc);
     `)
 
     await client.query(`

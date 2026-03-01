@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import {
-  createUserForLibraryCard,
-  createLibraryCard,
+  createUserAndLibraryCard,
   hashPin,
   normalizePinForAuth,
 } from "@/lib/server/repositories"
@@ -87,12 +86,10 @@ export async function POST(request: NextRequest) {
         if (transientAttempt > 0) {
           await new Promise((r) => setTimeout(r, 500 + transientAttempt * 500))
         }
-        const user = await createUserForLibraryCard(pseudonym)
-        const { id: cardId } = await createLibraryCard({
+        const { user, cardId } = await createUserAndLibraryCard({
+          pseudonym,
           cardNumber,
           pinHash: hashPin(normalizePinForAuth(pin)),
-          userId: user.id,
-          pseudonym,
         })
 
         const card = {

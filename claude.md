@@ -90,3 +90,6 @@
 - **Default loan period** — 60 days (2 months), not 21 days. Applied in checkoutBook, steward edit, book create defaults, and all UI fallbacks.
 - **Tap without card** — Checkout page shows "Get Library Card or Log In" (links to `/settings`) instead of "Go to Library of Things" when user has no library card.
 - **Dialog scroll** — DialogContent capped at 85vh with overflow-y scroll so bottom buttons (e.g. Confirm Return) are reachable on mobile.
+- **Display name propagation** — `updateUserProfile()` now cascades display name changes to `books.added_by_display_name`, `books.current_holder_name`, and `loan_events.user_display_name` so "Added by" / holder labels update app-wide immediately.
+- **Steward dashboard pagination** — Book Management, Bulk NFC Tag URLs, and Member Management sections show 10 items initially with "Show more" progressive disclosure and a "Collapse" option. NFC pagination resets when the node filter changes.
+- **Steward cover image editing** — Edit Book dialog supports pasting a URL or uploading a photo (compressed client-side via `compressBookCoverPhoto`) with a live preview. Uploaded images show as "(uploaded photo)" with a Remove button to switch back to URL entry.

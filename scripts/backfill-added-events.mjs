@@ -1,7 +1,7 @@
 /**
  * Inserts "added" ledger events for books that don't have one.
- * Use after deploying the "added" event feature so existing books (e.g. Susan Sontag)
- * show up in the sharing history.
+ * Use after deploying the "added" event feature so existing books show up in the sharing history.
+ * Idempotent: safe to run multiple times; only books with no "added" event are processed.
  *
  * Usage: pnpm db:backfill-added-events
  * (requires DATABASE_URL in .env.local)

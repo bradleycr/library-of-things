@@ -3,6 +3,8 @@ import { cookies } from "next/headers"
 import type { LendingTerms } from "@/lib/types"
 import { updateBook } from "@/lib/server/repositories"
 import { getStewardCookieName, verifyStewardToken } from "@/lib/server/steward-auth"
+import { parseJsonBody, isUuid } from "@/lib/server/validate"
+import { sanitizeCoverUrl } from "@/lib/server/sanitize-cover-url"
 
 /**
  * PATCH /api/books/[id]
@@ -19,19 +21,13 @@ export async function PATCH(
   }
 
   const { id } = await params
-  if (!id) {
-    return NextResponse.json({ error: "Book id required" }, { status: 400 })
+  if (!id || !isUuid(id)) {
+    return NextResponse.json({ error: "Invalid book id" }, { status: 400 })
   }
 
-  let body: unknown
-  try {
-    body = await request.json()
-  } catch {
-    return NextResponse.json(
-      { error: "Invalid JSON body" },
-      { status: 400 }
-    )
-  }
+  const parsed = await parseJsonBody<Record<string, unknown>>(request)
+  if (!parsed.ok) return parsed.response
+  const body = parsed.data
 
   const {
     title,
@@ -114,7 +110,9 @@ export async function PATCH(
       cover_image_url:
         cover_image_url === undefined
           ? undefined
-          : (typeof cover_image_url === "string" ? cover_image_url : null),
+          : (typeof cover_image_url === "string"
+              ? (sanitizeCoverUrl(cover_image_url) || null)
+              : null),
       node_id: typeof node_id === "string" && node_id ? node_id : undefined,
       lending_terms: parsedTerms,
       availability_status: normalizedStatus,

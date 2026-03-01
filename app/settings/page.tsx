@@ -58,7 +58,25 @@ export default function SettingsPage() {
   const [websiteUrl, setWebsiteUrl] = useState("")
   const [savingContact, setSavingContact] = useState(false)
 
-  /* ── Notification preferences (UI-only for now) ── */
+  /* ── Notification preferences (persisted to localStorage until backend exists) ── */
+  const NOTIFICATION_PREFS_KEY = "lot_notification_preferences"
+
+  function loadNotificationPrefs() {
+    if (typeof window === "undefined") return { emailReminders: true, emailAvailability: true, emailNewsletter: false }
+    try {
+      const raw = localStorage.getItem(NOTIFICATION_PREFS_KEY)
+      if (!raw) return { emailReminders: true, emailAvailability: true, emailNewsletter: false }
+      const p = JSON.parse(raw) as { emailReminders?: boolean; emailAvailability?: boolean; emailNewsletter?: boolean }
+      return {
+        emailReminders: p.emailReminders ?? true,
+        emailAvailability: p.emailAvailability ?? true,
+        emailNewsletter: p.emailNewsletter ?? false,
+      }
+    } catch {
+      return { emailReminders: true, emailAvailability: true, emailNewsletter: false }
+    }
+  }
+
   const [emailReminders, setEmailReminders] = useState(true)
   const [emailAvailability, setEmailAvailability] = useState(true)
   const [emailNewsletter, setEmailNewsletter] = useState(false)
@@ -82,6 +100,57 @@ export default function SettingsPage() {
       setWebsiteUrl(currentUser.website_url ?? "")
     }
   }, [currentUser])
+
+  /* ── Load notification prefs from localStorage on mount ── */
+  useEffect(() => {
+    const p = loadNotificationPrefs()
+    setEmailReminders(p.emailReminders)
+    setEmailAvailability(p.emailAvailability)
+    setEmailNewsletter(p.emailNewsletter)
+  }, [])
+
+  const saveNotificationPrefs = (prefs: {
+    emailReminders: boolean
+    emailAvailability: boolean
+    emailNewsletter: boolean
+  }) => {
+    try {
+      localStorage.setItem(NOTIFICATION_PREFS_KEY, JSON.stringify(prefs))
+      toast({
+        title: "Preferences saved",
+        description: "Email delivery is not yet available; we’ll use these when it is.",
+      })
+    } catch {
+      toast({ variant: "destructive", title: "Could not save preferences" })
+    }
+  }
+
+  const handleEmailRemindersChange = (checked: boolean) => {
+    setEmailReminders(checked)
+    saveNotificationPrefs({
+      emailReminders: checked,
+      emailAvailability,
+      emailNewsletter,
+    })
+  }
+
+  const handleEmailAvailabilityChange = (checked: boolean) => {
+    setEmailAvailability(checked)
+    saveNotificationPrefs({
+      emailReminders,
+      emailAvailability: checked,
+      emailNewsletter,
+    })
+  }
+
+  const handleEmailNewsletterChange = (checked: boolean) => {
+    setEmailNewsletter(checked)
+    saveNotificationPrefs({
+      emailReminders,
+      emailAvailability,
+      emailNewsletter: checked,
+    })
+  }
 
   /* ── If card exists but user isn't in bootstrap yet, refetch once ── */
   useEffect(() => {
@@ -488,7 +557,7 @@ export default function SettingsPage() {
                 </div>
                 <Switch
                   checked={emailReminders}
-                  onCheckedChange={setEmailReminders}
+                  onCheckedChange={handleEmailRemindersChange}
                 />
               </div>
               <Separator />
@@ -503,7 +572,7 @@ export default function SettingsPage() {
                 </div>
                 <Switch
                   checked={emailAvailability}
-                  onCheckedChange={setEmailAvailability}
+                  onCheckedChange={handleEmailAvailabilityChange}
                 />
               </div>
               <Separator />
@@ -518,7 +587,7 @@ export default function SettingsPage() {
                 </div>
                 <Switch
                   checked={emailNewsletter}
-                  onCheckedChange={setEmailNewsletter}
+                  onCheckedChange={handleEmailNewsletterChange}
                 />
               </div>
             </CardContent>

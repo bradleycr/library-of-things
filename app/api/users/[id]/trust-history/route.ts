@@ -1,20 +1,21 @@
 import { NextResponse } from "next/server"
 import { listTrustEventsByUserId } from "@/lib/server/repositories"
+import { isUuid } from "@/lib/server/validate"
 
 /** GET /api/users/[id]/trust-history — trust score breakdown for a user. */
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id: userId } = await params
-  if (!userId) {
-    return NextResponse.json({ error: "User id required" }, { status: 400 })
-  }
   try {
+    const { id: userId } = await params
+    if (!userId || !isUuid(userId)) {
+      return NextResponse.json({ error: "Invalid user id" }, { status: 400 })
+    }
     const events = await listTrustEventsByUserId(userId)
     return NextResponse.json({ events })
   } catch (error) {
-    console.error("Trust history error:", error)
+    console.error("[api/users/[id]/trust-history]", error)
     return NextResponse.json(
       { error: "Failed to load trust history" },
       { status: 500 }

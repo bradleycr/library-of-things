@@ -40,7 +40,6 @@ export function useBootstrapData() {
   const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const refetch = useCallback(async (skipCache = false) => {
-    /* Fast-path: reuse cached payload if still fresh. */
     if (!skipCache) {
       const cached = getCachedIfFresh()
       if (cached) {
@@ -56,7 +55,6 @@ export function useBootstrapData() {
     try {
       const payload = await fetchBootstrapData()
 
-      /* Success — update cache & reset retry counter. */
       cachedPayload = payload
       cachedAt = Date.now()
       setData(payload)
@@ -66,15 +64,10 @@ export function useBootstrapData() {
       const msg = err instanceof Error ? err.message : "Failed to load data"
       setError(msg)
 
-      /*
-       * Stale-while-error: keep showing whatever we had before rather than
-       * flashing "no data" / "0 books" while the DB wakes up.
-       */
-      if (cachedPayload && !data) {
-        setData(cachedPayload)
+      if (cachedPayload) {
+        setData((prev) => prev ?? cachedPayload)
       }
 
-      /* Schedule a retry with exponential backoff. */
       if (retryCount.current < MAX_RETRIES) {
         const delay = RETRY_BASE_MS * Math.pow(2, retryCount.current)
         retryCount.current += 1
@@ -83,15 +76,17 @@ export function useBootstrapData() {
     } finally {
       setLoading(false)
     }
-  }, [data])
+  }, [])
 
   useEffect(() => {
     refetch()
     return () => {
-      if (retryTimer.current) clearTimeout(retryTimer.current)
+      if (retryTimer.current) {
+        clearTimeout(retryTimer.current)
+        retryTimer.current = null
+      }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [refetch])
 
   return { data, loading, error, refetch: () => refetch(true) }
 }

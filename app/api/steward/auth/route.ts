@@ -25,8 +25,25 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const body = await request.json().catch(() => ({}))
-  const password = typeof body.password === "string" ? body.password : ""
+  let body: unknown
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json(
+      { error: "Invalid JSON body" },
+      { status: 400 }
+    )
+  }
+  if (body === null || typeof body !== "object") {
+    return NextResponse.json(
+      { error: "Invalid JSON body" },
+      { status: 400 }
+    )
+  }
+  const password =
+    typeof (body as Record<string, unknown>).password === "string"
+      ? ((body as Record<string, unknown>).password as string)
+      : ""
 
   if (!verifyStewardPassword(password)) {
     return NextResponse.json({ error: "Invalid password" }, { status: 401 })

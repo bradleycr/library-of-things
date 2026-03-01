@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useMemo } from "react"
-import { Search, SlidersHorizontal, X, Grid3X3, List, Loader2 } from "lucide-react"
+import { useState, useMemo, useEffect } from "react"
+import { Search, SlidersHorizontal, X, Grid3X3, List, Loader2, AlertCircle } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -20,9 +20,13 @@ import { BookCover } from "@/components/book-cover"
 import { getBookCoverUrl } from "@/lib/book-cover-generator"
 import { formatLocationForDisplay } from "@/lib/format-location"
 import { useBootstrapData } from "@/hooks/use-bootstrap-data"
+import { haversineDistanceMeters, getCurrentPosition } from "@/lib/geofence"
+import type { Book, Node } from "@/lib/types"
+
+const DISTANCE_KM_TO_M = 1000
 
 export default function ExplorePage() {
-  const { data, loading } = useBootstrapData()
+  const { data, loading, error } = useBootstrapData()
   const books = data?.books ?? []
   const nodes = data?.nodes ?? []
   const [query, setQuery] = useState("")
@@ -30,10 +34,18 @@ export default function ExplorePage() {
   const [availableOnly, setAvailableOnly] = useState(false)
   const [selectedNode, setSelectedNode] = useState("all")
   const [distance, setDistance] = useState([50])
+  const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null)
   const [lendingType, setLendingType] = useState<string[]>([])
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
 
+  useEffect(() => {
+    getCurrentPosition({ timeout: 8000, maximumAge: 300_000 }).then(setUserCoords)
+  }, [])
+
   const filteredBooks = useMemo(() => {
+    const distanceKm = distance[0] ?? 50
+    const radiusM = distanceKm * DISTANCE_KM_TO_M
+
     return books.filter((book) => {
       const q = query.toLowerCase()
       const matchesQuery =
@@ -52,9 +64,27 @@ export default function ExplorePage() {
         lendingType.length === 0 ||
         lendingType.includes(book.lending_terms?.type ?? "borrow")
 
-      return matchesQuery && matchesAvailability && matchesNode && matchesLending
+      const matchesDistance =
+        !userCoords || distanceKm >= 50
+          ? true
+          : (() => {
+              if (book.current_node_id) {
+                const node = nodes.find((n: Node) => n.id === book.current_node_id)
+                if (!node?.location_lat || node.location_lng == null) return true
+                const d = haversineDistanceMeters(
+                  userCoords.lat,
+                  userCoords.lng,
+                  node.location_lat,
+                  node.location_lng
+                )
+                return d <= radiusM
+              }
+              return true
+            })()
+
+      return matchesQuery && matchesAvailability && matchesNode && matchesLending && matchesDistance
     })
-  }, [books, query, availableOnly, selectedNode, lendingType, distance])
+  }, [books, query, availableOnly, selectedNode, lendingType, distance, userCoords, nodes])
 
   const activeFilterCount = [
     availableOnly,
@@ -106,9 +136,9 @@ export default function ExplorePage() {
                 type="button"
                 onClick={() => setQuery("")}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label="Clear search"
               >
                 <X className="h-4 w-4" />
-                <span className="sr-only">Clear search</span>
               </button>
             )}
           </div>
@@ -131,7 +161,7 @@ export default function ExplorePage() {
               <Button
                 variant={viewMode === "grid" ? "default" : "ghost"}
                 size="icon"
-                className="h-8 w-8 rounded-r-none"
+                className="h-11 min-h-11 w-11 min-w-11 rounded-r-none touch-manipulation"
                 onClick={() => setViewMode("grid")}
                 aria-label="Grid view"
               >
@@ -140,7 +170,7 @@ export default function ExplorePage() {
               <Button
                 variant={viewMode === "list" ? "default" : "ghost"}
                 size="icon"
-                className="h-8 w-8 rounded-l-none"
+                className="h-11 min-h-11 w-11 min-w-11 rounded-l-none touch-manipulation"
                 onClick={() => setViewMode("list")}
                 aria-label="List view"
               >
@@ -217,6 +247,11 @@ export default function ExplorePage() {
                   step={1}
                   className="mt-2"
                 />
+                {!userCoords && distance[0] < 50 && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Enable location to filter by distance.
+                  </p>
+                )}
               </div>
 
               {/* Lending Type */}
@@ -248,12 +283,31 @@ export default function ExplorePage() {
 
         {/* Results */}
         <div className="mb-4 text-sm text-muted-foreground">
-          {loading
+          {error ? (
+            <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-destructive">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{error}</span>
+            </div>
+          ) : loading
             ? "Loading…"
             : `${filteredBooks.length} book${filteredBooks.length !== 1 ? "s" : ""} found`}
         </div>
 
-        {loading ? (
+        {error ? (
+          <div className="flex flex-col items-center justify-center rounded-lg border border-border bg-card py-16">
+            <AlertCircle className="h-10 w-10 text-destructive/60" />
+            <h3 className="mt-4 font-semibold text-card-foreground">Couldn’t load books</h3>
+            <p className="mt-1 text-sm text-muted-foreground">{error}</p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-4"
+              onClick={() => window.location.reload()}
+            >
+              Retry
+            </Button>
+          </div>
+        ) : loading ? (
           <div className="flex items-center justify-center rounded-lg border border-border bg-card py-16">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             <span className="sr-only">Loading books</span>

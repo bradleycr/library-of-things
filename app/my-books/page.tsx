@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import Link from "next/link"
 import {
   RotateCcw,
@@ -10,6 +11,7 @@ import {
   ArrowRight,
   Library,
   Plus,
+  Loader2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -21,7 +23,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog"
 import {
   Select,
@@ -38,6 +39,8 @@ import { getBookCoverUrl } from "@/lib/book-cover-generator"
 import { formatLocationForDisplay } from "@/lib/format-location"
 import { useBootstrapData } from "@/hooks/use-bootstrap-data"
 import { useLibraryCard } from "@/hooks/use-library-card"
+import { useToast } from "@/hooks/use-toast"
+import type { Book } from "@/lib/types"
 
 function daysRemaining(dateStr?: string) {
   if (!dateStr) return null
@@ -46,13 +49,69 @@ function daysRemaining(dateStr?: string) {
 }
 
 export default function MyBooksPage() {
-  const { data } = useBootstrapData()
+  const { data, refetch } = useBootstrapData()
   const { card } = useLibraryCard()
+  const { toast } = useToast()
   const books = data?.books ?? []
   const loanEvents = data?.loanEvents ?? []
   const users = data?.users ?? []
   const nodes = data?.nodes ?? []
   const currentUser = card?.user_id ? users.find((u) => u.id === card.user_id) ?? null : null
+
+  /* Return dialog: one dialog per page; which book we're returning + form state */
+  const [returnDialogOpen, setReturnDialogOpen] = useState(false)
+  const [returnBook, setReturnBook] = useState<Book | null>(null)
+  const [returnNodeId, setReturnNodeId] = useState("")
+  const [returnNotes, setReturnNotes] = useState("")
+  const [returning, setReturning] = useState(false)
+
+  const openReturnDialog = (book: Book) => {
+    setReturnBook(book)
+    setReturnNodeId(book.current_node_id ?? "")
+    setReturnNotes("")
+    setReturnDialogOpen(true)
+  }
+
+  const closeReturnDialog = () => {
+    setReturnDialogOpen(false)
+    setReturnBook(null)
+    setReturnNodeId("")
+    setReturnNotes("")
+  }
+
+  const handleConfirmReturn = async () => {
+    if (!returnBook || !currentUser) return
+    setReturning(true)
+    try {
+      const res = await fetch("/api/books/return", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          book_id: returnBook.id,
+          user_id: currentUser.id,
+          return_node_id: returnNodeId || undefined,
+          notes: returnNotes.trim() || undefined,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? "Return failed")
+      await refetch()
+      closeReturnDialog()
+      toast({
+        title: "Book returned",
+        description: `${returnBook.title} has been returned.`,
+      })
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Could not return book",
+        description: err instanceof Error ? err.message : "Something went wrong. Please try again.",
+      })
+    } finally {
+      setReturning(false)
+    }
+  }
 
   if (!card) {
     return (
@@ -130,8 +189,8 @@ export default function MyBooksPage() {
         </div>
 
         <Tabs defaultValue="borrowed" className="w-full">
-          <TabsList className="mb-6 flex w-full flex-wrap gap-1 md:w-auto">
-            <TabsTrigger value="borrowed" className="flex-1 gap-2 md:flex-none">
+          <TabsList className="mb-6 flex h-auto w-full flex-wrap gap-2 p-1 md:w-auto">
+            <TabsTrigger value="borrowed" className="gap-2 px-3 py-2 md:flex-none">
               <BookOpen className="h-4 w-4" />
               Currently Borrowed
               {borrowedBooks.length > 0 && (
@@ -140,7 +199,7 @@ export default function MyBooksPage() {
                 </Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="added" className="flex-1 gap-2 md:flex-none">
+            <TabsTrigger value="added" className="gap-2 px-3 py-2 md:flex-none">
               <Library className="h-4 w-4" />
               Books I’ve Added
               {addedByMeBooks.length > 0 && (
@@ -149,7 +208,7 @@ export default function MyBooksPage() {
                 </Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="history" className="flex-1 gap-2 md:flex-none">
+            <TabsTrigger value="history" className="gap-2 px-3 py-2 md:flex-none">
               <Clock className="h-4 w-4" />
               Sharing History
             </TabsTrigger>
@@ -210,61 +269,15 @@ export default function MyBooksPage() {
                             </div>
                           )}
                           <div className="mt-auto flex flex-wrap gap-2 pt-3">
-                            <Dialog>
-                              <DialogTrigger asChild>
-                                <Button size="sm" variant="default" className="gap-1.5">
-                                  <RotateCcw className="h-3.5 w-3.5" />
-                                  Return
-                                </Button>
-                              </DialogTrigger>
-                              <DialogContent>
-                                <DialogHeader>
-                                  <DialogTitle className="text-foreground">
-                                    Return: {book.title}
-                                  </DialogTitle>
-                                  <DialogDescription>
-                                    Select a return location and optionally add
-                                    notes about the book condition.
-                                  </DialogDescription>
-                                </DialogHeader>
-                                <div className="mt-4 flex flex-col gap-4">
-                                  <div>
-                                    <Label>Return Location</Label>
-                                    <Select defaultValue={book.current_node_id || ""}>
-                                      <SelectTrigger className="mt-1">
-                                        <SelectValue placeholder="Select node" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        {nodes.map((node) => (
-                                          <SelectItem
-                                            key={node.id}
-                                            value={node.id}
-                                          >
-                                            {node.name}
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
-                                  <div>
-                                    <Label>
-                                      Condition Notes{" "}
-                                      <span className="text-muted-foreground">
-                                        (optional)
-                                      </span>
-                                    </Label>
-                                    <Textarea
-                                      className="mt-1"
-                                      placeholder="Any notes about the book condition..."
-                                    />
-                                  </div>
-                                  <Button className="gap-2">
-                                    <RotateCcw className="h-4 w-4" />
-                                    Confirm Return
-                                  </Button>
-                                </div>
-                              </DialogContent>
-                            </Dialog>
+                            <Button
+                              size="sm"
+                              variant="default"
+                              className="gap-1.5"
+                              onClick={() => openReturnDialog(book)}
+                            >
+                              <RotateCcw className="h-3.5 w-3.5" />
+                              Return
+                            </Button>
                             <Button
                               size="sm"
                               variant="outline"
@@ -425,6 +438,60 @@ export default function MyBooksPage() {
             )}
           </TabsContent>
         </Tabs>
+
+        {/* Single return dialog — controlled by returnBook / returnDialogOpen */}
+        <Dialog open={returnDialogOpen} onOpenChange={(open) => !open && closeReturnDialog()}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="text-foreground">
+                Return: {returnBook?.title ?? ""}
+              </DialogTitle>
+              <DialogDescription>
+                Select a return location and optionally add notes about the book condition.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="mt-4 flex flex-col gap-4">
+              <div>
+                <Label>Return Location</Label>
+                <Select value={returnNodeId} onValueChange={setReturnNodeId}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Select node" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {nodes.map((node) => (
+                      <SelectItem key={node.id} value={node.id}>
+                        {node.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>
+                  Condition Notes <span className="text-muted-foreground">(optional)</span>
+                </Label>
+                <Textarea
+                  className="mt-1"
+                  placeholder="Any notes about the book condition..."
+                  value={returnNotes}
+                  onChange={(e) => setReturnNotes(e.target.value)}
+                />
+              </div>
+              <Button
+                className="gap-2"
+                onClick={handleConfirmReturn}
+                disabled={returning}
+              >
+                {returning ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RotateCcw className="h-4 w-4" />
+                )}
+                {returning ? "Returning…" : "Confirm Return"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
       </div>
     </div>
