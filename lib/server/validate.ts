@@ -2,12 +2,13 @@ import "server-only"
 
 import { NextRequest, NextResponse } from "next/server"
 
-/** UUID v4 regex — allows hyphenated form only. */
-const UUID_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-
+/**
+ * Validates that a value is a usable text ID (non-empty string, max 255 chars).
+ * IDs in this app are `text` columns — may be UUIDs or short codes like "n1".
+ * Actual existence is enforced by DB foreign key constraints.
+ */
 export function isUuid(value: unknown): value is string {
-  return typeof value === "string" && UUID_REGEX.test(value)
+  return typeof value === "string" && value.trim().length > 0 && value.length <= 255
 }
 
 /**

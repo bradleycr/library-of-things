@@ -77,17 +77,11 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  // For node-based books, node_id is required and must be a valid UUID
+  // For node-based books, node_id is required (text ID, not necessarily UUID)
   if (!is_pocket_library) {
-    if (!node_id || typeof node_id !== "string") {
+    if (!node_id || typeof node_id !== "string" || !node_id.trim()) {
       return NextResponse.json(
         { error: "node_id is required for node-based books" },
-        { status: 400 }
-      )
-    }
-    if (!isUuid(node_id)) {
-      return NextResponse.json(
-        { error: "Invalid node_id" },
         { status: 400 }
       )
     }
