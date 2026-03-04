@@ -1,56 +1,130 @@
 # Library of Things
 
-Trust-based book sharing: physical books at community nodes, NFC/QR checkout, public sharing history. No late fees.
+Open-source, trust-based book sharing for physical communities.
 
-**Stack:** Next.js 16, React 19, TypeScript, Tailwind, Postgres (Supabase).
+Books sit on real shelves at community nodes. Stick a QR code on the spine,
+and anyone can scan it to check out — no app install, no email, no late fees.
+Just a pseudonymous library card generated in the browser.
 
-## Run locally
+```
+                ┌─────────────────────────────┐
+                │    shelf at a community      │
+                │    node (office, café...)     │
+                │                              │
+                │     ┌──┐ ┌──┐ ┌──┐ ┌──┐     │
+                │     └──┘ └──┘ └──┘ └──┘     │
+                └──────────────┬───────────────┘
+                               │
+                      QR code / NFC tag
+                               │
+                ┌──────────────▼───────────────┐
+                │       Library of Things       │
+                │                               │
+                │   get a library card  (anon)  │
+                │   check out the book          │
+                │   return when done            │
+                │   browse the full catalog     │
+                │                               │
+                │   ── works in any browser     │
+                │   ── no install needed        │
+                └───────────────────────────────┘
+```
+
+Built for [Foresight Institute](https://foresight.org)'s office libraries in
+Berlin and San Francisco, but designed so any community can run its own nodes
+and curate its own collections.
+
+## Quickstart
 
 ```bash
 git clone https://github.com/bradleycr/library-of-things.git
 cd library-of-things
 corepack enable && pnpm install
 cp env.example .env.local
-```
-
-Set `DATABASE_URL` in `.env.local` (Supabase Postgres). Optionally `STEWARD_PASSWORD` for the steward dashboard (default: `password123`). Steward dashboard: edit books (metadata, status, holder, location), add optional ledger notes, and manage members; all changes appear in the public sharing history.
-
-```bash
-pnpm db:ensure-schema    # create/update tables
-pnpm db:provision        # optional: reset + seed demo data
+# set DATABASE_URL in .env.local (see "Database" below)
+pnpm db:ensure-schema
 pnpm dev
 ```
 
-Open http://localhost:3000.
+Open [localhost:3000](http://localhost:3000).
+
+### Database
+
+You need PostgreSQL. Two options:
+
+| Option | Setup |
+|--------|-------|
+| **Supabase** (recommended) | Create a free project at [supabase.com](https://supabase.com). Copy the **Session Pooler** URI (port 6543) and paste it as `DATABASE_URL`. See [docs/DATABASE.md](./docs/DATABASE.md). |
+| **Local Postgres** | Set `DATABASE_URL=postgresql://user:pass@localhost:5432/dbname` and `DB_SSL=none`. |
+
+Run `pnpm db:ensure-schema` once to create tables. Optionally `pnpm db:provision`
+to seed demo data (destructive — dev only).
+
+### Environment
+
+Copy `env.example` → `.env.local`:
+
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `DATABASE_URL` | Yes | Postgres connection string |
+| `STEWARD_PASSWORD` | No | Steward dashboard password (default: `password123`) |
+| `DB_SSL` | No | `none` for local dev; omit for Supabase |
+
+## How it works
+
+- **Nodes** are physical locations — shelves, offices, reading rooms — where books live.
+- Each book gets a **QR code** (or NFC tag) linking to its checkout page.
+- Borrowers get a **pseudonymous library card** — no email or real name required.
+- All activity is recorded on a **public sharing ledger**.
+- A **steward dashboard** lets node managers edit books, manage members, and track activity.
+- **Pocket Library** lets owners list books they keep at home; borrowers contact them to arrange pickup.
 
 ## Scripts
 
-| Command | Purpose |
-|--------|---------|
-| `pnpm dev` | Dev server |
-| `pnpm build` | Production build |
-| `pnpm db:ensure-schema` | Apply schema migrations |
-| `pnpm db:provision` | Reset DB + seed (dev only) |
-| `pnpm db:backfill-added-events` | Backfill “added” events for existing books |
+| Command | What it does |
+|---------|-------------|
+| `pnpm dev` | Start dev server (Turbopack) |
+| `pnpm build` | Production build + type-check |
+| `pnpm db:ensure-schema` | Create / update all tables |
+| `pnpm db:provision` | Reset + seed demo data (dev only) |
+
+## Project layout
+
+```
+app/                    Next.js App Router pages + API routes
+  explore/                Browse the catalog
+  book/[uuid]/            Book detail + checkout
+  my-books/               Borrowed & added books
+  ledger/                 Public sharing history
+  steward/                Steward dashboard (login-protected)
+  settings/               Library card, profile, preferences
+  api/                    REST endpoints
+components/             Shared UI (header, modals, book cards)
+hooks/                  useLibraryCard, useBootstrapData
+lib/                    Types, utilities, image compression
+  server/                 DB queries, repositories, validation
+scripts/                Database provisioning & migrations
+docs/                   Operational guides
+```
+
+## Stack
+
+Next.js 16 · React 19 · TypeScript · Tailwind CSS · PostgreSQL (via `pg`, no ORM) · Vercel
 
 ## Docs
 
-| Doc | Purpose |
-|-----|---------|
-| [CONTRIBUTING.md](./CONTRIBUTING.md) | How to contribute (PRs, issues, code style) |
-| [DEPLOY.md](./DEPLOY.md) | Deploy to Vercel + Supabase (maintainers) |
-| [SUPABASE_SETUP.md](./SUPABASE_SETUP.md) | Supabase DB connection (Session Pooler, local) |
-| [POCKET_LIBRARY_FEATURE.md](./POCKET_LIBRARY_FEATURE.md) | Pocket Library (floating books) design |
-| [claude.md](./claude.md) | Living context for AI/contributors (routes, data, current state) |
+| Doc | What it covers |
+|-----|---------------|
+| [CONTRIBUTING.md](./CONTRIBUTING.md) | Project values, architecture, how to submit changes |
+| [docs/DEPLOY.md](./docs/DEPLOY.md) | Deploy your own instance (Vercel + Supabase) |
+| [docs/DATABASE.md](./docs/DATABASE.md) | Supabase connection setup, local Postgres |
+| [docs/POCKET_LIBRARY.md](./docs/POCKET_LIBRARY.md) | How the floating-book feature works |
 
 ## Contributing
 
-We welcome contributions. Please read **[CONTRIBUTING.md](./CONTRIBUTING.md)** before opening a PR. Run `pnpm build` before pushing.
-
-## Deploy
-
-**Vercel + Supabase:** See **[DEPLOY.md](./DEPLOY.md)** for deploy steps. You need a Supabase Postgres instance and a Vercel project; set `DATABASE_URL` and `STEWARD_PASSWORD`, run `pnpm db:ensure-schema` once, then push to sync.
+We'd love contributions — see **[CONTRIBUTING.md](./CONTRIBUTING.md)** for the
+project's values, what kinds of changes fit, and how to get started.
 
 ## License
 
-MIT. See [LICENSE](./LICENSE).
+MIT — see [LICENSE](./LICENSE).

@@ -45,13 +45,13 @@
 - `lib/` — `types.ts`, `utils`, `image-utils.ts` (client-side cover photo compression); `lib/server/` — `db.ts`, `repositories.ts`
 - `scripts/` — DB provisioning, migrations, backfills
 
-## Docs to use
+## Docs
 
-- **README.md** — Quickstart, scripts, links to other docs
-- **DEPLOY.md** — Vercel + Supabase deploy
-- **SUPABASE_SETUP.md** — DB connection (Session Pooler, etc.)
-- **POCKET_LIBRARY_FEATURE.md** — Pocket Library design
-- **CONTRIBUTING.md** — PRs, code style
+- **README.md** — Quickstart, scripts, project overview
+- **CONTRIBUTING.md** — Project values, architecture, how to contribute
+- **docs/DEPLOY.md** — Vercel + Supabase deploy
+- **docs/DATABASE.md** — DB connection setup (Supabase Session Pooler, local Postgres)
+- **docs/POCKET_LIBRARY.md** — Pocket Library (floating books) design
 
 ## Security
 
@@ -94,3 +94,5 @@
 - **Steward dashboard pagination** — Book Management, Bulk NFC Tag URLs, and Member Management sections show 10 items initially with "Show more" progressive disclosure and a "Collapse" option. NFC pagination resets when the node filter changes.
 - **Steward cover image editing** — Edit Book dialog supports pasting a URL or uploading a photo (compressed client-side via `compressBookCoverPhoto`) with a live preview. Uploaded images show as "(uploaded photo)" with a Remove button to switch back to URL entry.
 - **Delete book from library** — Steward dashboard Book Management: Delete (trash) button opens a confirmation dialog; optional ledger note. `DELETE /api/books/[id]` (steward-only) inserts a `removed` ledger event then deletes the book. `loan_events.book_id` is nullable with ON DELETE SET NULL so removed events remain in the ledger with book title preserved.
+- **ensure-schema covers Pocket Library** — `pnpm db:ensure-schema` now adds `owner_contact_email` and `is_pocket_library` columns to `books`; no separate migration script needed for new setups.
+- **Docs reorganized** — Operational docs (`DEPLOY.md`, `DATABASE.md`, `POCKET_LIBRARY.md`) live in `docs/`. Root keeps README, CONTRIBUTING, LICENSE, and AI context files (claude.md, AGENTS.md).

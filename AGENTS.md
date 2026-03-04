@@ -4,7 +4,7 @@
 
 ### Overview
 
-Library of Things is a single Next.js 16 full-stack app (App Router, React 19, TypeScript, Tailwind). It uses PostgreSQL via the `pg` driver (no ORM). See `claude.md` for route table, data/auth model, and current feature state. See `README.md` for standard dev commands.
+Library of Things is a single Next.js 16 full-stack app (App Router, React 19, TypeScript, Tailwind). It uses PostgreSQL via the `pg` driver (no ORM). See `claude.md` for route table, data/auth model, and current feature state. See `README.md` for quickstart. Operational docs live in `docs/` (DEPLOY.md, DATABASE.md, POCKET_LIBRARY.md).
 
 ### Services
 
@@ -22,7 +22,6 @@ Library of Things is a single Next.js 16 full-stack app (App Router, React 19, T
 ### Non-obvious caveats
 
 - **Unset `DATABASE_URL` before local dev/scripts**: The VM may inject a remote Supabase `DATABASE_URL` via secrets. Node's `--env-file` does **not** override existing env vars, so all `pnpm db:*` and `pnpm dev` commands will silently use the remote DB. Run `unset DATABASE_URL` first, or prefix commands with `env -u DATABASE_URL`.
-- **Pocket Library migration before provision**: `pnpm db:provision` expects `owner_contact_email` and `is_pocket_library` columns that `pnpm db:ensure-schema` does not create. Run `pnpm db:migrate-pocket-library` after `pnpm db:ensure-schema` but before `pnpm db:provision`.
 - **Lint script is broken**: `pnpm lint` calls `next lint`, which was removed in Next.js 16. This is a pre-existing issue. Use `pnpm build` (which includes TypeScript checking) as the primary correctness check.
 - **Checkout requires a token**: The `/book/[uuid]/checkout` route requires a `?token=` query param generated from QR/NFC tags. Direct navigation without a token shows "Invalid link". The steward dashboard shows full checkout URLs under "Bulk NFC Tag URLs".
 - **DB scripts use `--env-file`**: All `pnpm db:*` scripts load env from `.env.local` via Node's `--env-file` flag. The `.env.local` file must exist for these to work.

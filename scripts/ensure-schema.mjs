@@ -132,6 +132,12 @@ async function main() {
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'books' AND column_name = 'description') THEN
           ALTER TABLE public.books ADD COLUMN description text;
         END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'books' AND column_name = 'owner_contact_email') THEN
+          ALTER TABLE public.books ADD COLUMN owner_contact_email text;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'books' AND column_name = 'is_pocket_library') THEN
+          ALTER TABLE public.books ADD COLUMN is_pocket_library boolean NOT NULL DEFAULT false;
+        END IF;
       END $$;
     `)
 
