@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import type { Node } from "@/lib/types"
 import {
   getCurrentPosition,
@@ -11,26 +11,24 @@ import {
 /**
  * Optional geolocation for "return at a node" geofencing.
  * Never blocks the flow: if location is denied or fails, nearby is empty but return is still allowed.
+ * Exposes refreshLocation so the user can re-request position (e.g. after moving or a bad first fix).
  */
 export function useReturnLocation(nodes: Node[]) {
   const [position, setPosition] = useState<Coords | null>(null)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    let cancelled = false
+  const fetchPosition = useCallback(() => {
+    setLoading(true)
     getCurrentPosition()
-      .then((coords) => {
-        if (!cancelled) setPosition(coords)
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
+      .then((coords) => setPosition(coords))
+      .finally(() => setLoading(false))
   }, [])
 
-  /** Node ids that have coords and are within ~1 km of the user. Empty if no position or no nodes with coords. */
+  useEffect(() => {
+    fetchPosition()
+  }, [fetchPosition])
+
+  /** Node ids that have coords and are within range of the user (radius + accuracy). Empty if no position or no nodes with coords. */
   const nearbyNodeIds = position
     ? nodes
         .filter((n) => n.location_lat != null && n.location_lng != null && isWithinRadius(position, n))
@@ -40,5 +38,5 @@ export function useReturnLocation(nodes: Node[]) {
   /** Whether we have a position (so we can show "Nearby" badges). */
   const hasLocation = position !== null
 
-  return { position, loading, nearbyNodeIds, hasLocation }
+  return { position, loading, nearbyNodeIds, hasLocation, refreshLocation: fetchPosition }
 }

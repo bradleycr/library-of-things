@@ -547,7 +547,7 @@ function ReturnFlow({
   isTapEntry: boolean
 }) {
   const { toast } = useToast()
-  const { nearbyNodeIds, hasLocation } = useReturnLocation(nodes)
+  const { nearbyNodeIds, hasLocation, refreshLocation, loading: locationLoading } = useReturnLocation(nodes)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const handleReturn = async (nodeId: string) => {
@@ -614,6 +614,25 @@ function ReturnFlow({
             Location access was denied or unavailable; you can still choose where to return it.
           </p>
         )}
+        {hasLocation && nodes.some((n) => n.location_lat != null) && (
+          <div className="mt-2 flex justify-center">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="gap-1.5 text-muted-foreground"
+              onClick={refreshLocation}
+              disabled={locationLoading}
+            >
+              {locationLoading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <MapPin className="h-3.5 w-3.5" />
+              )}
+              {locationLoading ? "Getting location…" : "Refresh my location"}
+            </Button>
+          </div>
+        )}
         <div className="mt-4 space-y-2">
           {nodes.map((node) => {
             const hasCoords = node.location_lat != null && node.location_lng != null
@@ -643,7 +662,7 @@ function ReturnFlow({
                     )}
                     {disabled && (
                       <p className="mt-1 text-xs text-amber-600">
-                        Return only when you’re at this location (~1 km).
+                        Return only when you’re at this location (within ~1.5 km).
                       </p>
                     )}
                   </div>
