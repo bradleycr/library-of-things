@@ -1,5 +1,6 @@
 import "server-only"
 
+import { MAX_BOOKS_CHECKED_OUT } from "@/lib/constants"
 import type { Book, LoanEvent, Node, TrustEvent, User } from "@/lib/types"
 import { resilientQuery, resilientConnect } from "@/lib/server/db"
 import {
@@ -585,8 +586,8 @@ export async function updateUserProfile(
     const rowCount = typeof result.rowCount === "number" ? result.rowCount : 0
     if (rowCount === 0) return { ok: false, reason: "not_found" }
 
-    // Propagate the new name to denormalized columns so "Added by" / "Holder"
-    // labels stay current across the whole app without a full re-bootstrap.
+    // Propagate the new name to every denormalized column so "Added by",
+    // "Holder", ledger rows, and library card pseudonym all stay current.
     if (newDisplayName) {
       await Promise.all([
         resilientQuery(
@@ -599,6 +600,10 @@ export async function updateUserProfile(
         ),
         resilientQuery(
           "update loan_events set user_display_name = $1 where user_id = $2",
+          [newDisplayName, userId],
+        ),
+        resilientQuery(
+          "update library_cards set pseudonym = $1 where user_id = $2",
           [newDisplayName, userId],
         ),
       ])
@@ -683,6 +688,20 @@ export async function checkoutBook(params: { bookId: string; userId: string }) {
   const client = await resilientConnect()
   try {
     await client.query("begin")
+
+    // Enforce max books per user (e.g. 2 at a time)
+    const { rows: countRows } = await client.query<{ count: string }>(
+      `select count(*) as count from books
+       where current_holder_id = $1 and availability_status = 'checked_out'`,
+      [params.userId]
+    )
+    const checkedOutCount = parseInt(countRows[0]?.count ?? "0", 10)
+    if (checkedOutCount >= MAX_BOOKS_CHECKED_OUT) {
+      throw new Error(
+        `You can have at most ${MAX_BOOKS_CHECKED_OUT} books checked out at once. Return one to check out another.`
+      )
+    }
+
     const { rows: books } = await client.query<DbBook>(
       "select * from books where id = $1 for update",
       [params.bookId]
@@ -1157,10 +1176,18 @@ export async function getLibraryCardByNumberAndPin(
     ).catch((err) => console.warn("[auth] pin hash migration failed:", err.message))
   }
 
+  // Prefer the authoritative display_name from users table over the
+  // card's pseudonym, which may be stale if the user renamed themselves.
+  const { rows: userRows } = await resilientQuery<{ display_name: string }>(
+    "select display_name from users where id = $1",
+    [row.user_id]
+  )
+  const currentName = userRows[0]?.display_name ?? row.pseudonym
+
   return {
     id: row.id,
     card_number: row.card_number,
-    pseudonym: row.pseudonym,
+    pseudonym: currentName,
     user_id: row.user_id,
     created_at: new Date(row.created_at).toISOString(),
   }

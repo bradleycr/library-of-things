@@ -51,6 +51,9 @@ export default function AddBookPage() {
   const { toast } = useToast()
   const [libraryCardModalOpen, setLibraryCardModalOpen] = useState(false)
   const nodes = data?.nodes ?? []
+  const currentUser = card?.user_id
+    ? (data?.users ?? []).find((u) => u.id === card.user_id) ?? null
+    : null
 
   // Book details
   const [isbn, setIsbn] = useState("")
@@ -236,9 +239,9 @@ export default function AddBookPage() {
           is_pocket_library: locationType === "pocket",
           owner_contact_email: locationType === "pocket" ? ownerContactEmail : undefined,
           current_location_text: locationType === "pocket" ? currentLocation : undefined,
-          // Attribution: linked user, or "Anonymous" when add-anonymously is checked
+          // Attribution: linked user (authoritative name from DB), or "Anonymous"
           ...(card?.user_id && !addAnonymously
-            ? { added_by_user_id: card.user_id, added_by_display_name: card.pseudonym ?? undefined }
+            ? { added_by_user_id: card.user_id, added_by_display_name: currentUser?.display_name ?? card.pseudonym ?? undefined }
             : addAnonymously
               ? { added_by_display_name: "Anonymous" }
               : {}),

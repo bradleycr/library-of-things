@@ -56,9 +56,12 @@ export async function POST(request: NextRequest) {
     await checkoutBook({ bookId: book_id, userId: user_id })
     return NextResponse.json({ success: true })
   } catch (error) {
+    const message = error instanceof Error ? error.message : "Checkout failed"
+    const isBorrowingLimit =
+      /at most \d+ books checked out/i.test(message) || /return one to check out another/i.test(message)
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Checkout failed" },
-      { status: 400 }
+      { error: message },
+      { status: isBorrowingLimit ? 403 : 400 }
     )
   }
 }

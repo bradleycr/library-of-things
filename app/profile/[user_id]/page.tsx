@@ -134,7 +134,7 @@ export default function ProfilePage({
 
   const userEvents = loanEvents.filter((e) => e.user_id === user.id)
   const isOwnProfile = card?.user_id === user_id
-  const displayName = isOwnProfile && card ? card.pseudonym : user.display_name
+  const displayName = user.display_name
 
   return (
     <div className="py-6 sm:py-8">

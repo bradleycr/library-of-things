@@ -24,6 +24,7 @@ import { useBootstrapData } from "@/hooks/use-bootstrap-data"
 import { useLibraryCard } from "@/hooks/use-library-card"
 import { useReturnLocation } from "@/hooks/use-return-location"
 import { useToast } from "@/hooks/use-toast"
+import { MAX_BOOKS_CHECKED_OUT } from "@/lib/constants"
 import type { Book, Node } from "@/lib/types"
 
 // ---------------------------------------------------------------------------
@@ -250,6 +251,36 @@ export default function CheckoutPage({
     )
   }
 
+  // Available: borrowing limit reached (max 2 books at a time)
+  const checkedOutCount =
+    card?.user_id && data?.books
+      ? (data.books as Book[]).filter(
+          (b) =>
+            b.current_holder_id === card.user_id &&
+            b.availability_status === "checked_out"
+        ).length
+      : 0
+  if (isAvailable && card?.user_id && checkedOutCount >= MAX_BOOKS_CHECKED_OUT) {
+    return (
+      <MinimalScreen
+        book={book}
+        icon={<AlertCircle className="h-12 w-12 text-amber-500" />}
+        title="Borrowing limit reached"
+        message={`You can have at most ${MAX_BOOKS_CHECKED_OUT} books checked out at once. Return one to check out another.`}
+        action={
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Link href="/my-books">
+              <Button className="gap-2">My books — return one</Button>
+            </Link>
+            <Link href={`/book/${uuid}`}>
+              <Button variant="outline">Book details</Button>
+            </Link>
+          </div>
+        }
+      />
+    )
+  }
+
   // Checked out: not holder — show status only
   if (!isAvailable && !isHolder) {
     return (
@@ -403,14 +434,25 @@ function AvailableFlow({
         const j = await res.json().catch(() => ({}))
         const msg = (j?.error as string) ?? "Checkout failed"
         const isContactRequired = res.status === 403 && /contact info/i.test(msg)
+        const isBorrowingLimit =
+          res.status === 403 &&
+          (/at most \d+ books checked out/i.test(msg) || /return one to check out another/i.test(msg))
         toast({
           variant: "destructive",
-          title: isContactRequired ? "Contact info required" : (msg === "Unauthorized" ? "Session expired" : "Checkout failed"),
-          description: isContactRequired
-            ? "Add email, phone, or a profile link in Settings, then try again."
-            : msg === "Unauthorized"
-              ? "Please reload and try again."
-              : "Please try again.",
+          title: isBorrowingLimit
+            ? "Borrowing limit reached"
+            : isContactRequired
+              ? "Contact info required"
+              : msg === "Unauthorized"
+                ? "Session expired"
+                : "Checkout failed",
+          description: isBorrowingLimit
+            ? `You can have at most 2 books checked out at once. Return one from My books, then try again.`
+            : isContactRequired
+              ? "Add email, phone, or a profile link in Settings, then try again."
+              : msg === "Unauthorized"
+                ? "Please reload and try again."
+                : msg,
         })
       }
     } catch (e) {
