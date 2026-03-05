@@ -27,12 +27,14 @@ export function CoverPhotoCapture({ onCapture, onCancel }: CoverPhotoCaptureProp
     try {
       const dataUri = await compressBookCoverPhoto(file)
       setPreview(dataUri)
+      // Auto-apply: no second step — photo is used as soon as it's ready
+      onCapture(dataUri)
     } catch {
       setError("Couldn't process that image — try another photo.")
     } finally {
       setCompressing(false)
     }
-  }, [])
+  }, [onCapture])
 
   const handleInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -49,10 +51,6 @@ export function CoverPhotoCapture({ onCapture, onCancel }: CoverPhotoCaptureProp
     inputRef.current?.click()
   }
 
-  const handleConfirm = () => {
-    if (preview) onCapture(preview)
-  }
-
   return (
     <div className="flex flex-col gap-3">
       {/* Hidden file input — accepts images, hints camera on mobile */}
@@ -67,7 +65,7 @@ export function CoverPhotoCapture({ onCapture, onCancel }: CoverPhotoCaptureProp
       />
 
       {preview ? (
-        /* ── Preview state ─────────────────────────────────── */
+        /* ── Preview (brief before parent switches to URL mode) ─── */
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
           <div className="relative mx-auto h-44 w-32 shrink-0 overflow-hidden rounded-lg border border-border bg-muted shadow-sm sm:mx-0">
             <img
@@ -76,20 +74,11 @@ export function CoverPhotoCapture({ onCapture, onCancel }: CoverPhotoCaptureProp
               className="h-full w-full object-cover"
             />
           </div>
-
           <div className="flex flex-1 flex-col gap-2">
             <p className="text-sm text-muted-foreground">
-              Looking good? Confirm to use this photo, or retake.
+              Photo added. You can retake or cancel.
             </p>
             <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                size="sm"
-                onClick={handleConfirm}
-                className="gap-1.5"
-              >
-                Use this photo
-              </Button>
               <Button
                 type="button"
                 variant="outline"

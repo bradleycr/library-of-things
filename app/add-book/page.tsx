@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import Link from "next/link"
 import {
   BookOpen,
@@ -43,6 +43,7 @@ import { useToast } from "@/hooks/use-toast"
 import { GetLibraryCardModal } from "@/components/get-library-card-modal"
 import { CoverPhotoCapture } from "@/components/cover-photo-capture"
 import { AddBookSuccessCard } from "@/components/add-book-success-card"
+import { generateBookCoverSvg } from "@/lib/book-cover-generator"
 
 export default function AddBookPage() {
   const { data } = useBootstrapData()
@@ -60,6 +61,8 @@ export default function AddBookPage() {
   const [description, setDescription] = useState("")
   const [isbnLookedUp, setIsbnLookedUp] = useState(false)
   const [lookupError, setLookupError] = useState<string | null>(null)
+  const [lookupInProgress, setLookupInProgress] = useState(false)
+  const lookupAbortRef = useRef<AbortController | null>(null)
 
   // Cover source: "url" for standard URL/ISBN flow, "camera" for photo capture
   const [coverMode, setCoverMode] = useState<"url" | "camera">("url")
@@ -107,12 +110,24 @@ export default function AddBookPage() {
     }
   }, [locationType, currentLocation])
 
-  const lookupIsbn = async () => {
-    if (!isbn) return
+  const lookupIsbn = useCallback(async (isbnToLookUp?: string) => {
+    const value = (isbnToLookUp ?? isbn).trim().replace(/[\s-]/g, "")
+    if (!value) return
+    const is10 = value.length === 10
+    const is13 = value.length === 13
+    if (!is10 && !is13) return
+
+    // Cancel any in-flight lookup
+    lookupAbortRef.current?.abort()
+    lookupAbortRef.current = new AbortController()
+    const signal = lookupAbortRef.current.signal
+
     setLookupError(null)
+    setLookupInProgress(true)
     try {
       const response = await fetch(
-        `https://openlibrary.org/isbn/${encodeURIComponent(isbn.trim())}.json`
+        `https://openlibrary.org/isbn/${encodeURIComponent(value)}.json`,
+        { signal }
       )
       if (!response.ok) {
         throw new Error("No book metadata found for this ISBN")
@@ -125,13 +140,14 @@ export default function AddBookPage() {
         authors?: { key: string }[]
         works?: { key: string }[]
       }
-      setTitle(payload.title || title)
+      setTitle(payload.title ?? title)
       if (payload.by_statement) {
         setAuthor(payload.by_statement)
       } else if (payload.authors?.[0]?.key) {
         try {
           const authorRes = await fetch(
-            `https://openlibrary.org${payload.authors[0].key}.json`
+            `https://openlibrary.org${payload.authors[0].key}.json`,
+            { signal }
           )
           if (authorRes.ok) {
             const authorData = (await authorRes.json()) as { name?: string }
@@ -147,13 +163,12 @@ export default function AddBookPage() {
         setEdition(payload.publish_date)
       }
       setCoverImageUrl(
-        `https://covers.openlibrary.org/b/isbn/${encodeURIComponent(isbn.trim())}-L.jpg`
+        `https://covers.openlibrary.org/b/isbn/${encodeURIComponent(value)}-L.jpg`
       )
-      // Optional: fetch work description from Open Library (best-effort, never fails the lookup)
       const workKey = payload.works?.[0]?.key
       if (workKey) {
         try {
-          const workRes = await fetch(`https://openlibrary.org${workKey}.json`)
+          const workRes = await fetch(`https://openlibrary.org${workKey}.json`, { signal })
           if (workRes.ok) {
             const work = (await workRes.json()) as {
               description?: string | { type?: string; value?: string }
@@ -167,17 +182,33 @@ export default function AddBookPage() {
             }
           }
         } catch {
-          // ignore; description stays empty
+          // ignore
         }
       }
       setIsbnLookedUp(true)
     } catch (error) {
+      if ((error as Error).name === "AbortError") return
       setLookupError(
         error instanceof Error ? error.message : "ISBN lookup failed"
       )
       setIsbnLookedUp(false)
+    } finally {
+      if (!signal.aborted) setLookupInProgress(false)
     }
-  }
+  }, [isbn, title])
+
+  // Debounced auto-lookup when ISBN looks complete (10 or 13 digits). Only depends on isbn so we don't re-trigger after title/author update from a previous lookup.
+  useEffect(() => {
+    const normalized = isbn.trim().replace(/[\s-]/g, "")
+    const validLength = normalized.length === 10 || normalized.length === 13
+    if (!validLength) return
+
+    const timer = setTimeout(() => {
+      lookupIsbn(normalized)
+    }, 700)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: run only when isbn string changes
+  }, [isbn])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -299,27 +330,23 @@ export default function AddBookPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Enter ISBN (e.g., 9780199678112)"
-                    value={isbn}
-                    onChange={(e) => {
-                      setIsbn(e.target.value)
-                      setIsbnLookedUp(false)
-                      setCoverImageUrl("")
-                    }}
-                  />
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={lookupIsbn}
-                    disabled={!isbn}
-                    className="shrink-0"
-                  >
-                    Look Up
-                  </Button>
-                </div>
-                {isbnLookedUp && (
+                <p className="mb-2 text-sm text-muted-foreground">
+                  Enter an ISBN (10 or 13 digits; ISBN-10 can end with X). We&apos;ll look up title, author, and cover automatically.
+                </p>
+                <Input
+                  placeholder="e.g. 9780199678112"
+                  value={isbn}
+                  onChange={(e) => {
+                    setIsbn(e.target.value)
+                    setIsbnLookedUp(false)
+                    setCoverImageUrl("")
+                  }}
+                  className="max-w-sm"
+                />
+                {lookupInProgress && (
+                  <p className="mt-2 text-sm text-muted-foreground">Looking up…</p>
+                )}
+                {isbnLookedUp && !lookupInProgress && (
                   <p className="mt-2 flex items-center gap-1 text-sm text-accent">
                     <Check className="h-4 w-4" />
                     Found! Fields auto-populated.
@@ -429,24 +456,45 @@ export default function AddBookPage() {
                       </div>
                     ) : (
                       <div className="mt-2 flex flex-col gap-2">
-                        <div className="flex gap-2">
-                          <Input
-                            placeholder="Paste cover image URL (optional)"
-                            value={coverImageUrl}
-                            onChange={(e) => setCoverImageUrl(e.target.value)}
-                            className="text-sm"
-                          />
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="shrink-0 gap-1.5"
-                            onClick={() => setCoverMode("camera")}
-                            title="Take a photo of the cover"
-                          >
-                            <Camera className="h-4 w-4" />
-                            <span className="hidden sm:inline">Photo</span>
-                          </Button>
+                        {/* When no URL/photo: show generated cover preview so user sees what will actually be used (and after cancel from photo flow). */}
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+                          <div className="h-32 w-24 shrink-0 overflow-hidden rounded-lg border border-border bg-muted">
+                            <img
+                              src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(
+                                generateBookCoverSvg({
+                                  seed: "add-book-preview",
+                                  title: title || "Title",
+                                  author: author || undefined,
+                                })
+                              )}`}
+                              alt="Generated cover preview"
+                              className="h-full w-full object-cover"
+                            />
+                          </div>
+                          <div className="flex flex-1 flex-col gap-2">
+                            <p className="text-xs text-muted-foreground">
+                              This is the generated cover that will be used. Paste a URL or take a photo to use a different cover.
+                            </p>
+                            <div className="flex gap-2">
+                              <Input
+                                placeholder="Paste cover image URL (optional)"
+                                value={coverImageUrl}
+                                onChange={(e) => setCoverImageUrl(e.target.value)}
+                                className="text-sm"
+                              />
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="shrink-0 gap-1.5"
+                                onClick={() => setCoverMode("camera")}
+                                title="Take a photo of the cover"
+                              >
+                                <Camera className="h-4 w-4" />
+                                <span className="hidden sm:inline">Photo</span>
+                              </Button>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     )

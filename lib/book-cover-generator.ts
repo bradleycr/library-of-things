@@ -39,22 +39,33 @@ function pick2(seed: number, max: number): number {
   return ((seed >>> 7) + 31) % max
 }
 
-/** Wrap text into lines that fit in width (approx chars per line). */
+/** Wrap text into lines that fit in width (approx chars per line). Single words longer than maxCharsPerLine are truncated with ellipsis. */
 function wrapLines(text: string, maxCharsPerLine: number): string[] {
   const words = text.trim().split(/\s+/).filter(Boolean)
   if (words.length === 0) return []
   const lines: string[] = []
-  let current = words[0]
-  for (let i = 1; i < words.length; i++) {
-    if (current.length + 1 + words[i].length <= maxCharsPerLine) {
-      current += " " + words[i]
+  let current = ""
+
+  for (const word of words) {
+    const needSpace = current.length > 0 ? 1 : 0
+    const fits = current.length + needSpace + word.length <= maxCharsPerLine
+    if (fits) {
+      current = current ? current + " " + word : word
+    } else if (current) {
+      lines.push(truncateLine(current, maxCharsPerLine))
+      current = word.length <= maxCharsPerLine ? word : word.slice(0, maxCharsPerLine - 3) + "…"
     } else {
-      lines.push(current)
-      current = words[i]
+      current = word.length <= maxCharsPerLine ? word : word.slice(0, maxCharsPerLine - 3) + "…"
     }
   }
-  lines.push(current)
+  if (current) lines.push(truncateLine(current, maxCharsPerLine))
   return lines
+}
+
+/** Ensure a single line does not exceed max length; add ellipsis if truncated. */
+function truncateLine(line: string, maxLen: number): string {
+  if (line.length <= maxLen) return line
+  return line.slice(0, maxLen - 3) + "…"
 }
 
 export interface GenerateBookCoverOptions {
@@ -107,10 +118,10 @@ export function generateBookCoverSvg(
     }
   }
 
-  const displayTitle = (title || "A Book").slice(0, 80)
+  const displayTitle = (title || "A Book").slice(0, 72)
   const lines = wrapLines(displayTitle, 18)
   const maxLines = 4
-  const titleLines = lines.slice(0, maxLines)
+  const titleLines = lines.slice(0, maxLines).map((line) => truncateLine(line, 18))
   const lineHeight = 14
   const titleStartY = 120 - (titleLines.length * lineHeight) / 2
   const titleEls = titleLines
@@ -119,9 +130,13 @@ export function generateBookCoverSvg(
         `<text x="100" y="${titleStartY + (i + 1) * lineHeight}" text-anchor="middle" font-size="12" font-weight="700" font-family="system-ui, sans-serif" fill="${textColor}" opacity="0.95">${escapeXml(line)}</text>`
     )
     .join("")
+  const authorTrimmed = author?.trim()
+  const authorDisplay = authorTrimmed
+    ? truncateLine(authorTrimmed.slice(0, 28), 28)
+    : ""
   const authorLine =
-    author && author.trim()
-      ? `<text x="100" y="${titleStartY + titleLines.length * lineHeight + 22}" text-anchor="middle" font-size="10" font-family="system-ui, sans-serif" fill="${textColor}" opacity="0.85">${escapeXml(author.trim().slice(0, 40))}</text>`
+    authorDisplay
+      ? `<text x="100" y="${titleStartY + titleLines.length * lineHeight + 22}" text-anchor="middle" font-size="10" font-family="system-ui, sans-serif" fill="${textColor}" opacity="0.85">${escapeXml(authorDisplay)}</text>`
       : ""
 
   return `<?xml version="1.0" encoding="UTF-8"?>
