@@ -19,7 +19,7 @@
 
 | Route | Purpose |
 |-------|---------|
-| `/` | Home; catalog stats |
+| `/` | Home; catalog stats; “Available now” books first, then How it works, nodes |
 | `/explore` | Browse books |
 | `/add-book` | Add a book (node or Pocket Library); ISBN lookup; optional cover photo capture |
 | `/book/[uuid]` | Book detail; checkout link/QR |

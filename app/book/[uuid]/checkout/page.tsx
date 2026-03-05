@@ -42,7 +42,7 @@ export default function CheckoutPage({
   const token = searchParams.get("token")
   const { uuid } = use(params)
 
-  const { data } = useBootstrapData()
+  const { data, loading: bootstrapLoading } = useBootstrapData()
   const { card } = useLibraryCard()
 
   const [tapData, setTapData] = useState<TapPayload | null>(null)
@@ -93,9 +93,10 @@ export default function CheckoutPage({
       )
     : false
   const contactRequired = book?.lending_terms?.contact_required ?? false
-  const bootstrapLoaded = data !== undefined
-  const blockedByContactRequirement = contactRequired && !hasContactInfo
-  // While bootstrap is loading we can't verify contact info — hold off on checkout
+  // Only treat bootstrap as "loaded" when we have data (so we know the user list and can check contact)
+  const bootstrapLoaded = !bootstrapLoading && data !== null
+  const blockedByContactRequirement = contactRequired && bootstrapLoaded && !hasContactInfo
+  // While bootstrap is loading or we have no data, we can't verify contact — show spinner
   const contactCheckPending = contactRequired && !bootstrapLoaded
   const isAvailable = book?.availability_status === "available"
   const isHolder = !!(book && card?.user_id && book.current_holder_id === card.user_id)
@@ -400,10 +401,16 @@ function AvailableFlow({
       if (res.ok) setCheckoutComplete(true)
       else {
         const j = await res.json().catch(() => ({}))
+        const msg = (j?.error as string) ?? "Checkout failed"
+        const isContactRequired = res.status === 403 && /contact info/i.test(msg)
         toast({
           variant: "destructive",
-          title: j?.error === "Unauthorized" ? "Session expired" : "Checkout failed",
-          description: j?.error === "Unauthorized" ? "Please reload and try again." : "Please try again.",
+          title: isContactRequired ? "Contact info required" : (msg === "Unauthorized" ? "Session expired" : "Checkout failed"),
+          description: isContactRequired
+            ? "Add email, phone, or a profile link in Settings, then try again."
+            : msg === "Unauthorized"
+              ? "Please reload and try again."
+              : "Please try again.",
         })
       }
     } catch (e) {

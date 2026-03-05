@@ -89,23 +89,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* How it works */}
-      <section className="py-12 md:py-16">
-        <div className="page-container">
-          <div className="max-w-3xl">
-          <h2 className="text-lg font-semibold text-foreground">
-            How it works
-          </h2>
-          <p className="mt-2 text-muted-foreground">
-            Physical books with QR/NFC tags. Tap to check out, return when
-            you're ready. Fully trust-based — we keep a public ledger so anyone
-            can see what's where. Pseudonymous by default.
-          </p>
-          </div>
-        </div>
-      </section>
-
-      {/* Books */}
+      {/* Books — show first so the catalog is the main focus */}
       <section className="border-t border-border/60 py-12 md:py-16">
         <div className="page-container">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-baseline sm:justify-between">
@@ -133,6 +117,22 @@ export default async function HomePage() {
                 : "Loading catalog…"}
             </p>
           )}
+        </div>
+      </section>
+
+      {/* How it works */}
+      <section className="py-12 md:py-16">
+        <div className="page-container">
+          <div className="max-w-3xl">
+          <h2 className="text-lg font-semibold text-foreground">
+            How it works
+          </h2>
+          <p className="mt-2 text-muted-foreground">
+            Physical books with QR/NFC tags. Tap to check out, return when
+            you're ready. Fully trust-based — we keep a public ledger so anyone
+            can see what's where. Pseudonymous by default.
+          </p>
+          </div>
         </div>
       </section>
 

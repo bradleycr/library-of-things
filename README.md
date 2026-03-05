@@ -119,6 +119,7 @@ Next.js 16 · React 19 · TypeScript · Tailwind CSS · PostgreSQL (via `pg`, no
 | [docs/DEPLOY.md](./docs/DEPLOY.md) | Deploy your own instance (Vercel + Supabase) |
 | [docs/DATABASE.md](./docs/DATABASE.md) | Supabase connection setup, local Postgres |
 | [docs/POCKET_LIBRARY.md](./docs/POCKET_LIBRARY.md) | How the floating-book feature works |
+| [docs/OSS_READINESS.md](./docs/OSS_READINESS.md) | Checklist for sharing the repo as open source |
 
 ## Contributing
 

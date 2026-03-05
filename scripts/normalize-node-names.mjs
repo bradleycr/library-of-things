@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * One-time normalization: rename nodes to "Foresight Berlin Node" / "Foresight SF Node"
- * (no Flybrary), set Berlin address to Lothmenstraße 56, and make all books at a node
- * show the node name uniformly (current_node_name and current_location_text).
+ * One-time normalization: rename nodes to "Foresight Berlin Node" / "Foresight SF Node",
+ * set Berlin address to Lothmenstraße 56, and make all books at a node show the node name
+ * uniformly. Matches nodes that still have the old "Flybrary" name in the DB.
  *
  * Run with: node --env-file=.env.local scripts/normalize-node-names.mjs
  */

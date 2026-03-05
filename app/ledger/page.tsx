@@ -21,6 +21,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Card, CardContent } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
 import { formatLocationForDisplay } from "@/lib/format-location"
 import { useBootstrapData } from "@/hooks/use-bootstrap-data"
 
@@ -45,7 +46,7 @@ function formatDateTime(dateStr: string) {
 }
 
 export default function LedgerPage() {
-  const { data } = useBootstrapData()
+  const { data, loading } = useBootstrapData()
   const loanEvents = data?.loanEvents ?? []
   const [eventFilter, setEventFilter] = useState("all")
   const [showFilters, setShowFilters] = useState(false)
@@ -164,9 +165,13 @@ export default function LedgerPage() {
           ].map((stat) => (
             <Card key={stat.label} className="border-border">
               <CardContent className="flex flex-col items-center p-4">
-                <span className="text-2xl font-bold text-primary">
-                  {stat.value}
-                </span>
+                {loading ? (
+                  <Skeleton className="h-8 w-12 rounded" aria-hidden />
+                ) : (
+                  <span className="text-2xl font-bold text-primary">
+                    {stat.value}
+                  </span>
+                )}
                 <span className="text-xs text-muted-foreground">
                   {stat.label}
                 </span>
@@ -197,7 +202,9 @@ export default function LedgerPage() {
             </Badge>
           )}
           <span className="text-sm text-muted-foreground">
-            {sortedEvents.length} event{sortedEvents.length !== 1 ? "s" : ""}
+            {loading
+              ? "Loading…"
+              : `${sortedEvents.length} event${sortedEvents.length !== 1 ? "s" : ""}`}
           </span>
         </div>
 
@@ -246,7 +253,32 @@ export default function LedgerPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sortedEvents.map((event) => (
+                  {loading ? (
+                    /* Skeleton rows so we don't show "0 events" or empty table while bootstrap loads */
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <TableRow key={`skeleton-${i}`}>
+                        <TableCell>
+                          <Skeleton className="h-4 w-28" />
+                        </TableCell>
+                        <TableCell>
+                          <Skeleton className="h-5 w-16 rounded-full" />
+                        </TableCell>
+                        <TableCell>
+                          <Skeleton className="h-4 w-32" />
+                        </TableCell>
+                        <TableCell>
+                          <Skeleton className="h-4 w-24" />
+                        </TableCell>
+                        <TableCell>
+                          <Skeleton className="h-4 w-20" />
+                        </TableCell>
+                        <TableCell>
+                          <Skeleton className="h-4 w-16" />
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    sortedEvents.map((event) => (
                     <TableRow key={event.id}>
                       <TableCell className="whitespace-nowrap text-sm">
                         {formatDateTime(event.timestamp)}
@@ -295,7 +327,8 @@ export default function LedgerPage() {
                         {event.notes || "—"}
                       </TableCell>
                     </TableRow>
-                  ))}
+                  ))
+                )}
                 </TableBody>
               </Table>
             </div>

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import type { LibraryCard } from "@/lib/types"
 
 const STORAGE_KEY = "library_of_things_library_card"
+/** Prior project name; we still read and migrate from this key for existing users. */
 const LEGACY_STORAGE_KEY = "flybrary_library_card"
 const SESSION_TS_KEY = "lot_session_ts"
 

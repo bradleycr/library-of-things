@@ -33,7 +33,10 @@ export async function POST(request: NextRequest) {
     if (!book) {
       return NextResponse.json({ error: "Book not found" }, { status: 404 })
     }
-    if (book.lending_terms?.contact_required) {
+    const terms = book.lending_terms
+    const contactRequired =
+      typeof terms === "object" && terms !== null && terms.contact_required === true
+    if (contactRequired) {
       const user = await getUserById(user_id)
       const hasContact = !!(
         user?.contact_email?.trim() ||
