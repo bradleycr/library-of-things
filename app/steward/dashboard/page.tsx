@@ -165,8 +165,6 @@ export default function StewardDashboardPage() {
     type: "coworking" as NodeType["type"],
     steward_id: "",
     location_address: "",
-    location_lat: "",
-    location_lng: "",
     operating_hours: "",
     capacity: "",
     public: true,
@@ -488,14 +486,6 @@ export default function StewardDashboardPage() {
           type: addNodeForm.type,
           steward_id: addNodeForm.steward_id,
           location_address: addNodeForm.location_address.trim() || undefined,
-          location_lat:
-            addNodeForm.location_lat !== ""
-              ? Number.parseFloat(addNodeForm.location_lat)
-              : undefined,
-          location_lng:
-            addNodeForm.location_lng !== ""
-              ? Number.parseFloat(addNodeForm.location_lng)
-              : undefined,
           operating_hours: addNodeForm.operating_hours.trim() || undefined,
           capacity:
             addNodeForm.capacity !== ""
@@ -515,8 +505,6 @@ export default function StewardDashboardPage() {
         type: "coworking",
         steward_id: users[0]?.id ?? "",
         location_address: "",
-        location_lat: "",
-        location_lng: "",
         operating_hours: "",
         capacity: "",
         public: true,
@@ -730,7 +718,7 @@ export default function StewardDashboardPage() {
             <DialogHeader>
               <DialogTitle>Add node</DialogTitle>
               <DialogDescription>
-                New nodes appear on the homepage and in add-book/return flows. Steward must be an existing user.
+                New nodes appear on the homepage and in add-book/return flows. Coordinates are generated from the address when possible, so stewards only need to enter the location once.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
@@ -753,7 +741,7 @@ export default function StewardDashboardPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {(["coworking", "library", "cafe", "bookstore", "little_free_library", "home"] as const).map(
+                    {(["coworking", "library", "cafe", "bookstore", "little_free_library", "home", "other"] as const).map(
                       (t) => (
                         <SelectItem key={t} value={t}>
                           {t.replace("_", " ")}
@@ -789,30 +777,9 @@ export default function StewardDashboardPage() {
                   onChange={(e) => setAddNodeForm((f) => ({ ...f, location_address: e.target.value }))}
                   placeholder="Street, city, country"
                 />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="grid gap-2">
-                  <Label htmlFor="node-lat">Latitude</Label>
-                  <Input
-                    id="node-lat"
-                    type="number"
-                    step="any"
-                    value={addNodeForm.location_lat}
-                    onChange={(e) => setAddNodeForm((f) => ({ ...f, location_lat: e.target.value }))}
-                    placeholder="52.49"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="node-lng">Longitude</Label>
-                  <Input
-                    id="node-lng"
-                    type="number"
-                    step="any"
-                    value={addNodeForm.location_lng}
-                    onChange={(e) => setAddNodeForm((f) => ({ ...f, location_lng: e.target.value }))}
-                    placeholder="13.44"
-                  />
-                </div>
+                <p className="text-xs text-muted-foreground">
+                  We&apos;ll look up map coordinates from this address automatically for directions and distance-aware features.
+                </p>
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="node-hours">Operating hours</Label>

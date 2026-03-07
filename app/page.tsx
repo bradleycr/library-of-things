@@ -178,6 +178,13 @@ export default async function HomePage() {
                     <p className="mt-1 text-xs text-muted-foreground">
                       {booksPerNodeId[node.id] ?? 0} books at this node
                     </p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <Link href={`/explore?node=${encodeURIComponent(node.id)}`}>
+                        <Button size="sm" className="min-h-11">
+                          View Collection
+                        </Button>
+                      </Link>
+                    </div>
                   </CardContent>
                 </Card>
               ))}

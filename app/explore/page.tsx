@@ -1,7 +1,9 @@
 "use client"
 
-import { useState, useMemo, useEffect } from "react"
-import { Search, SlidersHorizontal, X, Grid3X3, List, Loader2, AlertCircle } from "lucide-react"
+import { Suspense, useState, useMemo, useEffect } from "react"
+import Link from "next/link"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { Search, SlidersHorizontal, X, Grid3X3, List, Loader2, AlertCircle, ArrowLeft } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -25,7 +27,10 @@ import type { Book, Node } from "@/lib/types"
 
 const DISTANCE_KM_TO_M = 1000
 
-export default function ExplorePage() {
+function ExplorePageContent() {
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
   const { data, loading, error } = useBootstrapData()
   const books = data?.books ?? []
   const nodes = data?.nodes ?? []
@@ -41,6 +46,31 @@ export default function ExplorePage() {
   useEffect(() => {
     getCurrentPosition({ timeout: 8000, maximumAge: 300_000 }).then(setUserCoords)
   }, [])
+
+  useEffect(() => {
+    const requestedNodeId = searchParams.get("node")
+    if (!requestedNodeId) {
+      setSelectedNode((prev) => (prev === "all" ? prev : "all"))
+      return
+    }
+
+    if (nodes.some((node) => node.id === requestedNodeId)) {
+      setSelectedNode((prev) => (prev === requestedNodeId ? prev : requestedNodeId))
+      return
+    }
+
+    setSelectedNode((prev) => (prev === "all" ? prev : "all"))
+
+    const params = new URLSearchParams(searchParams.toString())
+    params.delete("node")
+    const nextQuery = params.toString()
+    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false })
+  }, [nodes, pathname, router, searchParams])
+
+  const activeNode = useMemo(
+    () => (selectedNode === "all" ? null : nodes.find((node) => node.id === selectedNode) ?? null),
+    [nodes, selectedNode]
+  )
 
   const filteredBooks = useMemo(() => {
     const distanceKm = distance[0] ?? 50
@@ -99,9 +129,23 @@ export default function ExplorePage() {
     )
   }
 
+  const setNodeFilter = (nextNodeId: string) => {
+    setSelectedNode(nextNodeId)
+
+    const params = new URLSearchParams(searchParams.toString())
+    if (nextNodeId === "all") {
+      params.delete("node")
+    } else {
+      params.set("node", nextNodeId)
+    }
+
+    const nextQuery = params.toString()
+    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false })
+  }
+
   const clearFilters = () => {
     setAvailableOnly(false)
-    setSelectedNode("all")
+    setNodeFilter("all")
     setDistance([50])
     setLendingType([])
   }
@@ -112,14 +156,52 @@ export default function ExplorePage() {
         {/* Header */}
         <div className="mb-8">
           <h1 className="font-serif text-3xl font-bold text-foreground md:text-4xl">
-            Explore Books
+            {activeNode ? activeNode.name : "Explore Books"}
           </h1>
           <p className="mt-2 text-muted-foreground">
             {loading
               ? "Loading…"
-              : `Search and browse ${books.length} books across ${nodes.length} community nodes`}
+              : activeNode
+                ? `Browse the collection at this node, then jump to another one whenever you want.`
+                : `Search and browse ${books.length} books across ${nodes.length} community nodes`}
           </p>
         </div>
+
+        {nodes.length > 0 && (
+          <div className="mb-6 rounded-lg border border-border bg-card p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <Link href="/">
+                <Button variant="ghost" size="sm" className="min-h-11 gap-2">
+                  <ArrowLeft className="h-4 w-4" />
+                  Back to Home
+                </Button>
+              </Link>
+              {activeNode && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="min-h-11"
+                  onClick={() => setNodeFilter("all")}
+                >
+                  View All Collections
+                </Button>
+              )}
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {nodes.map((node) => (
+                <Button
+                  key={node.id}
+                  variant={selectedNode === node.id ? "default" : "outline"}
+                  size="sm"
+                  className="min-h-11"
+                  onClick={() => setNodeFilter(node.id)}
+                >
+                  {node.name}
+                </Button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Search & Filter Bar */}
         <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center">
@@ -219,7 +301,7 @@ export default function ExplorePage() {
                 <Label className="mb-3 block text-xs font-medium text-muted-foreground">
                   Community Node
                 </Label>
-                <Select value={selectedNode} onValueChange={setSelectedNode}>
+                <Select value={selectedNode} onValueChange={setNodeFilter}>
                   <SelectTrigger className="h-9">
                     <SelectValue placeholder="All nodes" />
                   </SelectTrigger>
@@ -391,5 +473,13 @@ export default function ExplorePage() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function ExplorePage() {
+  return (
+    <Suspense fallback={<div className="py-6 sm:py-8"><div className="page-container text-sm text-muted-foreground">Loading…</div></div>}>
+      <ExplorePageContent />
+    </Suspense>
   )
 }

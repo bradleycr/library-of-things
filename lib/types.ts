@@ -105,7 +105,7 @@ export interface LoanEvent {
 export interface Node {
   id: string
   name: string
-  type: "home" | "cafe" | "coworking" | "library" | "bookstore" | "little_free_library"
+  type: "home" | "cafe" | "coworking" | "library" | "bookstore" | "little_free_library" | "other"
   location_lat?: number
   location_lng?: number
   location_address?: string

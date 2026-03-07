@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
+import { revalidatePath } from "next/cache"
 import { cookies } from "next/headers"
 import {
   getStewardCookieName,
   verifyStewardToken,
 } from "@/lib/server/steward-auth"
 import { createNode } from "@/lib/server/repositories"
+import { geocodeNodeAddress } from "@/lib/server/geocode-node-address"
 import type { Node } from "@/lib/types"
 
 const NODE_TYPES: Node["type"][] = [
@@ -14,6 +16,7 @@ const NODE_TYPES: Node["type"][] = [
   "library",
   "bookstore",
   "little_free_library",
+  "other",
 ]
 
 /**
@@ -79,16 +82,24 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const trimmedAddress =
+      typeof location_address === "string" ? location_address.trim().slice(0, 1000) : undefined
+    const providedLat =
+      typeof location_lat === "number" && Number.isFinite(location_lat) ? location_lat : undefined
+    const providedLng =
+      typeof location_lng === "number" && Number.isFinite(location_lng) ? location_lng : undefined
+    const geocoded =
+      trimmedAddress && (providedLat == null || providedLng == null)
+        ? await geocodeNodeAddress(trimmedAddress)
+        : null
+
     const node = await createNode({
       name: name.trim().slice(0, 500),
       type: type as Node["type"],
       steward_id: steward_id.trim(),
-      location_address:
-        typeof location_address === "string" ? location_address.trim().slice(0, 1000) : undefined,
-      location_lat:
-        typeof location_lat === "number" && Number.isFinite(location_lat) ? location_lat : undefined,
-      location_lng:
-        typeof location_lng === "number" && Number.isFinite(location_lng) ? location_lng : undefined,
+      location_address: trimmedAddress,
+      location_lat: providedLat ?? geocoded?.lat,
+      location_lng: providedLng ?? geocoded?.lng,
       public: typeof isPublic === "boolean" ? isPublic : true,
       capacity:
         typeof capacity === "number" && Number.isInteger(capacity) && capacity >= 0
@@ -97,6 +108,7 @@ export async function POST(request: NextRequest) {
       operating_hours:
         typeof operating_hours === "string" ? operating_hours.trim().slice(0, 500) : undefined,
     })
+    revalidatePath("/")
     return NextResponse.json(node)
   } catch (error) {
     console.error("Create node error:", error)

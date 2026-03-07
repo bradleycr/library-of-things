@@ -25,6 +25,13 @@ After deploying, quickly confirm these flows:
 4. **Add book (node selection)**
    - **Add book** → choose “Library node” → select a node → fill title and submit. Should create the book without “Invalid node_id”.
 
+5. **Node collections (home → explore)**
+   - **Home** → Library nodes section → click **View Collection** on a node card. Should open **Explore** filtered to that node’s books.
+   - On **Explore**, use “Back to Home” and the node buttons to switch between “All” and a single node. URL should include `?node=<id>` when a node is selected.
+
+6. **Add node (steward)**
+   - **Steward dashboard** → **Add node** → fill name, type (including “other”), steward, **address** (no lat/lng fields). Submit. New node should appear on homepage and in add-book node list; directions link should work if geocoding succeeded.
+
 ---
 
 ## 1. Tap without card — “Get Library Card or Log In”

@@ -19,8 +19,8 @@
 
 | Route | Purpose |
 |-------|---------|
-| `/` | Home; catalog stats; “Available now” books first, then How it works, nodes |
-| `/explore` | Browse books |
+| `/` | Home; catalog stats; “Available now” books first, then How it works, **library nodes** (View Collection + address link for directions) |
+| `/explore` | Browse books; supports node-specific collection views via `?node=` |
 | `/add-book` | Add a book (node or Pocket Library); ISBN lookup; optional cover photo capture |
 | `/book/[uuid]` | Book detail; checkout link/QR |
 | `/book/[uuid]/checkout` | Checkout flow (requires library card) |
@@ -42,7 +42,7 @@
 - `app/` — App Router pages and API routes
 - `components/` — UI (site-header, modals, book cards, etc.)
 - `hooks/` — `useLibraryCard`, `useBootstrapData`
-- `lib/` — `types.ts`, `utils`, `image-utils.ts` (client-side cover photo compression), **`loan-period.ts`** (default suggested rental period + helpers); `lib/server/` — `db.ts`, `repositories.ts`
+- `lib/` — `types.ts`, `utils`, `image-utils.ts` (client-side cover photo compression), **`loan-period.ts`** (default suggested rental period + helpers); `lib/server/` — `db.ts`, `repositories.ts`, **`geocode-node-address.ts`** (address → lat/lng for new nodes)
 - `scripts/` — DB provisioning, migrations, backfills
 
 ## Docs
@@ -94,6 +94,8 @@
 - **Dialog scroll** — DialogContent capped at 85vh with overflow-y scroll so bottom buttons (e.g. Confirm Return) are reachable on mobile.
 - **Display name propagation** — `updateUserProfile()` cascades display name changes to `books.added_by_display_name`, `books.current_holder_name`, `loan_events.user_display_name`, and `library_cards.pseudonym` so every surface (profile, ledger, book cards, library card display) updates immediately. Login API returns the authoritative `users.display_name` rather than the card's stored pseudonym, so session refreshes never revert a renamed user. Profile page and add-book page prefer `user.display_name` from bootstrap over `card.pseudonym`.
 - **Steward dashboard pagination** — Book Management, Bulk NFC Tag URLs, and Member Management sections show 10 items initially with "Show more" progressive disclosure and a "Collapse" option. NFC pagination resets when the node filter changes.
+- **Node collections** — Homepage node cards include a **View Collection** CTA that links to `/explore?node=<id>`. Explore shows a back-home action and a node switcher so users can jump between node-specific collections without losing the existing browse UI.
+- **Node creation** — Steward add-node flow no longer asks for manual latitude/longitude; when an address is provided, the server tries to geocode it automatically for directions and distance-based features. Node type now includes `other`.
 - **Steward cover image editing** — Edit Book dialog supports pasting a URL or uploading a photo (compressed client-side via `compressBookCoverPhoto`) with a live preview. Uploaded images show as "(uploaded photo)" with a Remove button to switch back to URL entry.
 - **Delete book from library** — Steward dashboard Book Management: Delete (trash) button opens a confirmation dialog; optional ledger note. `DELETE /api/books/[id]` (steward-only) inserts a `removed` ledger event then deletes the book. `loan_events.book_id` is nullable with ON DELETE SET NULL so removed events remain in the ledger with book title preserved.
 - **ensure-schema covers Pocket Library** — `pnpm db:ensure-schema` now adds `owner_contact_email` and `is_pocket_library` columns to `books`; no separate migration script needed for new setups.
