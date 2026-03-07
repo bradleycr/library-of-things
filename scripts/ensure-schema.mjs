@@ -65,6 +65,9 @@ async function main() {
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'website_url') THEN
           ALTER TABLE public.users ADD COLUMN website_url text;
         END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'profile_public') THEN
+          ALTER TABLE public.users ADD COLUMN profile_public boolean not null default true;
+        END IF;
       END $$;
     `)
 

@@ -45,7 +45,8 @@ pnpm db:ensure-schema
 ```
 
 This creates all tables (`users`, `nodes`, `books`, `library_cards`, `loan_events`,
-`trust_events`) and adds any missing columns. Safe to re-run — it never deletes data.
+`trust_events`, `app_config`) and adds any missing columns (e.g. `profile_public` on
+`users`). Safe to re-run — it never deletes data. Run again after pulling if the schema was updated.
 
 ### Demo data (optional)
 

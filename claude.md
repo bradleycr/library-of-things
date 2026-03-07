@@ -104,3 +104,6 @@
 - **ensure-schema covers Pocket Library** — `pnpm db:ensure-schema` now adds `owner_contact_email` and `is_pocket_library` columns to `books`; no separate migration script needed for new setups.
 - **Docs reorganized** — Operational docs (`DEPLOY.md`, `DATABASE.md`, `POCKET_LIBRARY.md`) live in `docs/`. Root keeps README, CONTRIBUTING, LICENSE, and AI context files (claude.md, AGENTS.md).
 - **Profile "Their books"** — On another member's profile, the quick action shows "[Name]'s Books" and links to `/my-books?user=<id>`. My Books page supports `?user=` for a read-only view (borrowed, added, sharing history) with that member's avatar, name, and trust score in the header; "View profile" back link when viewing someone else. Own My Books shows "My Books" with avatar and "You" so it's clear whose page it is.
+- **Settings buttons** — Profile card: "Update display name" (sends only display_name). Contact card: "Update contact info."
+- **Deleted account** — On delete, ledger and "added by" show "Deleted account"; profile not-found: "This profile doesn't exist or the account has been deleted."
+- **Public/private profile** — `profile_public` (default true). When private: confirmation dialog; name becomes "Anonymous" app-wide; new events use getPublicDisplayName(); profile page shows "Anonymous" when viewing a private profile.

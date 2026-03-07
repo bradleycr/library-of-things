@@ -25,7 +25,7 @@ Library of Things is a single Next.js 16 full-stack app (App Router, React 19, T
 - **Lint script is broken**: `pnpm lint` calls `next lint`, which was removed in Next.js 16. This is a pre-existing issue. Use `pnpm build` (which includes TypeScript checking) as the primary correctness check.
 - **Checkout requires a token**: The `/book/[uuid]/checkout` route requires a `?token=` query param generated from QR/NFC tags. Direct navigation without a token shows "Invalid link". The steward dashboard shows full checkout URLs under "Bulk NFC Tag URLs".
 - **DB scripts use `--env-file`**: All `pnpm db:*` scripts load env from `.env.local` via Node's `--env-file` flag. The `.env.local` file must exist for these to work.
-- **Schema before first run**: Run `pnpm db:ensure-schema` before the first `pnpm dev` to create tables. Optionally `pnpm db:provision` to seed demo data (destructive).
+- **Schema before first run**: Run `pnpm db:ensure-schema` before the first `pnpm dev` to create tables. Re-run after pulling if the codebase adds new columns. Optionally `pnpm db:provision` to seed demo data (destructive).
 - **No automated test suite**: The project has no unit/integration tests. Validation is done via `pnpm build` (TypeScript + Next.js compilation).
 
 ### Authentication model

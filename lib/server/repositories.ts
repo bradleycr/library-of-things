@@ -540,6 +540,7 @@ export async function updateUserDisplayName(
 /** Optional profile updates; only provided fields are updated. */
 export type UserProfileUpdate = {
   display_name?: string
+  profile_public?: boolean
   contact_opt_in?: boolean
   contact_email?: string | null
   phone?: string | null
@@ -584,6 +585,11 @@ export async function updateUserProfile(
     idx += 1
     setParts.push(`display_name = $${idx}`)
     values.push(trimmed)
+  }
+  if (updates.profile_public !== undefined) {
+    idx += 1
+    setParts.push(`profile_public = $${idx}`)
+    values.push(updates.profile_public)
   }
   if (updates.contact_opt_in !== undefined) {
     idx += 1
@@ -630,8 +636,12 @@ export async function updateUserProfile(
     const rowCount = typeof result.rowCount === "number" ? result.rowCount : 0
     if (rowCount === 0) return { ok: false, reason: "not_found" }
 
-    // Propagate the new name to every denormalized column so "Added by",
-    // "Holder", ledger rows, and library card pseudonym all stay current.
+    const newProfilePublic = updates.profile_public
+
+    if (newProfilePublic === false) {
+      await anonymizeUserDisplay(userId)
+    }
+
     if (newDisplayName) {
       await Promise.all([
         resilientQuery(
@@ -651,6 +661,32 @@ export async function updateUserProfile(
           [newDisplayName, userId],
         ),
       ])
+    } else if (newProfilePublic === true) {
+      const { rows: u } = await resilientQuery<{ display_name: string }>(
+        "select display_name from users where id = $1",
+        [userId],
+      )
+      const name = u[0]?.display_name
+      if (name) {
+        await Promise.all([
+          resilientQuery(
+            "update books set added_by_display_name = $1 where added_by_user_id = $2",
+            [name, userId],
+          ),
+          resilientQuery(
+            "update books set current_holder_name = $1 where current_holder_id = $2",
+            [name, userId],
+          ),
+          resilientQuery(
+            "update loan_events set user_display_name = $1 where user_id = $2",
+            [name, userId],
+          ),
+          resilientQuery(
+            "update library_cards set pseudonym = $1 where user_id = $2",
+            [name, userId],
+          ),
+        ])
+      }
     }
 
     return { ok: true }
@@ -728,6 +764,17 @@ export async function searchBooks(params: {
  *  then raw client queries inside the txn.
  * ═══════════════════════════════════════════ */
 
+/** Returns the display name to show publicly for this user (Anonymous if profile is private). */
+export async function getPublicDisplayName(userId: string): Promise<string> {
+  const { rows } = await resilientQuery<{ display_name: string; profile_public: boolean }>(
+    "select display_name, coalesce(profile_public, true) as profile_public from users where id = $1",
+    [userId],
+  )
+  const row = rows[0]
+  if (!row) return "Unknown"
+  return row.profile_public ? row.display_name : "Anonymous"
+}
+
 export async function checkoutBook(params: { bookId: string; userId: string }) {
   const config = await getAppConfig()
   const client = await resilientConnect()
@@ -759,10 +806,7 @@ export async function checkoutBook(params: { bookId: string; userId: string }) {
       throw new Error("Book is not available")
     }
 
-    const { rows: userRows } = await client.query<DbUser>(
-      "select display_name from users where id = $1",
-      [params.userId]
-    )
+    const displayNameForPublic = await getPublicDisplayName(params.userId)
 
     const loanDays = Number(book.lending_terms?.loan_period_days) || config.default_loan_period_days
     const expectedReturn = new Date(Date.now() + loanDays * 24 * 60 * 60 * 1000).toISOString()
@@ -773,7 +817,7 @@ export async function checkoutBook(params: { bookId: string; userId: string }) {
              availability_status = 'checked_out',
              expected_return_date = $4
        where id = $1`,
-      [params.bookId, params.userId, userRows[0]?.display_name ?? null, expectedReturn]
+      [params.bookId, params.userId, displayNameForPublic, expectedReturn]
     )
 
     await client.query(
@@ -786,7 +830,7 @@ export async function checkoutBook(params: { bookId: string; userId: string }) {
         params.bookId,
         book.title,
         params.userId,
-        userRows[0]?.display_name ?? null,
+        displayNameForPublic,
         book.current_location_text ?? null,
       ]
     )
@@ -849,10 +893,7 @@ export async function returnBook(params: {
       [params.bookId, params.returnNodeId ?? null, nodeName, locationText]
     )
 
-    const { rows: userRows } = await client.query<DbUser>(
-      "select display_name from users where id = $1",
-      [params.userId]
-    )
+    const returnDisplayName = await getPublicDisplayName(params.userId)
 
     await client.query(
       `insert into loan_events
@@ -864,7 +905,7 @@ export async function returnBook(params: {
         params.bookId,
         book.title,
         params.userId,
-        userRows[0]?.display_name ?? null,
+        returnDisplayName,
         locationText,
         params.notes ?? null,
       ]
@@ -943,6 +984,10 @@ export async function createBook(input: {
       throw new Error("Pocket Library books require an owner contact email")
     }
 
+    const addedByDisplayNameValue = addedByUserId
+      ? await getPublicDisplayName(addedByUserId)
+      : (input.addedByDisplayName ?? null)
+
     await client.query(
       `insert into books
         (id, isbn, title, author, edition, description, qr_tag_id, checkout_url, cover_image_url, 
@@ -966,18 +1011,11 @@ export async function createBook(input: {
         locationText ?? null,
         JSON.stringify(input.lendingTerms),
         addedByUserId ?? null,
-        input.addedByDisplayName ?? null,
+        addedByDisplayNameValue ?? null,
         input.ownerContactEmail ?? null,
         input.isPocketLibrary ?? false,
       ]
     )
-
-    const { rows: userRows } = await client.query<DbUser>(
-      "select display_name from users where id = $1",
-      [addedByUserId]
-    )
-    const addedByDisplayName =
-      input.addedByDisplayName ?? userRows[0]?.display_name ?? "—"
 
     await client.query(
       `insert into loan_events
@@ -989,7 +1027,7 @@ export async function createBook(input: {
         id,
         input.title,
         addedByUserId,
-        addedByDisplayName,
+        addedByDisplayNameValue ?? "—",
         locationText ?? (input.isPocketLibrary ? "Pocket Library" : "Unknown"),
       ]
     )
@@ -1130,6 +1168,24 @@ export function normalizePinForAuth(pin: string): string {
   return digits.slice(-4).padStart(4, "0")
 }
 
+/** Sets this user's denormalised display name to "Anonymous" everywhere (books added by, current holder, loan_events). Used when profile is set to private. */
+export async function anonymizeUserDisplay(userId: string): Promise<void> {
+  await Promise.all([
+    resilientQuery(
+      "update books set added_by_display_name = 'Anonymous' where added_by_user_id = $1",
+      [userId],
+    ),
+    resilientQuery(
+      "update books set current_holder_name = 'Anonymous' where current_holder_id = $1",
+      [userId],
+    ),
+    resilientQuery(
+      "update loan_events set user_display_name = 'Anonymous' where user_id = $1",
+      [userId],
+    ),
+  ])
+}
+
 /* ═══════════════════════════════════════════
  *  Account deletion — anonymise ledger entries,
  *  return held books, then remove the user.
@@ -1167,10 +1223,19 @@ export async function deleteUserAccount(userId: string): Promise<DeleteUserResul
       [userId]
     )
 
+    /* Set "Added by" to "Deleted account" and clear user id before we delete the user */
+    await client.query(
+      `UPDATE books
+         SET added_by_display_name = 'Deleted account',
+             added_by_user_id = NULL
+       WHERE added_by_user_id = $1`,
+      [userId]
+    )
+
     /* Anonymise the user's ledger history (preserves transparency) */
     await client.query(
       `UPDATE loan_events
-         SET user_display_name = '[Deleted]',
+         SET user_display_name = 'Deleted account',
              user_id = NULL
        WHERE user_id = $1`,
       [userId]

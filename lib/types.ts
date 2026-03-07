@@ -79,6 +79,8 @@ export interface User {
   avatar_seed?: string
   /** When true, show contact section on profile if any contact method is set. */
   contact_opt_in?: boolean
+  /** When false, this user's name appears as "Anonymous" across the app (ledger, added by, holder). They can still log in. */
+  profile_public?: boolean
   /** Optional; only shown when contact_opt_in is true. */
   contact_email?: string
   phone?: string

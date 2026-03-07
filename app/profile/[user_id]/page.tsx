@@ -111,7 +111,7 @@ export default function ProfilePage({
           User not found
         </h1>
         <p className="mt-2 text-muted-foreground">
-          This profile may not exist or has been removed.
+          This profile doesn't exist or the account has been deleted.
         </p>
         <Link href="/explore">
           <Button className="mt-6 gap-2">
@@ -134,7 +134,8 @@ export default function ProfilePage({
 
   const userEvents = loanEvents.filter((e) => e.user_id === user.id)
   const isOwnProfile = card?.user_id === user_id
-  const displayName = user.display_name
+  const isPrivateProfile = !isOwnProfile && user.profile_public === false
+  const displayName = isPrivateProfile ? "Anonymous" : user.display_name
 
   return (
     <div className="py-6 sm:py-8">

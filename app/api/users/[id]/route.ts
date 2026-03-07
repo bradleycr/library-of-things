@@ -28,6 +28,10 @@ export async function PATCH(
       updates.display_name = displayName
     }
 
+    if (body.profile_public !== undefined) {
+      updates.profile_public = Boolean(body.profile_public)
+    }
+
     if (body.contact_opt_in !== undefined) {
       updates.contact_opt_in = Boolean(body.contact_opt_in)
     }
@@ -49,7 +53,7 @@ export async function PATCH(
 
     if (Object.keys(updates).length === 0) {
       return NextResponse.json(
-        { error: "Provide at least one field to update (display_name, contact_opt_in, contact_email, phone, twitter_url, linkedin_url, website_url)" },
+        { error: "Provide at least one field to update (display_name, profile_public, contact_opt_in, contact_email, phone, twitter_url, linkedin_url, website_url)" },
         { status: 400 }
       )
     }

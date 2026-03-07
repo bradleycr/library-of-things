@@ -83,8 +83,11 @@ export default function SettingsPage() {
   const [emailAvailability, setEmailAvailability] = useState(true)
   const [emailNewsletter, setEmailNewsletter] = useState(false)
 
-  /* ── Privacy (UI-only for now) ── */
+  /* ── Privacy ── */
   const [publicProfile, setPublicProfile] = useState(true)
+  const [publicProfileDialogOpen, setPublicProfileDialogOpen] = useState(false)
+  const [pendingPrivate, setPendingPrivate] = useState(false)
+  const [savingPrivacy, setSavingPrivacy] = useState(false)
 
   /* ── Delete account ── */
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -95,6 +98,7 @@ export default function SettingsPage() {
     if (currentUser) {
       setDisplayName(currentUser.display_name)
       setContactOptIn(currentUser.contact_opt_in ?? true)
+      setPublicProfile(currentUser.profile_public ?? true)
       setContactEmail(currentUser.contact_email ?? "")
       setPhone(currentUser.phone ?? "")
       setTwitterUrl(currentUser.twitter_url ?? "")
@@ -180,23 +184,17 @@ export default function SettingsPage() {
         credentials: "include",
         body: JSON.stringify({
           display_name: displayName.trim(),
-          contact_opt_in: contactOptIn,
-          contact_email: contactEmail.trim() || null,
-          phone: phone.trim() || null,
-          twitter_url: twitterUrl.trim() || null,
-          linkedin_url: linkedinUrl.trim() || null,
-          website_url: websiteUrl.trim() || null,
         }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? "Failed to save")
       updatePseudonym(displayName.trim())
       await refetch()
-      toast({ title: "Profile updated", description: "Your display name has been saved." })
+      toast({ title: "Display name updated", description: "Your display name has been saved." })
     } catch (err) {
       toast({
         variant: "destructive",
-        title: "Could not save profile",
+        title: "Could not update display name",
         description: err instanceof Error ? err.message : "Something went wrong. Please try again.",
       })
     } finally {
@@ -224,7 +222,7 @@ export default function SettingsPage() {
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? "Failed to save contact info")
       await refetch()
-      toast({ title: "Contact info saved", description: "Your contact information has been updated." })
+      toast({ title: "Contact info updated", description: "Your contact information has been saved." })
     } catch (err) {
       toast({
         variant: "destructive",
@@ -260,6 +258,68 @@ export default function SettingsPage() {
       })
     } finally {
       setDeleting(false)
+    }
+  }
+
+  /* ════════════════════
+   *  Public profile toggle
+   * ════════════════════ */
+
+  const handlePublicProfileChange = async (checked: boolean) => {
+    if (!currentUser) return
+    if (checked) {
+      setSavingPrivacy(true)
+      try {
+        const res = await fetch(`/api/users/${currentUser.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ profile_public: true }),
+        })
+        if (!res.ok) throw new Error((await res.json()).error ?? "Failed to update")
+        setPublicProfile(true)
+        await refetch()
+        toast({ title: "Profile is now public", description: "Your name will appear again across the app." })
+      } catch (err) {
+        toast({
+          variant: "destructive",
+          title: "Could not update",
+          description: err instanceof Error ? err.message : "Something went wrong.",
+        })
+      } finally {
+        setSavingPrivacy(false)
+      }
+    } else {
+      setPendingPrivate(true)
+      setPublicProfileDialogOpen(true)
+    }
+  }
+
+  const handleConfirmPrivateProfile = async () => {
+    if (!currentUser) return
+    setSavingPrivacy(true)
+    try {
+      const res = await fetch(`/api/users/${currentUser.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ profile_public: false }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? "Failed to update")
+      setPublicProfile(false)
+      setPublicProfileDialogOpen(false)
+      setPendingPrivate(false)
+      await refetch()
+      toast({ title: "Profile is now private", description: "Your name now appears as Anonymous across the app." })
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Could not update",
+        description: err instanceof Error ? err.message : "Something went wrong.",
+      })
+    } finally {
+      setSavingPrivacy(false)
     }
   }
 
@@ -433,7 +493,7 @@ export default function SettingsPage() {
                 ) : (
                   <Save className="h-4 w-4" />
                 )}
-                Save Profile
+                Update display name
               </Button>
             </CardContent>
           </Card>
@@ -529,7 +589,7 @@ export default function SettingsPage() {
                 ) : (
                   <Save className="h-4 w-4" />
                 )}
-                Save contact info
+                Update contact info
               </Button>
             </CardContent>
           </Card>
@@ -607,14 +667,45 @@ export default function SettingsPage() {
                     Public Profile
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Allow others to view your profile page
+                    When off, your name appears as &quot;Anonymous&quot; everywhere (ledger, who added books, current holder). You can still log in and use your account.
                   </p>
                 </div>
                 <Switch
                   checked={publicProfile}
-                  onCheckedChange={setPublicProfile}
+                  onCheckedChange={handlePublicProfileChange}
+                  disabled={savingPrivacy}
                 />
               </div>
+              <Dialog open={publicProfileDialogOpen} onOpenChange={(open) => !open && setPublicProfileDialogOpen(false)}>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle className="text-foreground">
+                      Make your profile private?
+                    </DialogTitle>
+                    <DialogDescription>
+                      This will change your name to &quot;Anonymous&quot; across the whole app — in the sharing ledger, on books you&apos;ve added, and as current holder. You can still log in and use your account normally; only what others see changes. You can turn your profile back to public anytime.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="mt-4 flex justify-end gap-3">
+                    <Button
+                      variant="outline"
+                      className="text-foreground bg-transparent"
+                      onClick={() => setPublicProfileDialogOpen(false)}
+                      disabled={savingPrivacy}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      className="gap-2"
+                      onClick={handleConfirmPrivateProfile}
+                      disabled={savingPrivacy}
+                    >
+                      {savingPrivacy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                      Make profile private
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
             </CardContent>
           </Card>
 
