@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { BookCover } from "@/components/book-cover"
 import { getBookCoverUrl } from "@/lib/book-cover-generator"
@@ -82,6 +83,7 @@ export default function CheckoutPage({
   const [checkoutComplete, setCheckoutComplete] = useState(false)
   const [returnComplete, setReturnComplete] = useState(false)
   const [returningNodeId, setReturningNodeId] = useState<string | null>(null)
+  const [returnNotes, setReturnNotes] = useState("")
 
   const isTapEntry = !!token
   const users = data?.users ?? []
@@ -323,6 +325,8 @@ export default function CheckoutPage({
         onReturnComplete={() => setReturnComplete(true)}
         returningNodeId={returningNodeId}
         setReturningNodeId={setReturningNodeId}
+        returnNotes={returnNotes}
+        setReturnNotes={setReturnNotes}
         isTapEntry={isTapEntry}
       />
     )
@@ -589,6 +593,8 @@ function ReturnFlow({
   onReturnComplete,
   returningNodeId,
   setReturningNodeId,
+  returnNotes,
+  setReturnNotes,
   isTapEntry,
 }: {
   book: Book
@@ -597,6 +603,8 @@ function ReturnFlow({
   onReturnComplete: () => void
   returningNodeId: string | null
   setReturningNodeId: (id: string | null) => void
+  returnNotes: string
+  setReturnNotes: (s: string) => void
   isTapEntry: boolean
 }) {
   const { toast } = useToast()
@@ -615,6 +623,7 @@ function ReturnFlow({
           book_id: book.id,
           user_id: userId,
           return_node_id: nodeId,
+          notes: returnNotes.trim() || undefined,
         }),
       })
       if (res.ok) onReturnComplete()
@@ -686,6 +695,17 @@ function ReturnFlow({
             </Button>
           </div>
         )}
+        <div className="mt-4">
+          <Label className="text-muted-foreground">Optional note (up to 200 characters)</Label>
+          <Textarea
+            className="mt-1 min-h-[72px] resize-y"
+            placeholder="e.g. Condition, how you enjoyed it…"
+            value={returnNotes}
+            onChange={(e) => setReturnNotes(e.target.value.slice(0, 200))}
+            maxLength={200}
+          />
+          <p className="mt-0.5 text-right text-xs text-muted-foreground">{returnNotes.length}/200</p>
+        </div>
         <div className="mt-4 space-y-2">
           {nodes.map((node) => {
             const hasCoords = node.location_lat != null && node.location_lng != null

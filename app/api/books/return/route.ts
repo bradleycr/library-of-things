@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
       bookId: book_id,
       userId: user_id,
       returnNodeId: return_node_id,
-      notes: clampString(notes, LIMITS.notes) ?? undefined,
+      notes: clampString(notes, LIMITS.ledgerNote) ?? undefined,
     })
     return NextResponse.json({ success: true })
   } catch (error) {

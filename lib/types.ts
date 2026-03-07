@@ -75,6 +75,8 @@ export interface User {
   trust_score: number
   community_memberships: string[]
   created_at: string
+  /** Optional seed for DiceBear avatar; when set, overrides default (id-based) so user can regenerate a new look. */
+  avatar_seed?: string
   /** When true, show contact section on profile if any contact method is set. */
   contact_opt_in?: boolean
   /** Optional; only shown when contact_opt_in is true. */

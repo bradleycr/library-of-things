@@ -46,10 +46,13 @@ export async function PATCH(
     if (body.website_url !== undefined) {
       updates.website_url = body.website_url === null || body.website_url === "" ? null : String(body.website_url)
     }
+    if (body.avatar_seed !== undefined) {
+      updates.avatar_seed = body.avatar_seed === null || body.avatar_seed === "" ? null : String(body.avatar_seed)
+    }
 
     if (Object.keys(updates).length === 0) {
       return NextResponse.json(
-        { error: "Provide at least one field to update (display_name, contact_opt_in, contact_email, phone, twitter_url, linkedin_url, website_url)" },
+        { error: "Provide at least one field to update (display_name, avatar_seed, contact_opt_in, contact_email, phone, twitter_url, linkedin_url, website_url)" },
         { status: 400 }
       )
     }

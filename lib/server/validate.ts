@@ -51,6 +51,8 @@ export const LIMITS = {
   description: 3000,
   isbn: 20,
   notes: 2000,
+  /** Short notes attached to ledger events (returns, steward edits). Kept small so history stays readable and layout-safe. */
+  ledgerNote: 200,
   url: 2048,
   displayName: 200,
   operatingHours: 500,

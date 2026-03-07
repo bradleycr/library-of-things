@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/table"
 import { useBootstrapData } from "@/hooks/use-bootstrap-data"
 import type { User, LoanEvent } from "@/lib/types"
-import { getAvatarUrl, getInitials } from "@/lib/avatar"
+import { getAvatarUrl, getInitials, getAvatarSeed } from "@/lib/avatar"
 
 export default function MembersPage() {
   const { data, loading } = useBootstrapData()
@@ -108,7 +108,7 @@ export default function MembersPage() {
                         >
                           <Avatar className="h-9 w-9">
                             <AvatarImage 
-                              src={getAvatarUrl(user.id)} 
+                              src={getAvatarUrl(getAvatarSeed(user))} 
                               alt={user.display_name}
                             />
                             <AvatarFallback className="bg-primary/10 text-sm font-bold text-primary">

@@ -323,8 +323,13 @@ export default function LedgerPage() {
                           ? formatLocationForDisplay(event.location_text)
                           : "—"}
                       </TableCell>
-                      <TableCell className="max-w-[200px] truncate text-sm text-muted-foreground">
-                        {event.notes || "—"}
+                      <TableCell className="min-w-0 max-w-[200px] text-sm text-muted-foreground">
+                        <span
+                          className="block overflow-hidden text-ellipsis break-words line-clamp-3"
+                          title={event.notes ?? undefined}
+                        >
+                          {event.notes || "—"}
+                        </span>
                       </TableCell>
                     </TableRow>
                   ))

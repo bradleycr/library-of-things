@@ -1,4 +1,7 @@
 import Link from "next/link"
+import { Github } from "lucide-react"
+
+const GITHUB_REPO_URL = "https://github.com/bradleycr/library-of-things"
 
 const links = [
   { href: "/explore", label: "Explore" },
@@ -44,9 +47,20 @@ export function SiteFooter() {
 
         {/* Single line: trust-based + attribution */}
         <div className="mt-8 flex flex-col items-center gap-4 border-t border-border/40 pt-8 text-center sm:flex-row sm:justify-between sm:text-left">
-          <p className="text-xs text-muted-foreground">
-            Trust-based. Pseudonymous.
-          </p>
+          <div className="flex items-center gap-2">
+            <p className="text-xs text-muted-foreground">
+              Trust-based. Pseudonymous.
+            </p>
+            <a
+              href={GITHUB_REPO_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex text-muted-foreground transition-colors hover:text-foreground"
+              aria-label="GitHub repository"
+            >
+              <Github className="h-4 w-4" />
+            </a>
+          </div>
           <div className="flex items-center gap-4">
             <a
               href="https://foresight.org"

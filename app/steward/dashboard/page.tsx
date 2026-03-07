@@ -1666,13 +1666,14 @@ export default function StewardDashboardPage() {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="edit-note">Ledger note (optional)</Label>
+                <Label htmlFor="edit-note">Ledger note (optional, up to 200 characters)</Label>
                 <Textarea
                   id="edit-note"
                   value={editForm.note}
-                  onChange={(e) => setEditForm((f) => ({ ...f, note: e.target.value }))}
-                  placeholder="Why this change was made"
+                  onChange={(e) => setEditForm((f) => ({ ...f, note: e.target.value.slice(0, 200) }))}
+                  placeholder="Short note for the sharing history"
                   className="min-h-[88px]"
+                  maxLength={200}
                 />
               </div>
               <div className="flex items-center gap-2">

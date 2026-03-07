@@ -2,6 +2,8 @@
 
 Deploy your own instance using **Vercel** (app hosting) and **Supabase** (Postgres database).
 
+The reference deployment for this repo is **[libraryofthings.vercel.app](https://libraryofthings.vercel.app)**.
+
 ## 1. Supabase database
 
 1. Create a project at [supabase.com](https://supabase.com) (free tier works).

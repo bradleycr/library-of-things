@@ -433,6 +433,11 @@ export default function MyBooksPage() {
                             {event.location_text &&
                               ` at ${formatLocationForDisplay(event.location_text)}`}
                           </p>
+                          {event.notes && (
+                            <p className="mt-1.5 line-clamp-2 break-words text-xs text-muted-foreground" title={event.notes}>
+                              {event.notes}
+                            </p>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -451,7 +456,7 @@ export default function MyBooksPage() {
                 Return: {returnBook?.title ?? ""}
               </DialogTitle>
               <DialogDescription>
-                Select a return location and optionally add notes about the book condition.
+                Select a return location. You can leave a short note about the condition of the book, how you enjoyed it, or anything else — it will appear in the sharing history.
               </DialogDescription>
             </DialogHeader>
             <div className="mt-4 flex flex-col gap-4">
@@ -472,14 +477,18 @@ export default function MyBooksPage() {
               </div>
               <div>
                 <Label>
-                  Condition Notes <span className="text-muted-foreground">(optional)</span>
+                  Note <span className="text-muted-foreground">(optional, up to 200 characters)</span>
                 </Label>
                 <Textarea
-                  className="mt-1"
-                  placeholder="Any notes about the book condition..."
+                  className="mt-1 min-h-[88px] resize-y"
+                  placeholder="e.g. Condition, how you enjoyed it, or anything you’d like to share…"
                   value={returnNotes}
-                  onChange={(e) => setReturnNotes(e.target.value)}
+                  onChange={(e) => setReturnNotes(e.target.value.slice(0, 200))}
+                  maxLength={200}
                 />
+                <p className="mt-1 text-right text-xs text-muted-foreground">
+                  {returnNotes.length}/200
+                </p>
               </div>
               <Button
                 className="gap-2"

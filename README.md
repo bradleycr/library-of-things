@@ -2,6 +2,8 @@
 
 Open-source, trust-based book sharing for physical communities.
 
+**Live app:** [libraryofthings.vercel.app](https://libraryofthings.vercel.app)
+
 Books sit on real shelves at community nodes. Stick a QR code on the spine,
 and anyone can scan it to check out — no app install, no email, no late fees.
 Just a pseudonymous library card generated in the browser.
@@ -46,7 +48,7 @@ pnpm db:ensure-schema
 pnpm dev
 ```
 
-Open [localhost:3000](http://localhost:3000).
+Open [localhost:3000](http://localhost:3000). The app is also currently hosted at [libraryofthings.vercel.app](https://libraryofthings.vercel.app).
 
 ### Database
 

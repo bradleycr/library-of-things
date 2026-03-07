@@ -38,7 +38,7 @@ After deploying, quickly confirm these flows:
 **Steps**
 
 1. On a device **without** a library card (or in an incognito/private window with no card saved), open a book’s **checkout URL** (from QR/NFC or steward “Bulk NFC Tag URLs”).  
-   Example: `https://your-app.vercel.app/book/<book-uuid>/checkout?token=<token>`
+   Example: `https://libraryofthings.vercel.app/book/<book-uuid>/checkout?token=<token>`
 2. Ensure the book is **available** (not checked out).
 
 **Expected**

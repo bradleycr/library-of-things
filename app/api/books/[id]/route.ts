@@ -3,7 +3,7 @@ import { cookies } from "next/headers"
 import type { LendingTerms } from "@/lib/types"
 import { updateBook, deleteBook } from "@/lib/server/repositories"
 import { getStewardCookieName, verifyStewardToken } from "@/lib/server/steward-auth"
-import { parseJsonBody, isUuid } from "@/lib/server/validate"
+import { parseJsonBody, isUuid, LIMITS, clampString } from "@/lib/server/validate"
 import { sanitizeCoverUrl } from "@/lib/server/sanitize-cover-url"
 
 /**
@@ -168,7 +168,7 @@ export async function PATCH(
               ? current_holder_id
               : null),
       ledger_note:
-        note === undefined ? undefined : (typeof note === "string" ? note : null),
+        note === undefined ? undefined : (clampString(note, LIMITS.ledgerNote) ?? null),
       actor_display_name: "Steward",
     })
 
