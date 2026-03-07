@@ -22,6 +22,7 @@
 | `/` | Home; catalog stats; “Available now” books first, then How it works, **library nodes** (View Collection + address link for directions) |
 | `/explore` | Browse books; supports node-specific collection views via `?node=` |
 | `/add-book` | Add a book (node or Pocket Library); ISBN lookup; optional cover photo capture |
+| `/add-book/print-qr` | Print-ready QR code page (?url= checkout URL); centered 2″ label with cut line; Print or Save as PDF |
 | `/book/[uuid]` | Book detail; checkout link/QR |
 | `/book/[uuid]/checkout` | Checkout flow (requires library card) |
 | `/my-books` | User’s borrowed books, added books, history |
@@ -72,7 +73,7 @@
 - Ledger: event types `added`, `checkout`, `return`, `transfer`, `report_lost`, `report_damaged`, `removed`; `user_id` can be null (e.g. anonymized after member delete). For `removed` (book deleted from library), `book_id` is null and the row is kept for history.
 - No mock data in runtime; all data from Postgres via bootstrap and API routes.
 - **Book cover images** — three sources: (1) OpenLibrary URL from ISBN lookup, (2) user-taken photo compressed client-side and stored as JPEG data URI in `cover_image_url`, (3) deterministic pastel-gradient SVG fallback at `/api/books/[id]/cover`; title/author on generated covers use off-black (#1a1a1a) for contrast. Cover API cache is 24h so design updates apply within a day.
-- **Add-book success** — after adding a book, user sees checkout URL (copyable), optional “Add to book” guide (NFC Tools link + printable QR via qrcode.react), and “Do this later” to collapse the guide; URL stays visible.
+- **Add-book success** — after adding a book, the form is hidden and only a “Book added” view is shown (no editing); checkout URL (copyable), optional “Add to book” guide with **Print QR code** (opens `/add-book/print-qr?url=...` for a ready-to-print page with 2″ QR and cut line), NFC Tools link, and “Do this later” to collapse the guide; “Add another book” and “Browse catalog” links.
 - **Add-book UX** — ISBN: no Look Up button; once 10 or 13 digits are entered (with optional spaces/dashes; ISBN-10 can end with X), lookup runs automatically after 700ms debounce; in-flight lookups are cancelled when the user keeps typing. Cover photo: after capture and compression, the photo is applied immediately (no “Use this photo” step); user can still Retake or Cancel from the preview. When they cancel (or when no URL/photo is set), the form shows a generated cover preview (same pastel generator as live covers) so users see what will be used; long titles/authors on generated covers are truncated with ellipsis so text never overflows.
 - **Partner logos** — Foresight in header + footer; Internet Archive in footer (and library card) only, not in header.
 - **Book location display** — Under books (cards, explore, book detail) we always show the **node name** (e.g. "Foresight Berlin Node") when the book is at a node; only Pocket Library books show the typed address/location text.

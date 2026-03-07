@@ -314,15 +314,85 @@ export default function AddBookPage() {
     <div className="py-6 sm:py-8">
       <div className="page-container">
         <div className="mx-auto max-w-2xl">
-          <div className="mb-8">
-            <h1 className="font-serif text-3xl font-bold text-foreground">
-              Add a Book to the Network
-            </h1>
-            <p className="mt-2 text-muted-foreground">
-              Share your books with the community. Add them to a library node or keep them in your
-              Pocket Library.
-            </p>
-          </div>
+          {/* When book was just added: show only success state — no form, so nothing looks editable */}
+          {bookCreated ? (
+            <div className="flex flex-col gap-6">
+              <div>
+                <h1 className="font-serif text-3xl font-bold text-foreground">
+                  Book added
+                </h1>
+                <p className="mt-2 text-muted-foreground">
+                  Your book is in the catalog. Use the options below to add the checkout link to your book (QR or NFC), or go to the book page.
+                </p>
+              </div>
+
+              {createdCheckoutUrl ? (
+                <AddBookSuccessCard
+                  checkoutUrl={createdCheckoutUrl}
+                  bookId={createdBookId}
+                  locationType={locationType}
+                />
+              ) : createdBookId ? (
+                <Card className="border-primary/30 bg-primary/5">
+                  <CardContent className="flex flex-col items-center gap-4 p-6 text-center">
+                    <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
+                      <Check className="h-7 w-7 text-primary" />
+                    </div>
+                    <p className="font-medium text-foreground">Book added.</p>
+                    <Link href={`/book/${createdBookId}`}>
+                      <Button variant="outline" className="gap-2">
+                        View book page
+                        <ArrowRight className="h-4 w-4" />
+                      </Button>
+                    </Link>
+                  </CardContent>
+                </Card>
+              ) : null}
+
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setBookCreated(false)
+                    setCreatedBookId(null)
+                    setCreatedCheckoutUrl(null)
+                    setTitle("")
+                    setAuthor("")
+                    setEdition("")
+                    setIsbn("")
+                    setCoverImageUrl("")
+                    setDescription("")
+                    setIsbnLookedUp(false)
+                    setLookupError(null)
+                    setNodeId("")
+                    setOwnerContactEmail("")
+                    setCurrentLocation("")
+                  }}
+                  className="gap-2"
+                >
+                  <BookOpen className="h-4 w-4" />
+                  Add another book
+                </Button>
+                <Link href="/explore">
+                  <Button variant="ghost" className="gap-2">
+                    Browse catalog
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="mb-8">
+                <h1 className="font-serif text-3xl font-bold text-foreground">
+                  Add a Book to the Network
+                </h1>
+                <p className="mt-2 text-muted-foreground">
+                  Share your books with the community. Add them to a library node or keep them in your
+                  Pocket Library.
+                </p>
+              </div>
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-6">
             {/* ISBN Lookup */}
@@ -700,31 +770,9 @@ export default function AddBookPage() {
               </Button>
             </div>
 
-            {/* Success: URL + optional NFC/QR guide; "Do it later" keeps URL visible */}
-            {bookCreated && createdCheckoutUrl && (
-              <AddBookSuccessCard
-                checkoutUrl={createdCheckoutUrl}
-                bookId={createdBookId}
-                locationType={locationType}
-              />
-            )}
-            {bookCreated && !createdCheckoutUrl && createdBookId && (
-              <Card className="border-primary/30 bg-primary/5">
-                <CardContent className="flex flex-col items-center gap-4 p-6 text-center">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
-                    <Check className="h-7 w-7 text-primary" />
-                  </div>
-                  <p className="font-medium text-foreground">Book added.</p>
-                  <Link href={`/book/${createdBookId}`}>
-                    <Button variant="outline" className="gap-2">
-                      View book page
-                      <ArrowRight className="h-4 w-4" />
-                    </Button>
-                  </Link>
-                </CardContent>
-              </Card>
-            )}
           </form>
+            </>
+          )}
         </div>
       </div>
 

@@ -105,8 +105,8 @@ export function AddBookSuccessCard({
               <li className="flex gap-2">
                 <QrCode className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                 <span>
-                  <strong className="text-foreground">No NFC tag?</strong> Save or
-                  print the QR code below, cut it out, and glue it into the book.
+                  <strong className="text-foreground">No NFC tag?</strong> Print a
+                  QR code label (or save as PDF), cut it out, and glue it into the book.
                 </span>
               </li>
             </ul>
@@ -123,6 +123,19 @@ export function AddBookSuccessCard({
               <p className="text-xs text-muted-foreground">
                 Save or print → cut out → glue in book
               </p>
+              <Button
+                type="button"
+                variant="default"
+                size="sm"
+                className="mt-1 w-full gap-2 sm:w-auto"
+                onClick={() => {
+                  const printUrl = `/add-book/print-qr?url=${encodeURIComponent(fullUrl)}`
+                  window.open(printUrl, "_blank", "noopener,noreferrer")
+                }}
+              >
+                <QrCode className="h-4 w-4" />
+                Print QR code (ready-to-print page)
+              </Button>
             </div>
             <Button
               type="button"
