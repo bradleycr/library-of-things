@@ -44,6 +44,7 @@ import { GetLibraryCardModal } from "@/components/get-library-card-modal"
 import { CoverPhotoCapture } from "@/components/cover-photo-capture"
 import { AddBookSuccessCard } from "@/components/add-book-success-card"
 import { generateBookCoverSvg } from "@/lib/book-cover-generator"
+import { DEFAULT_LOAN_PERIOD_DAYS, formatDefaultLoanPeriod } from "@/lib/loan-period"
 
 export default function AddBookPage() {
   const { data } = useBootstrapData()
@@ -633,7 +634,7 @@ export default function AddBookPage() {
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
                 <p className="text-sm text-muted-foreground">
-                  Suggested return period is 2 months (60 days). Borrowers see this as a guideline, not a strict due date.
+                  Suggested return period is {formatDefaultLoanPeriod(data?.config?.default_loan_period_days ?? DEFAULT_LOAN_PERIOD_DAYS)}. Borrowers see this as a guideline, not a strict due date.
                 </p>
 
                 <div className="flex flex-col gap-3">

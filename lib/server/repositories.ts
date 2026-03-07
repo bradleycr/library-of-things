@@ -1,6 +1,7 @@
 import "server-only"
 
 import { MAX_BOOKS_CHECKED_OUT } from "@/lib/constants"
+import { DEFAULT_LOAN_PERIOD_DAYS } from "@/lib/loan-period"
 import type { Book, LoanEvent, Node, TrustEvent, User } from "@/lib/types"
 import { resilientQuery, resilientConnect } from "@/lib/server/db"
 import {
@@ -162,6 +163,48 @@ export async function listTrustEventsByUserId(userId: string): Promise<TrustEven
   return rows.map(mapTrustEvent)
 }
 
+/** App-wide config (steward-editable). Falls back to defaults when DB has no row. */
+export type AppConfig = {
+  default_loan_period_days: number
+}
+
+export async function getAppConfig(): Promise<AppConfig> {
+  try {
+    const { rows } = await resilientQuery<{ key: string; value: unknown }>(
+      "select key, value from app_config where key = 'default_loan_period_days'"
+    )
+    const row = rows[0]
+    if (row && typeof row.value === "number" && row.value >= 1 && row.value <= 365) {
+      return { default_loan_period_days: Math.round(row.value) }
+    }
+    if (row && typeof row.value === "string") {
+      const n = parseInt(row.value, 10)
+      if (!Number.isNaN(n) && n >= 1 && n <= 365) return { default_loan_period_days: n }
+    }
+  } catch {
+    // Table may not exist yet (e.g. before ensure-schema); use defaults.
+  }
+  return { default_loan_period_days: DEFAULT_LOAN_PERIOD_DAYS }
+}
+
+/** Update app config (steward-only). */
+export async function setAppConfig(updates: Partial<AppConfig>): Promise<AppConfig> {
+  const client = await resilientConnect()
+  try {
+    if (typeof updates.default_loan_period_days === "number") {
+      const days = Math.max(1, Math.min(365, Math.round(updates.default_loan_period_days)))
+      await client.query(
+        `insert into app_config (key, value, updated_at) values ('default_loan_period_days', $1::jsonb, now())
+         on conflict (key) do update set value = $1::jsonb, updated_at = now()`,
+        [JSON.stringify(days)]
+      )
+    }
+    return getAppConfig()
+  } finally {
+    client.release()
+  }
+}
+
 export async function getBookById(id: string) {
   const { rows } = await resilientQuery<DbBook>("select * from books where id = $1", [id])
   return rows[0] ? mapBook(rows[0]) : null
@@ -192,6 +235,7 @@ export async function updateBook(
     actor_display_name?: string | null
   }
 ): Promise<Book | null> {
+  const config = await getAppConfig()
   const client = await resilientConnect()
   try {
     await client.query("begin")
@@ -250,7 +294,7 @@ export async function updateBook(
         : current.availability_status
     const loanPeriodDays = Math.max(
       1,
-      Number(lending_terms_obj?.loan_period_days) || 60
+      Number(lending_terms_obj?.loan_period_days) || config.default_loan_period_days
     )
     const expected_return_date =
       availability_status === "checked_out"
@@ -685,6 +729,7 @@ export async function searchBooks(params: {
  * ═══════════════════════════════════════════ */
 
 export async function checkoutBook(params: { bookId: string; userId: string }) {
+  const config = await getAppConfig()
   const client = await resilientConnect()
   try {
     await client.query("begin")
@@ -719,7 +764,7 @@ export async function checkoutBook(params: { bookId: string; userId: string }) {
       [params.userId]
     )
 
-    const loanDays = Number(book.lending_terms?.loan_period_days) || 60
+    const loanDays = Number(book.lending_terms?.loan_period_days) || config.default_loan_period_days
     const expectedReturn = new Date(Date.now() + loanDays * 24 * 60 * 60 * 1000).toISOString()
     await client.query(
       `update books

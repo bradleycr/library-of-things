@@ -252,8 +252,22 @@ async function main() {
       create index if not exists idx_trust_events_user_created on trust_events(user_id, created_at desc);
     `)
 
+    // App-wide config (e.g. default loan period) — steward-editable from dashboard.
+    await client.query(`
+      create table if not exists app_config (
+        key text primary key,
+        value jsonb not null,
+        updated_at timestamptz not null default now()
+      );
+    `)
+    await client.query(`
+      insert into app_config (key, value, updated_at)
+      values ('default_loan_period_days', '60', now())
+      on conflict (key) do nothing;
+    `)
+
     await client.query("commit")
-    console.log("Schema ensured. Tables: users, nodes, books, library_cards, loan_events, trust_events.")
+    console.log("Schema ensured. Tables: users, nodes, books, library_cards, loan_events, trust_events, app_config.")
   } catch (error) {
     await client.query("rollback")
     console.error("Schema ensure failed:", error.message)

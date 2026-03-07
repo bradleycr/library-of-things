@@ -32,6 +32,7 @@ import { BookCover } from "@/components/book-cover"
 import { getBookCoverUrl } from "@/lib/book-cover-generator"
 import { formatLocationForDisplay } from "@/lib/format-location"
 import { useBootstrapData } from "@/hooks/use-bootstrap-data"
+import { DEFAULT_LOAN_PERIOD_DAYS } from "@/lib/loan-period"
 
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("en-US", {
@@ -71,6 +72,7 @@ export default function BookDetailPage({
   const { uuid } = use(params)
   const book = books.find((b) => b.id === uuid)
   const node = book?.current_node_id ? nodes.find((n) => n.id === book.current_node_id) : null
+  const defaultLoanPeriodDays = data?.config?.default_loan_period_days ?? DEFAULT_LOAN_PERIOD_DAYS
   // Directions: node books → node address/coords (correct place); pocket → owner's entered location.
   const directionsHref =
     node != null
@@ -355,7 +357,7 @@ export default function BookDetailPage({
                   <div className="flex items-center gap-2 text-card-foreground">
                     <Clock className="h-4 w-4 text-muted-foreground" />
                     <span>
-                      {book.lending_terms?.loan_period_days ?? 60} day borrow period (suggested)
+                      {book.lending_terms?.loan_period_days ?? defaultLoanPeriodDays} day borrow period (suggested)
                     </span>
                   </div>
                   <div className="flex items-center gap-2 text-card-foreground">

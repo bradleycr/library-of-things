@@ -29,11 +29,11 @@
 | `/settings` | Link card (PIN), get new card, log in with card |
 | `/ledger` | Sharing history (all events; export CSV/JSON) |
 | `/members` | Member list (books out, activity); links to profiles |
-| `/steward/login`, `/steward/dashboard` | Steward: nodes, books (edit metadata + status/holder/location + optional ledger note), bulk add, member edit/delete; changes write to ledger |
+| `/steward/login`, `/steward/dashboard` | Steward: nodes, books (edit metadata + status/holder/location + optional ledger note), **Library settings** (default loan period), bulk add, member edit/delete; changes write to ledger |
 
 ## Data & auth
 
-- **Bootstrap:** Client loads `/api/bootstrap`; hook `useBootstrapData()`. Supplies books, users, nodes, loan events, etc.
+- **Bootstrap:** Client loads `/api/bootstrap`; hook `useBootstrapData()`. Supplies books, users, nodes, loan events, **config** (e.g. `default_loan_period_days`), etc.
 - **Library card:** Stored in `localStorage`; hook `useLibraryCard()`. Card can have `user_id` (linked) or not (card-only). Login/link via PIN at `/api/library-card/login`.
 - **Remove card:** Header “Remove card from this device” shows a confirmation: *“Make sure you save your card and PIN. Otherwise, you won’t have access to this account.”* Then clears local card.
 
@@ -42,7 +42,7 @@
 - `app/` — App Router pages and API routes
 - `components/` — UI (site-header, modals, book cards, etc.)
 - `hooks/` — `useLibraryCard`, `useBootstrapData`
-- `lib/` — `types.ts`, `utils`, `image-utils.ts` (client-side cover photo compression); `lib/server/` — `db.ts`, `repositories.ts`
+- `lib/` — `types.ts`, `utils`, `image-utils.ts` (client-side cover photo compression), **`loan-period.ts`** (default suggested rental period + helpers); `lib/server/` — `db.ts`, `repositories.ts`
 - `scripts/` — DB provisioning, migrations, backfills
 
 ## Docs
@@ -87,9 +87,9 @@
 - **Atomic card creation** — Library card generation uses `createUserAndLibraryCard()` (single transaction); no orphan users if card insert fails.
 - **Explore** — Bootstrap `error` state shown with retry; distance filter filters by user location when available; view toggles 44px touch targets; clear-search has `aria-label`.
 - **No alert()** — Add-book and checkout/return flows use toast for errors. Tap fetch uses AbortController for cleanup on unmount.
-- **DB indexes** — `ensure-schema` adds `idx_books_availability_status`, `idx_books_current_node_id`, `idx_books_current_holder_id`, `idx_loan_events_book_timestamp`, `idx_loan_events_user_timestamp`. Backfill script documented as idempotent.
+- **DB indexes** — `ensure-schema` adds `idx_books_availability_status`, `idx_books_current_node_id`, `idx_books_current_holder_id`, `idx_loan_events_book_timestamp`, `idx_loan_events_user_timestamp`, and **app_config** table (key/value for e.g. `default_loan_period_days`). Backfill script documented as idempotent.
 - **Steward auth** — Invalid JSON body returns 400. Mobile menu and profile button: menu closes on pathname change; profile button has `aria-label` and 44px touch target.
-- **Default loan period** — 60 days (2 months), not 21 days. Applied in checkoutBook, steward edit, book create defaults, and all UI fallbacks.
+- **Default loan period** — Single source: `lib/loan-period.ts` (`DEFAULT_LOAN_PERIOD_DAYS` = 60) and steward-editable **app_config** (`default_loan_period_days`). Bootstrap returns `config`; create book, checkout, steward edit, book detail, add-book, and return/trust logic use config (or constant when config unavailable). Steward dashboard has a **Library settings** card to change the default; it propagates app-wide.
 - **Tap without card** — Checkout page shows "Get Library Card or Log In" (links to `/settings`) instead of "Go to Library of Things" when user has no library card.
 - **Dialog scroll** — DialogContent capped at 85vh with overflow-y scroll so bottom buttons (e.g. Confirm Return) are reachable on mobile.
 - **Display name propagation** — `updateUserProfile()` cascades display name changes to `books.added_by_display_name`, `books.current_holder_name`, `loan_events.user_display_name`, and `library_cards.pseudonym` so every surface (profile, ledger, book cards, library card display) updates immediately. Login API returns the authoritative `users.display_name` rather than the card's stored pseudonym, so session refreshes never revert a renamed user. Profile page and add-book page prefer `user.display_name` from bootstrap over `card.pseudonym`.

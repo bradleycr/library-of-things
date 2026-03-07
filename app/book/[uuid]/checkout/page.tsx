@@ -25,6 +25,7 @@ import { useLibraryCard } from "@/hooks/use-library-card"
 import { useReturnLocation } from "@/hooks/use-return-location"
 import { useToast } from "@/hooks/use-toast"
 import { MAX_BOOKS_CHECKED_OUT } from "@/lib/constants"
+import { DEFAULT_LOAN_PERIOD_DAYS } from "@/lib/loan-period"
 import type { Book, Node } from "@/lib/types"
 
 // ---------------------------------------------------------------------------
@@ -73,6 +74,7 @@ export default function CheckoutPage({
 
   const book = tapData?.book ?? (data?.books ?? []).find((b) => b.id === uuid)
   const nodes = tapData?.nodes ?? data?.nodes ?? []
+  const defaultLoanPeriodDays = data?.config?.default_loan_period_days ?? DEFAULT_LOAN_PERIOD_DAYS
 
   const [email, setEmail] = useState("")
   const [agreedToTerms, setAgreedToTerms] = useState(false)
@@ -175,7 +177,7 @@ export default function CheckoutPage({
         message={
           <>
             You checked out <strong>{book.title}</strong>. Suggested return within{" "}
-            {book.lending_terms?.loan_period_days ?? 60} days.
+            {book.lending_terms?.loan_period_days ?? defaultLoanPeriodDays} days.
           </>
         }
         action={
@@ -331,6 +333,7 @@ export default function CheckoutPage({
     <AvailableFlow
       book={book}
       uuid={uuid}
+      defaultLoanPeriodDays={defaultLoanPeriodDays}
       cardUserId={card?.user_id}
       email={email}
       setEmail={setEmail}
@@ -393,6 +396,7 @@ function MinimalScreen({
 function AvailableFlow({
   book,
   uuid,
+  defaultLoanPeriodDays,
   cardUserId,
   email,
   setEmail,
@@ -405,6 +409,7 @@ function AvailableFlow({
 }: {
   book: Book
   uuid: string
+  defaultLoanPeriodDays: number
   cardUserId?: string
   email: string
   setEmail: (s: string) => void
@@ -538,7 +543,7 @@ function AvailableFlow({
                     onCheckedChange={(c) => setAgreedToTerms(c === true)}
                   />
                   <label htmlFor="terms" className="cursor-pointer text-sm text-muted-foreground">
-                    I’ll return it within {book.lending_terms?.loan_period_days ?? 60} days and treat it with care.
+                    I’ll return it within {book.lending_terms?.loan_period_days ?? defaultLoanPeriodDays} days and treat it with care.
                   </label>
                 </div>
                 <Button

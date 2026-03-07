@@ -5,8 +5,10 @@ import {
   listLoanEvents,
   listNodes,
   listUsers,
+  getAppConfig,
 } from "@/lib/server/repositories"
 import { getStewardCookieName, verifyStewardToken } from "@/lib/server/steward-auth"
+import { DEFAULT_LOAN_PERIOD_DAYS } from "@/lib/loan-period"
 import type { Book } from "@/lib/types"
 
 /** Cache-Control so browsers (e.g. Safari) don't cache a partial or error response. */
@@ -23,24 +25,27 @@ const NO_STORE_HEADERS = {
  */
 export async function GET() {
   try {
-    const [booksResult, loanEventsResult, nodesResult, usersResult] = await Promise.allSettled([
+    const [booksResult, loanEventsResult, nodesResult, usersResult, configResult] = await Promise.allSettled([
       listBooks(),
       listLoanEvents(),
       listNodes(),
       listUsers(),
+      getAppConfig(),
     ])
 
     const books = booksResult.status === "fulfilled" ? booksResult.value : null
     const loanEvents = loanEventsResult.status === "fulfilled" ? loanEventsResult.value : null
     const nodes = nodesResult.status === "fulfilled" ? nodesResult.value : null
     const users = usersResult.status === "fulfilled" ? usersResult.value : null
+    const config = configResult.status === "fulfilled" ? configResult.value : null
 
-    const allOk = books != null && loanEvents != null && nodes != null && users != null
+    const allOk = books != null && loanEvents != null && nodes != null && users != null && config != null
     if (!allOk) {
       if (booksResult.status === "rejected") console.error("Bootstrap: listBooks failed:", booksResult.reason?.message)
       if (loanEventsResult.status === "rejected") console.error("Bootstrap: listLoanEvents failed:", loanEventsResult.reason?.message)
       if (nodesResult.status === "rejected") console.error("Bootstrap: listNodes failed:", nodesResult.reason?.message)
       if (usersResult.status === "rejected") console.error("Bootstrap: listUsers failed:", usersResult.reason?.message)
+      if (configResult.status === "rejected") console.error("Bootstrap: getAppConfig failed:", configResult.reason?.message)
       return NextResponse.json(
         { error: "Bootstrap partial failure" },
         { status: 503, headers: NO_STORE_HEADERS }
@@ -61,7 +66,7 @@ export async function GET() {
         )
 
     return NextResponse.json(
-      { books: booksForClient, loanEvents, nodes, users },
+      { books: booksForClient, loanEvents, nodes, users, config: config ?? { default_loan_period_days: DEFAULT_LOAN_PERIOD_DAYS } },
       { headers: NO_STORE_HEADERS }
     )
   } catch (error) {

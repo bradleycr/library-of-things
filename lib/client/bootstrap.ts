@@ -1,10 +1,16 @@
 import type { Book, LoanEvent, Node, User } from "@/lib/types"
+import { DEFAULT_LOAN_PERIOD_DAYS } from "@/lib/loan-period"
+
+export type AppConfig = {
+  default_loan_period_days: number
+}
 
 export type BootstrapPayload = {
   books: Book[]
   loanEvents: LoanEvent[]
   nodes: Node[]
   users: User[]
+  config: AppConfig
 }
 
 /**
@@ -24,10 +30,16 @@ export async function fetchBootstrapData(): Promise<BootstrapPayload> {
   }
 
   const body = await response.json()
+  const rawConfig = body.config
+  const config: AppConfig =
+    rawConfig && typeof rawConfig.default_loan_period_days === "number" && rawConfig.default_loan_period_days >= 1 && rawConfig.default_loan_period_days <= 365
+      ? { default_loan_period_days: Math.round(rawConfig.default_loan_period_days) }
+      : { default_loan_period_days: DEFAULT_LOAN_PERIOD_DAYS }
   return {
     books: Array.isArray(body.books) ? body.books : [],
     loanEvents: Array.isArray(body.loanEvents) ? body.loanEvents : [],
     nodes: Array.isArray(body.nodes) ? body.nodes : [],
     users: Array.isArray(body.users) ? body.users : [],
+    config,
   }
 }

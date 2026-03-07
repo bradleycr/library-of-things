@@ -111,6 +111,7 @@ const defaultTerms = {
   requires_id: false,
   pseudonymous_allowed: true,
   contact_required: false,
+  // Must match lib/loan-period.ts DEFAULT_LOAN_PERIOD_DAYS (app default).
   loan_period_days: 60,
   shipping_allowed: false,
   local_only: true,

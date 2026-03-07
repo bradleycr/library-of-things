@@ -6,6 +6,8 @@
 
 import type { PoolClient } from "pg"
 
+import { DEFAULT_LOAN_PERIOD_DAYS } from "@/lib/loan-period"
+
 /** Bounds and default — everyone starts here. */
 export const TRUST = {
   INITIAL: 50,
@@ -80,7 +82,7 @@ export async function applyTrustChange(
 
 /**
  * Classifies a return as on-time, late, or very late based on expected return date.
- * Suggested period is 60 days (2 months); "very late" = 60+ days after expected return date.
+ * Suggested period comes from book/config; "very late" = DEFAULT_LOAN_PERIOD_DAYS+ after expected return date.
  */
 export function classifyReturn(
   expectedReturnDate: string | Date | null | undefined
@@ -91,7 +93,7 @@ export function classifyReturn(
   const msLate = now - expected
   const daysLate = msLate / (24 * 60 * 60 * 1000)
   if (daysLate <= 0) return "return_on_time"
-  if (daysLate >= 60) return "return_very_late"
+  if (daysLate >= DEFAULT_LOAN_PERIOD_DAYS) return "return_very_late"
   return "return_late"
 }
 

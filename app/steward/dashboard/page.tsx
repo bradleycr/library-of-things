@@ -17,6 +17,7 @@ import {
   ListOrdered,
   Building2,
   Upload,
+  Settings,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -62,6 +63,7 @@ import {
 } from "recharts"
 import { useBootstrapData } from "@/hooks/use-bootstrap-data"
 import { compressBookCoverPhoto } from "@/lib/image-utils"
+import { DEFAULT_LOAN_PERIOD_DAYS, clampLoanPeriodDays } from "@/lib/loan-period"
 import type { Book, Node as NodeType, User } from "@/lib/types"
 
 type StewardBookStatus = "available" | "checked_out" | "unavailable" | "missing"
@@ -84,6 +86,7 @@ export default function StewardDashboardPage() {
   const loanEvents = data?.loanEvents ?? []
   const nodes = data?.nodes ?? []
   const users = data?.users ?? []
+  const defaultLoanPeriodDays = data?.config?.default_loan_period_days ?? DEFAULT_LOAN_PERIOD_DAYS
   // Node context for header and filters (Bulk NFC, etc.); "all" or a node id.
   const [selectedNodeId, setSelectedNodeId] = useState<string>("all")
 
@@ -109,8 +112,13 @@ export default function StewardDashboardPage() {
     current_holder_id: "",
     note: "",
     contact_required: false,
-    loan_period_days: 60,
+    loan_period_days: DEFAULT_LOAN_PERIOD_DAYS,
   })
+
+  // Library settings (app-wide default loan period) — synced from bootstrap, editable here.
+  const [configForm, setConfigForm] = useState({ default_loan_period_days: DEFAULT_LOAN_PERIOD_DAYS })
+  const [configSaving, setConfigSaving] = useState(false)
+  const [configError, setConfigError] = useState<string | null>(null)
 
   // Member management state
   const [editingMember, setEditingMember] = useState<User | null>(null)
@@ -176,11 +184,11 @@ export default function StewardDashboardPage() {
         current_holder_id: editingBook.current_holder_id ?? "",
         note: "",
         contact_required: editingBook.lending_terms?.contact_required ?? false,
-        loan_period_days: editingBook.lending_terms?.loan_period_days ?? 60,
+        loan_period_days: editingBook.lending_terms?.loan_period_days ?? defaultLoanPeriodDays,
       })
       setEditError(null)
     }
-  }, [editingBook])
+  }, [editingBook, defaultLoanPeriodDays])
 
   useEffect(() => {
     if (!editingMember) return
@@ -206,6 +214,12 @@ export default function StewardDashboardPage() {
       )
     }
   }, [users])
+
+  useEffect(() => {
+    if (data?.config) {
+      setConfigForm({ default_loan_period_days: data.config.default_loan_period_days })
+    }
+  }, [data?.config])
 
   const managingLabel =
     selectedNodeId === "all"
@@ -544,7 +558,7 @@ export default function StewardDashboardPage() {
           lending_terms: {
             ...editingBook.lending_terms,
             contact_required: editForm.contact_required,
-            loan_period_days: Math.max(1, Math.min(365, Number(editForm.loan_period_days) || 60)),
+            loan_period_days: clampLoanPeriodDays(Number(editForm.loan_period_days) || defaultLoanPeriodDays),
           },
         }),
       })
@@ -889,6 +903,72 @@ export default function StewardDashboardPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Library settings — app-wide default loan period */}
+        <Card className="mb-8 border-border">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-card-foreground">
+              <Settings className="h-5 w-5" />
+              Library settings
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Default suggested loan period for new books and when a book has no custom period. Used app-wide (checkout, add book, book detail).
+            </p>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-end">
+            <div className="grid gap-2 max-w-[140px]">
+              <Label htmlFor="config-default-loan-days">Default loan period (days)</Label>
+              <Input
+                id="config-default-loan-days"
+                type="number"
+                min={1}
+                max={365}
+                value={configForm.default_loan_period_days}
+                onChange={(e) =>
+                  setConfigForm((f) => ({
+                    ...f,
+                    default_loan_period_days: Math.max(1, Math.min(365, Number(e.target.value) || DEFAULT_LOAN_PERIOD_DAYS)),
+                  }))
+                }
+              />
+            </div>
+            <Button
+              type="button"
+              disabled={configSaving || configForm.default_loan_period_days === (data?.config?.default_loan_period_days ?? DEFAULT_LOAN_PERIOD_DAYS)}
+              onClick={async () => {
+                setConfigSaving(true)
+                setConfigError(null)
+                try {
+                  const res = await fetch("/api/steward/config", {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "include",
+                    body: JSON.stringify({ default_loan_period_days: configForm.default_loan_period_days }),
+                  })
+                  const j = await res.json().catch(() => ({}))
+                  if (!res.ok) throw new Error(j?.error ?? "Failed to save")
+                  await refetch()
+                } catch (e) {
+                  setConfigError(e instanceof Error ? e.message : "Failed to save")
+                } finally {
+                  setConfigSaving(false)
+                }
+              }}
+            >
+              {configSaving ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Saving…
+                </>
+              ) : (
+                "Save"
+              )}
+            </Button>
+            {configError && (
+              <p className="text-sm text-destructive">{configError}</p>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Charts */}
         <div className="mb-8 grid gap-6 md:grid-cols-2">
@@ -1615,7 +1695,7 @@ export default function StewardDashboardPage() {
                   min={1}
                   max={365}
                   value={editForm.loan_period_days}
-                  onChange={(e) => setEditForm((f) => ({ ...f, loan_period_days: Number(e.target.value) || 60 }))}
+                  onChange={(e) => setEditForm((f) => ({ ...f, loan_period_days: Number(e.target.value) || defaultLoanPeriodDays }))}
                 />
               </div>
               <div className="grid gap-2">

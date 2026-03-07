@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import type { LendingTerms } from "@/lib/types"
-import { createBook } from "@/lib/server/repositories"
+import { createBook, getAppConfig } from "@/lib/server/repositories"
 import { getSessionUserId } from "@/lib/server/session"
 import { parseJsonBody, isUuid, LIMITS, clampString } from "@/lib/server/validate"
 import { sanitizeCoverUrl } from "@/lib/server/sanitize-cover-url"
@@ -98,13 +98,14 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  const config = await getAppConfig()
   const defaultTerms: LendingTerms = {
     type: "borrow",
     is_free: true,
     requires_id: false,
     pseudonymous_allowed: true,
     contact_required: false,
-    loan_period_days: 60,
+    loan_period_days: config.default_loan_period_days,
     shipping_allowed: false,
     local_only: true,
     contact_opt_in: true,
