@@ -1,15 +1,13 @@
 "use client"
 
 import { Suspense, useState, useMemo, useEffect } from "react"
-import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { Search, SlidersHorizontal, X, Grid3X3, List, Loader2, AlertCircle, ArrowLeft } from "lucide-react"
+import { Search, SlidersHorizontal, X, Grid3X3, List, Loader2, AlertCircle } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
-import { Slider } from "@/components/ui/slider"
 import {
   Select,
   SelectContent,
@@ -22,10 +20,7 @@ import { BookCover } from "@/components/book-cover"
 import { getBookCoverUrl } from "@/lib/book-cover-generator"
 import { formatLocationForDisplay } from "@/lib/format-location"
 import { useBootstrapData } from "@/hooks/use-bootstrap-data"
-import { haversineDistanceMeters, getCurrentPosition } from "@/lib/geofence"
-import type { Book, Node } from "@/lib/types"
-
-const DISTANCE_KM_TO_M = 1000
+import type { Book } from "@/lib/types"
 
 function ExplorePageContent() {
   const router = useRouter()
@@ -38,15 +33,10 @@ function ExplorePageContent() {
   const [showFilters, setShowFilters] = useState(false)
   const [availableOnly, setAvailableOnly] = useState(false)
   const [selectedNode, setSelectedNode] = useState("all")
-  const [distance, setDistance] = useState([50])
-  const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null)
   const [lendingType, setLendingType] = useState<string[]>([])
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
 
-  useEffect(() => {
-    getCurrentPosition({ timeout: 8000, maximumAge: 300_000 }).then(setUserCoords)
-  }, [])
-
+  // Sync selected node from URL (e.g. View Collection from homepage).
   useEffect(() => {
     const requestedNodeId = searchParams.get("node")
     if (!requestedNodeId) {
@@ -67,15 +57,7 @@ function ExplorePageContent() {
     router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false })
   }, [nodes, pathname, router, searchParams])
 
-  const activeNode = useMemo(
-    () => (selectedNode === "all" ? null : nodes.find((node) => node.id === selectedNode) ?? null),
-    [nodes, selectedNode]
-  )
-
   const filteredBooks = useMemo(() => {
-    const distanceKm = distance[0] ?? 50
-    const radiusM = distanceKm * DISTANCE_KM_TO_M
-
     return books.filter((book) => {
       const q = query.toLowerCase()
       const matchesQuery =
@@ -94,33 +76,14 @@ function ExplorePageContent() {
         lendingType.length === 0 ||
         lendingType.includes(book.lending_terms?.type ?? "borrow")
 
-      const matchesDistance =
-        !userCoords || distanceKm >= 50
-          ? true
-          : (() => {
-              if (book.current_node_id) {
-                const node = nodes.find((n: Node) => n.id === book.current_node_id)
-                if (!node?.location_lat || node.location_lng == null) return true
-                const d = haversineDistanceMeters(
-                  userCoords.lat,
-                  userCoords.lng,
-                  node.location_lat,
-                  node.location_lng
-                )
-                return d <= radiusM
-              }
-              return true
-            })()
-
-      return matchesQuery && matchesAvailability && matchesNode && matchesLending && matchesDistance
+      return matchesQuery && matchesAvailability && matchesNode && matchesLending
     })
-  }, [books, query, availableOnly, selectedNode, lendingType, distance, userCoords, nodes])
+  }, [books, query, availableOnly, selectedNode, lendingType])
 
   const activeFilterCount = [
     availableOnly,
     selectedNode !== "all",
     lendingType.length > 0,
-    distance[0] < 50,
   ].filter(Boolean).length
 
   const toggleLendingType = (type: string) => {
@@ -146,7 +109,6 @@ function ExplorePageContent() {
   const clearFilters = () => {
     setAvailableOnly(false)
     setNodeFilter("all")
-    setDistance([50])
     setLendingType([])
   }
 
@@ -156,52 +118,14 @@ function ExplorePageContent() {
         {/* Header */}
         <div className="mb-8">
           <h1 className="font-serif text-3xl font-bold text-foreground md:text-4xl">
-            {activeNode ? activeNode.name : "Explore Books"}
+            Explore Books
           </h1>
           <p className="mt-2 text-muted-foreground">
             {loading
               ? "Loading…"
-              : activeNode
-                ? `Browse the collection at this node, then jump to another one whenever you want.`
-                : `Search and browse ${books.length} books across ${nodes.length} community nodes`}
+              : `Search and browse ${books.length} books across ${nodes.length} community nodes`}
           </p>
         </div>
-
-        {nodes.length > 0 && (
-          <div className="mb-6 rounded-lg border border-border bg-card p-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <Link href="/">
-                <Button variant="ghost" size="sm" className="min-h-11 gap-2">
-                  <ArrowLeft className="h-4 w-4" />
-                  Back to Home
-                </Button>
-              </Link>
-              {activeNode && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="min-h-11"
-                  onClick={() => setNodeFilter("all")}
-                >
-                  View All Collections
-                </Button>
-              )}
-            </div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {nodes.map((node) => (
-                <Button
-                  key={node.id}
-                  variant={selectedNode === node.id ? "default" : "outline"}
-                  size="sm"
-                  className="min-h-11"
-                  onClick={() => setNodeFilter(node.id)}
-                >
-                  {node.name}
-                </Button>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* Search & Filter Bar */}
         <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center">
@@ -273,7 +197,7 @@ function ExplorePageContent() {
                 </Button>
               )}
             </div>
-            <div className="mt-4 grid gap-6 md:grid-cols-4">
+            <div className="mt-4 grid gap-6 md:grid-cols-3">
               {/* Availability */}
               <div>
                 <Label className="mb-3 block text-xs font-medium text-muted-foreground">
@@ -314,26 +238,6 @@ function ExplorePageContent() {
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
-
-              {/* Distance */}
-              <div>
-                <Label className="mb-3 block text-xs font-medium text-muted-foreground">
-                  Distance: {distance[0]} km
-                </Label>
-                <Slider
-                  value={distance}
-                  onValueChange={setDistance}
-                  min={1}
-                  max={50}
-                  step={1}
-                  className="mt-2"
-                />
-                {!userCoords && distance[0] < 50 && (
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Enable location to filter by distance.
-                  </p>
-                )}
               </div>
 
               {/* Lending Type */}

@@ -44,7 +44,7 @@ export default function CheckoutPage({
   const token = searchParams.get("token")
   const { uuid } = use(params)
 
-  const { data, loading: bootstrapLoading } = useBootstrapData()
+  const { data, loading: bootstrapLoading, refetch } = useBootstrapData()
   const { card } = useLibraryCard()
 
   const [tapData, setTapData] = useState<TapPayload | null>(null)
@@ -342,6 +342,7 @@ export default function CheckoutPage({
       isProcessing={isProcessing}
       setIsProcessing={setIsProcessing}
       setCheckoutComplete={setCheckoutComplete}
+      refetchBootstrap={refetch}
       isTapEntry={isTapEntry}
     />
   )
@@ -405,6 +406,7 @@ function AvailableFlow({
   isProcessing,
   setIsProcessing,
   setCheckoutComplete,
+  refetchBootstrap,
   isTapEntry,
 }: {
   book: Book
@@ -418,6 +420,7 @@ function AvailableFlow({
   isProcessing: boolean
   setIsProcessing: (b: boolean) => void
   setCheckoutComplete: (b: boolean) => void
+  refetchBootstrap: () => Promise<void>
   isTapEntry: boolean
 }) {
   const { toast } = useToast()
@@ -434,8 +437,11 @@ function AvailableFlow({
         credentials: "include",
         body: JSON.stringify({ book_id: uuid, user_id: cardUserId }),
       })
-      if (res.ok) setCheckoutComplete(true)
-      else {
+      if (res.ok) {
+        // Refresh app data so My Books / profile show the new loan immediately.
+        await refetchBootstrap()
+        setCheckoutComplete(true)
+      } else {
         const j = await res.json().catch(() => ({}))
         const msg = (j?.error as string) ?? "Checkout failed"
         const isContactRequired = res.status === 403 && /contact info/i.test(msg)
