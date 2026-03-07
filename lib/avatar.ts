@@ -15,11 +15,12 @@ export function getAvatarUrl(
 }
 
 /**
- * Resolve the avatar seed for a user. When the user has regenerated their
- * profile image we store a custom avatar_seed; otherwise we use their id.
+ * Resolve the avatar seed for a user. We use the user id only so avatars are
+ * deterministic and no avatar-related data is stored in the database.
+ * (Regenerate-avatar feature is disabled; could be re-added later with a stored seed if desired.)
  */
-export function getAvatarSeed(user: { id: string; avatar_seed?: string | null }): string {
-  return user.avatar_seed && user.avatar_seed.trim() ? user.avatar_seed : user.id
+export function getAvatarSeed(user: { id: string }): string {
+  return user.id
 }
 
 /**

@@ -16,7 +16,6 @@ import {
   Phone,
   Globe,
   Settings,
-  RefreshCw,
 } from "lucide-react"
 import type { User } from "@/lib/types"
 import { Button } from "@/components/ui/button"
@@ -29,14 +28,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import { BookCover } from "@/components/book-cover"
 import { getBookCoverUrl } from "@/lib/book-cover-generator"
 import { LibraryCard } from "@/components/library-card"
@@ -45,7 +36,6 @@ import { TrustScoreWithBreakdown } from "@/components/trust-score-breakdown"
 import { useBootstrapData } from "@/hooks/use-bootstrap-data"
 import { useLibraryCard } from "@/hooks/use-library-card"
 import { getAvatarUrl, getInitials, getAvatarSeed } from "@/lib/avatar"
-import { useToast } from "@/hooks/use-toast"
 
 function getTrustBadge(score: number) {
   if (score >= 90) return { label: "Highly Trusted", className: "bg-accent text-accent-foreground" }
@@ -86,10 +76,7 @@ export default function ProfilePage({
 }) {
   const { data, refetch, loading } = useBootstrapData()
   const { card, mounted } = useLibraryCard()
-  const { toast } = useToast()
   const [libraryCardModalOpen, setLibraryCardModalOpen] = useState(false)
-  const [regenerateAvatarConfirmOpen, setRegenerateAvatarConfirmOpen] = useState(false)
-  const [regeneratingAvatar, setRegeneratingAvatar] = useState(false)
   const refetchedForOwnProfile = useRef(false)
   const users = data?.users ?? []
   const books = data?.books ?? []
@@ -149,34 +136,6 @@ export default function ProfilePage({
   const isOwnProfile = card?.user_id === user_id
   const displayName = user.display_name
 
-  const handleRegenerateAvatar = async () => {
-    if (!user_id) return
-    setRegeneratingAvatar(true)
-    try {
-      const res = await fetch(`/api/users/${user_id}/regenerate-avatar`, {
-        method: "POST",
-        credentials: "include",
-      })
-      if (res.ok) {
-        await refetch()
-        setRegenerateAvatarConfirmOpen(false)
-        toast({ title: "Profile image updated", description: "Your new avatar is saved." })
-      } else {
-        const j = await res.json().catch(() => ({}))
-        throw new Error((j?.error as string) ?? "Failed to regenerate")
-      }
-    } catch (e) {
-      console.error(e)
-      toast({
-        variant: "destructive",
-        title: "Could not update image",
-        description: e instanceof Error ? e.message : "Please try again.",
-      })
-    } finally {
-      setRegeneratingAvatar(false)
-    }
-  }
-
   return (
     <div className="py-6 sm:py-8">
       <div className="page-container">
@@ -200,19 +159,6 @@ export default function ProfilePage({
                 {getInitials(displayName)}
               </AvatarFallback>
             </Avatar>
-            {isOwnProfile && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="absolute -bottom-1 -right-1 gap-1 rounded-full border-border bg-background shadow"
-                onClick={() => setRegenerateAvatarConfirmOpen(true)}
-                aria-label="Regenerate profile image"
-              >
-                <RefreshCw className="h-3.5 w-3.5" />
-                New
-              </Button>
-            )}
           </div>
           <div className="flex-1 text-center md:text-left">
             <h1 className="font-serif text-3xl font-bold text-foreground">
@@ -435,41 +381,6 @@ export default function ProfilePage({
           open={libraryCardModalOpen}
           onOpenChange={setLibraryCardModalOpen}
         />
-
-        {/* Regenerate avatar confirmation */}
-        <Dialog open={regenerateAvatarConfirmOpen} onOpenChange={setRegenerateAvatarConfirmOpen}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Regenerate profile image</DialogTitle>
-              <DialogDescription>
-                Are you sure you want to regenerate your profile image? A new random avatar will be generated and saved. You can do this again anytime.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setRegenerateAvatarConfirmOpen(false)}
-                disabled={regeneratingAvatar}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleRegenerateAvatar}
-                disabled={regeneratingAvatar}
-                className="gap-2"
-              >
-                {regeneratingAvatar ? (
-                  <>Updating…</>
-                ) : (
-                  <>
-                    <RefreshCw className="h-4 w-4" />
-                    Yes, regenerate
-                  </>
-                )}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
 
         {/* Currently Borrowed */}
         {currentlyBorrowed.length > 0 && (

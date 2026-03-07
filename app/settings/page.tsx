@@ -2,11 +2,12 @@
 
 import { useEffect, useState, useRef } from "react"
 import { useRouter } from "next/navigation"
-import { Trash2, Save, Loader2, CreditCard, LogIn, RefreshCw } from "lucide-react"
+import { Trash2, Save, Loader2, CreditCard, LogIn } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
@@ -88,8 +89,6 @@ export default function SettingsPage() {
   /* ── Delete account ── */
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const [regenerateAvatarOpen, setRegenerateAvatarOpen] = useState(false)
-  const [regeneratingAvatar, setRegeneratingAvatar] = useState(false)
 
   /* ── Populate fields from current user ── */
   useEffect(() => {
@@ -202,33 +201,6 @@ export default function SettingsPage() {
       })
     } finally {
       setSavingProfile(false)
-    }
-  }
-
-  const handleRegenerateAvatar = async () => {
-    if (!currentUser) return
-    setRegeneratingAvatar(true)
-    try {
-      const res = await fetch(`/api/users/${currentUser.id}/regenerate-avatar`, {
-        method: "POST",
-        credentials: "include",
-      })
-      if (res.ok) {
-        await refetch()
-        setRegenerateAvatarOpen(false)
-        toast({ title: "Profile image updated", description: "Your new avatar is saved." })
-      } else {
-        const j = await res.json().catch(() => ({}))
-        throw new Error((j?.error as string) ?? "Failed to regenerate")
-      }
-    } catch (err) {
-      toast({
-        variant: "destructive",
-        title: "Could not update image",
-        description: err instanceof Error ? err.message : "Please try again.",
-      })
-    } finally {
-      setRegeneratingAvatar(false)
     }
   }
 
@@ -433,54 +405,8 @@ export default function SettingsPage() {
                 <div>
                   <p className="text-sm font-medium text-foreground">Your pixel art avatar</p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Unique design generated from your profile. You can regenerate a new one anytime.
+                    Unique design generated from your profile. Deterministic — no image storage.
                   </p>
-                  <Dialog open={regenerateAvatarOpen} onOpenChange={setRegenerateAvatarOpen}>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="mt-2 gap-2"
-                      onClick={() => setRegenerateAvatarOpen(true)}
-                    >
-                      <RefreshCw className="h-4 w-4" />
-                      Regenerate profile image
-                    </Button>
-                    <DialogContent className="sm:max-w-md">
-                      <DialogHeader>
-                        <DialogTitle>Regenerate profile image</DialogTitle>
-                        <DialogDescription>
-                          Are you sure you want to regenerate your profile image? A new random avatar will be generated and saved. You can do this again anytime.
-                        </DialogDescription>
-                      </DialogHeader>
-                      <DialogFooter>
-                        <Button
-                          variant="outline"
-                          onClick={() => setRegenerateAvatarOpen(false)}
-                          disabled={regeneratingAvatar}
-                        >
-                          Cancel
-                        </Button>
-                        <Button
-                          onClick={handleRegenerateAvatar}
-                          disabled={regeneratingAvatar}
-                          className="gap-2"
-                        >
-                          {regeneratingAvatar ? (
-                            <>
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                              Updating…
-                            </>
-                          ) : (
-                            <>
-                              <RefreshCw className="h-4 w-4" />
-                              Yes, regenerate
-                            </>
-                          )}
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
                 </div>
               </div>
 

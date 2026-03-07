@@ -29,6 +29,7 @@ function ExplorePageContent() {
   const { data, loading, error } = useBootstrapData()
   const books = data?.books ?? []
   const nodes = data?.nodes ?? []
+  const users = data?.users ?? []
   const [query, setQuery] = useState("")
   const [showFilters, setShowFilters] = useState(false)
   const [availableOnly, setAvailableOnly] = useState(false)
@@ -37,6 +38,9 @@ function ExplorePageContent() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
 
   // Sync selected node from URL (e.g. View Collection from homepage).
+  // When bootstrap is still loading (nodes empty), keep the URL and set selection so
+  // once nodes load the filter is correct. Only clear ?node= when we've loaded nodes
+  // and the requested id is not in the list.
   useEffect(() => {
     const requestedNodeId = searchParams.get("node")
     if (!requestedNodeId) {
@@ -44,13 +48,20 @@ function ExplorePageContent() {
       return
     }
 
-    if (nodes.some((node) => node.id === requestedNodeId)) {
+    const nodeExists = nodes.some((node) => node.id === requestedNodeId)
+    if (nodeExists) {
       setSelectedNode((prev) => (prev === requestedNodeId ? prev : requestedNodeId))
       return
     }
 
-    setSelectedNode((prev) => (prev === "all" ? prev : "all"))
+    // Nodes not loaded yet: preserve URL and set selection so next effect run applies it
+    if (nodes.length === 0) {
+      setSelectedNode((prev) => (prev === requestedNodeId ? prev : requestedNodeId))
+      return
+    }
 
+    // Nodes loaded and this node id is invalid — clear URL and reset to all
+    setSelectedNode((prev) => (prev === "all" ? prev : "all"))
     const params = new URLSearchParams(searchParams.toString())
     params.delete("node")
     const nextQuery = params.toString()

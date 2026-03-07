@@ -58,6 +58,15 @@ interactivity where needed.
 - **Steward auth.** Separate password-based login (`STEWARD_PASSWORD` env var).
   Cookie-protected dashboard and API routes.
 
+**Data layer (backend-agnostic).** All server-side data access goes through
+`lib/server/repositories.ts`; the app does not touch the database elsewhere.
+Reads are aggregated in one endpoint (`GET /api/bootstrap`) so the client
+gets books, nodes, users, loan events, and config in a single request. Mutations
+go through dedicated API routes that call the same repositories. This keeps
+the data contract in one place: to switch to a decentralized or different
+backend later, replace or reimplement the repository layer and the bootstrap
+API; the client and UI stay unchanged.
+
 ## How to contribute
 
 1. **Open an issue first** for anything non-trivial so we can discuss scope.

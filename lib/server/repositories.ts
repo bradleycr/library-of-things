@@ -540,7 +540,6 @@ export async function updateUserDisplayName(
 /** Optional profile updates; only provided fields are updated. */
 export type UserProfileUpdate = {
   display_name?: string
-  avatar_seed?: string | null
   contact_opt_in?: boolean
   contact_email?: string | null
   phone?: string | null
@@ -615,11 +614,6 @@ export async function updateUserProfile(
     idx += 1
     setParts.push(`website_url = $${idx}`)
     values.push(updates.website_url && updates.website_url.trim() ? updates.website_url.trim() : null)
-  }
-  if (updates.avatar_seed !== undefined) {
-    idx += 1
-    setParts.push(`avatar_seed = $${idx}`)
-    values.push(updates.avatar_seed && updates.avatar_seed.trim() ? updates.avatar_seed.trim() : null)
   }
 
   if (setParts.length === 0) return { ok: true }
