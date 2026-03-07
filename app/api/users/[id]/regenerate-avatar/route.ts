@@ -26,6 +26,15 @@ export async function POST(
       if (result.reason === "not_found") {
         return NextResponse.json({ error: "User not found." }, { status: 404 })
       }
+      if (result.reason === "schema_out_of_date") {
+        return NextResponse.json(
+          {
+            error:
+              "Database needs an update for avatar support. If you run this site, run: pnpm db:ensure-schema (see docs/DEPLOY.md).",
+          },
+          { status: 503 }
+        )
+      }
       return NextResponse.json(
         { error: "Failed to update profile" },
         { status: 500 }

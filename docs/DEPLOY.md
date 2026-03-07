@@ -46,8 +46,8 @@ This pushes `DATABASE_URL` and `STEWARD_PASSWORD` to the Vercel project via the 
 - **Steward dashboard** — `/steward/login` (password = your `STEWARD_PASSWORD`).
   From here you can manage books, bulk-add by ISBN, manage members, and copy
   NFC tag URLs.
-- **Schema updates** — when you pull new code that adds columns, run
-  `pnpm db:ensure-schema` against your production `DATABASE_URL` once.
+- **Schema updates** — when you pull new code that adds columns (e.g. `users.avatar_seed`), run
+  `pnpm db:ensure-schema` against your production `DATABASE_URL` once. Otherwise features like profile image regeneration may return "Database needs an update".
 
 ## Troubleshooting
 

@@ -49,7 +49,7 @@ function daysRemaining(dateStr?: string) {
 }
 
 export default function MyBooksPage() {
-  const { data, refetch } = useBootstrapData()
+  const { data, loading, error, refetch } = useBootstrapData()
   const { card } = useLibraryCard()
   const { toast } = useToast()
   const books = data?.books ?? []
@@ -136,6 +136,34 @@ export default function MyBooksPage() {
       </div>
     )
   }
+
+  /* Have linked card but need bootstrap to resolve currentUser — avoid showing "User not found" while loading */
+  if (card?.user_id && loading) {
+    return (
+      <div className="py-6 sm:py-8">
+        <div className="page-container">
+          <div className="flex flex-col items-center justify-center gap-4 py-16">
+            <Loader2 className="h-10 w-10 animate-spin text-muted-foreground" aria-hidden />
+            <p className="text-sm text-muted-foreground">Loading your books…</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (card?.user_id && error) {
+    return (
+      <div className="py-6 sm:py-8">
+        <div className="page-container">
+          <p className="text-muted-foreground">Could not load data. {error}</p>
+          <Button className="mt-4 gap-2" variant="outline" onClick={() => refetch()}>
+            Try again
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
   if (!currentUser) {
     return (
       <div className="py-6 sm:py-8">
