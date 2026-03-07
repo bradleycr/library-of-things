@@ -25,8 +25,8 @@
 | `/add-book/print-qr` | Print-ready QR code page (?url= checkout URL); centered 2″ label with cut line; Print or Save as PDF |
 | `/book/[uuid]` | Book detail; checkout link/QR |
 | `/book/[uuid]/checkout` | Checkout flow (requires library card) |
-| `/my-books` | User’s borrowed books, added books, history |
-| `/profile/[user_id]` | Public profile |
+| `/my-books` | User's borrowed books, added books, history; optional `?user=<id>` shows that member's books (read-only, with profile header) |
+| `/profile/[user_id]` | Public profile; own profile shows "My Books" → `/my-books`, other profiles show "[Name]'s Books" → `/my-books?user=<id>` |
 | `/settings` | Link card (PIN), get new card, log in with card |
 | `/ledger` | Sharing history (all events; export CSV/JSON) |
 | `/members` | Member list (books out, activity); links to profiles |
@@ -103,3 +103,4 @@
 - **Delete book from library** — Steward dashboard Book Management: Delete (trash) button opens a confirmation dialog; optional ledger note. `DELETE /api/books/[id]` (steward-only) inserts a `removed` ledger event then deletes the book. `loan_events.book_id` is nullable with ON DELETE SET NULL so removed events remain in the ledger with book title preserved.
 - **ensure-schema covers Pocket Library** — `pnpm db:ensure-schema` now adds `owner_contact_email` and `is_pocket_library` columns to `books`; no separate migration script needed for new setups.
 - **Docs reorganized** — Operational docs (`DEPLOY.md`, `DATABASE.md`, `POCKET_LIBRARY.md`) live in `docs/`. Root keeps README, CONTRIBUTING, LICENSE, and AI context files (claude.md, AGENTS.md).
+- **Profile "Their books"** — On another member's profile, the quick action shows "[Name]'s Books" and links to `/my-books?user=<id>`. My Books page supports `?user=` for a read-only view (borrowed, added, sharing history) with that member's avatar, name, and trust score in the header; "View profile" back link when viewing someone else. Own My Books shows "My Books" with avatar and "You" so it's clear whose page it is.

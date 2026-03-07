@@ -219,9 +219,12 @@ export default function ProfilePage({
           )}
         </div>
 
-        {/* Quick actions: My Books + Add a Book (when card exists) */}
+        {/* Quick actions: My Books / Their Books + Add a Book (own profile only) */}
         <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-          <Link href="/my-books" className="flex-1">
+          <Link
+            href={isOwnProfile ? "/my-books" : `/my-books?user=${user.id}`}
+            className="flex-1"
+          >
             <Card className="border-border transition-colors hover:border-primary/40 hover:bg-muted/30 cursor-pointer h-full">
               <CardContent className="flex items-center justify-between p-4">
                 <div className="flex items-center gap-3">
@@ -229,9 +232,13 @@ export default function ProfilePage({
                     <BookOpen className="h-5 w-5 text-primary" />
                   </div>
                   <div>
-                    <p className="font-medium text-foreground">My Books</p>
+                    <p className="font-medium text-foreground">
+                      {isOwnProfile ? "My Books" : `${displayName}'s Books`}
+                    </p>
                     <p className="text-sm text-muted-foreground">
-                      Borrowed books, history & returns
+                      {isOwnProfile
+                        ? "Borrowed books, history & returns"
+                        : "Borrowed, added & sharing history"}
                     </p>
                   </div>
                 </div>

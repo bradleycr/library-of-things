@@ -1,14 +1,15 @@
 "use client"
 
-import { useState } from "react"
+import { useState, Suspense } from "react"
 import Link from "next/link"
+import { useSearchParams } from "next/navigation"
 import {
   RotateCcw,
   Settings2,
   Clock,
-  Shield,
   BookOpen,
   ArrowRight,
+  ArrowLeft,
   Library,
   Plus,
   Loader2,
@@ -40,7 +41,9 @@ import { formatLocationForDisplay } from "@/lib/format-location"
 import { useBootstrapData } from "@/hooks/use-bootstrap-data"
 import { useLibraryCard } from "@/hooks/use-library-card"
 import { useToast } from "@/hooks/use-toast"
-import type { Book } from "@/lib/types"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { getAvatarUrl, getInitials, getAvatarSeed } from "@/lib/avatar"
+import type { Book, User } from "@/lib/types"
 
 function daysRemaining(dateStr?: string) {
   if (!dateStr) return null
@@ -48,7 +51,9 @@ function daysRemaining(dateStr?: string) {
   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)))
 }
 
-export default function MyBooksPage() {
+function MyBooksContent() {
+  const searchParams = useSearchParams()
+  const viewUserId = searchParams.get("user")
   const { data, loading, error, refetch } = useBootstrapData()
   const { card } = useLibraryCard()
   const { toast } = useToast()
@@ -56,7 +61,12 @@ export default function MyBooksPage() {
   const loanEvents = data?.loanEvents ?? []
   const users = data?.users ?? []
   const nodes = data?.nodes ?? []
-  const currentUser = card?.user_id ? users.find((u) => u.id === card.user_id) ?? null : null
+  const viewingOtherUser = viewUserId != null && viewUserId !== ""
+  const subjectUser: User | null = viewingOtherUser
+    ? (users.find((u) => u.id === viewUserId) ?? null)
+    : (card?.user_id ? users.find((u) => u.id === card.user_id) ?? null : null)
+  const isOwnView = !viewingOtherUser && !!card?.user_id && card.user_id === subjectUser?.id
+  const currentUser = subjectUser
 
   /* Return dialog: one dialog per page; which book we're returning + form state */
   const [returnDialogOpen, setReturnDialogOpen] = useState(false)
@@ -113,7 +123,7 @@ export default function MyBooksPage() {
     }
   }
 
-  if (!card) {
+  if (!card && !viewingOtherUser) {
     return (
       <div className="py-6 sm:py-8">
         <div className="page-container">
@@ -122,7 +132,7 @@ export default function MyBooksPage() {
       </div>
     )
   }
-  if (card && !card.user_id) {
+  if (card && !card.user_id && !viewingOtherUser) {
     return (
       <div className="py-6 sm:py-8">
         <div className="page-container">
@@ -137,8 +147,50 @@ export default function MyBooksPage() {
     )
   }
 
+  if (viewingOtherUser) {
+    if (loading) {
+      return (
+        <div className="py-6 sm:py-8">
+          <div className="page-container">
+            <div className="flex flex-col items-center justify-center gap-4 py-16">
+              <Loader2 className="h-10 w-10 animate-spin text-muted-foreground" aria-hidden />
+              <p className="text-sm text-muted-foreground">Loading…</p>
+            </div>
+          </div>
+        </div>
+      )
+    }
+    if (error) {
+      return (
+        <div className="py-6 sm:py-8">
+          <div className="page-container">
+            <p className="text-muted-foreground">Could not load data. {error}</p>
+            <Button className="mt-4 gap-2" variant="outline" onClick={() => refetch()}>
+              Try again
+            </Button>
+          </div>
+        </div>
+      )
+    }
+    if (!subjectUser) {
+      return (
+        <div className="py-6 sm:py-8">
+          <div className="page-container">
+            <p className="text-muted-foreground">User not found.</p>
+            <Link href="/explore">
+              <Button className="mt-4 gap-2" variant="outline">
+                <ArrowRight className="h-4 w-4" />
+                Explore
+              </Button>
+            </Link>
+          </div>
+        </div>
+      )
+    }
+  }
+
   /* Have linked card but need bootstrap to resolve currentUser — avoid showing "User not found" while loading */
-  if (card?.user_id && loading) {
+  if (!viewingOtherUser && card?.user_id && loading) {
     return (
       <div className="py-6 sm:py-8">
         <div className="page-container">
@@ -151,7 +203,7 @@ export default function MyBooksPage() {
     )
   }
 
-  if (card?.user_id && error) {
+  if (!viewingOtherUser && card?.user_id && error) {
     return (
       <div className="py-6 sm:py-8">
         <div className="page-container">
@@ -194,26 +246,50 @@ export default function MyBooksPage() {
     <div className="py-6 sm:py-8">
       <div className="page-container">
       <div className="mx-auto max-w-5xl">
+        {viewingOtherUser && subjectUser && (
+          <Link href={`/profile/${subjectUser.id}`}>
+            <Button variant="ghost" size="sm" className="mb-4 gap-2 text-foreground">
+              <ArrowLeft className="h-4 w-4" />
+              View profile
+            </Button>
+          </Link>
+        )}
         {/* Header */}
         <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div>
-            <h1 className="font-serif text-3xl font-bold text-foreground">
-              My Books
-            </h1>
-            <p className="mt-1 text-muted-foreground">
-              Borrowed books, titles you’ve added, and lending history
-            </p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+            {currentUser && (
+              <>
+                <Avatar className="h-12 w-12 border border-border shrink-0">
+                  <AvatarImage src={getAvatarUrl(getAvatarSeed(currentUser))} alt={currentUser.display_name} />
+                  <AvatarFallback className="bg-primary/10 text-sm font-bold text-primary">
+                    {getInitials(currentUser.display_name)}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <h1 className="font-serif text-3xl font-bold text-foreground">
+                    {isOwnView ? "My Books" : `${currentUser.display_name}'s Books`}
+                  </h1>
+                  <p className="mt-0.5 text-sm text-muted-foreground">
+                    {isOwnView ? "Borrowed books, titles you've added, and lending history" : "Borrowed, added & sharing history"}
+                  </p>
+                  {isOwnView && (
+                    <span className="inline-block mt-1 text-xs text-muted-foreground">You</span>
+                  )}
+                </div>
+              </>
+            )}
           </div>
 
-          {/* Trust Score — click for breakdown */}
-          <Card className="border-border md:w-56">
-            <CardContent className="flex flex-col items-center p-4">
-              <TrustScoreWithBreakdown
-                userId={currentUser.id}
-                trustScore={currentUser.trust_score}
-              />
-            </CardContent>
-          </Card>
+          {currentUser && (
+            <Card className="border-border md:w-56 shrink-0">
+              <CardContent className="flex flex-col items-center p-4">
+                <TrustScoreWithBreakdown
+                  userId={currentUser.id}
+                  trustScore={currentUser.trust_score}
+                />
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         <Tabs defaultValue="borrowed" className="w-full">
@@ -229,7 +305,7 @@ export default function MyBooksPage() {
             </TabsTrigger>
             <TabsTrigger value="added" className="gap-2 px-3 py-2 md:flex-none">
               <Library className="h-4 w-4" />
-              Books I’ve Added
+              {isOwnView ? "Books I've Added" : "Books They've Added"}
               {addedByMeBooks.length > 0 && (
                 <Badge variant="secondary" className="ml-1">
                   {addedByMeBooks.length}
@@ -296,6 +372,7 @@ export default function MyBooksPage() {
                               </span>
                             </div>
                           )}
+                          {isOwnView && (
                           <div className="mt-auto flex flex-wrap gap-2 pt-3">
                             <Button
                               size="sm"
@@ -315,6 +392,7 @@ export default function MyBooksPage() {
                               Edit Terms
                             </Button>
                           </div>
+                          )}
                         </div>
                       </CardContent>
                     </Card>
@@ -333,14 +411,25 @@ export default function MyBooksPage() {
                   No books added yet
                 </h3>
                 <p className="mt-1 text-center text-sm text-muted-foreground">
-                  Add a book from your shelf to share with the community
+                  {isOwnView
+                    ? "Add a book from your shelf to share with the community"
+                    : "This member hasn't added any books yet."}
                 </p>
-                <Link href="/add-book">
-                  <Button className="mt-4 gap-2">
-                    <Plus className="h-4 w-4" />
-                    Add a Book
-                  </Button>
-                </Link>
+                {isOwnView ? (
+                  <Link href="/add-book">
+                    <Button className="mt-4 gap-2">
+                      <Plus className="h-4 w-4" />
+                      Add a Book
+                    </Button>
+                  </Link>
+                ) : subjectUser ? (
+                  <Link href={`/profile/${subjectUser.id}`}>
+                    <Button className="mt-4 gap-2" variant="outline">
+                      <ArrowLeft className="h-4 w-4" />
+                      View profile
+                    </Button>
+                  </Link>
+                ) : null}
               </div>
             ) : (
               <div className="grid gap-4 md:grid-cols-2">
@@ -403,7 +492,7 @@ export default function MyBooksPage() {
                   No sharing history yet
                 </h3>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Your lending activity will appear here
+                  {isOwnView ? "Your lending activity will appear here" : "This member has no sharing history yet."}
                 </p>
               </div>
             ) : (
@@ -509,7 +598,7 @@ export default function MyBooksPage() {
                 </Label>
                 <Textarea
                   className="mt-1 min-h-[88px] resize-y"
-                  placeholder="e.g. Condition, how you enjoyed it, or anything you’d like to share…"
+                  placeholder="e.g. Condition, how you enjoyed it, or anything you'd like to share…"
                   value={returnNotes}
                   onChange={(e) => setReturnNotes(e.target.value.slice(0, 200))}
                   maxLength={200}
@@ -536,5 +625,24 @@ export default function MyBooksPage() {
       </div>
       </div>
     </div>
+  )
+}
+
+export default function MyBooksPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="py-6 sm:py-8">
+          <div className="page-container">
+            <div className="flex flex-col items-center justify-center gap-4 py-16">
+              <Loader2 className="h-10 w-10 animate-spin text-muted-foreground" aria-hidden />
+              <p className="text-sm text-muted-foreground">Loading…</p>
+            </div>
+          </div>
+        </div>
+      }
+    >
+      <MyBooksContent />
+    </Suspense>
   )
 }
