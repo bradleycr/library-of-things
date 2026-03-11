@@ -1,11 +1,10 @@
 "use client"
 
-import { useState, Suspense } from "react"
+import { useState, Suspense, useCallback } from "react"
 import Link from "next/link"
-import { useSearchParams } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import {
   RotateCcw,
-  Settings2,
   Clock,
   BookOpen,
   ArrowRight,
@@ -13,6 +12,8 @@ import {
   Library,
   Plus,
   Loader2,
+  Camera,
+  QrCode,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -34,6 +35,7 @@ import {
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
 import { BookCover } from "@/components/book-cover"
 import { TrustScoreWithBreakdown } from "@/components/trust-score-breakdown"
 import { getBookCoverUrl } from "@/lib/book-cover-generator"
@@ -43,6 +45,9 @@ import { useLibraryCard } from "@/hooks/use-library-card"
 import { useToast } from "@/hooks/use-toast"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { getAvatarUrl, getInitials, getAvatarSeed } from "@/lib/avatar"
+import { IsbnScannerDialog } from "@/components/isbn-scanner-dialog"
+import { normalizeIsbn } from "@/lib/isbn-utils"
+import { ISBN_CHECKOUT_RETURN_ENABLED } from "@/lib/feature-flags"
 import type { Book, User } from "@/lib/types"
 
 function daysRemaining(dateStr?: string) {
@@ -68,17 +73,34 @@ function MyBooksContent() {
   const isOwnView = !viewingOtherUser && !!card?.user_id && card.user_id === subjectUser?.id
   const currentUser = subjectUser
 
-  /* Return dialog: one dialog per page; which book we're returning + form state */
+  /* Return: gate (prove you have the book) then form */
+  const [returnGateOpen, setReturnGateOpen] = useState(false)
   const [returnDialogOpen, setReturnDialogOpen] = useState(false)
   const [returnBook, setReturnBook] = useState<Book | null>(null)
+  const [isbnScannerOpenForReturn, setIsbnScannerOpenForReturn] = useState(false)
   const [returnNodeId, setReturnNodeId] = useState("")
   const [returnNotes, setReturnNotes] = useState("")
   const [returning, setReturning] = useState(false)
+  const [returnAtLocationAcknowledged, setReturnAtLocationAcknowledged] = useState(false)
+
+  const router = useRouter()
+
+  const openReturnGate = (book: Book) => {
+    setReturnBook(book)
+    setReturnGateOpen(true)
+  }
+
+  const closeReturnGate = () => {
+    setReturnGateOpen(false)
+    setReturnBook(null)
+    setIsbnScannerOpenForReturn(false)
+  }
 
   const openReturnDialog = (book: Book) => {
     setReturnBook(book)
     setReturnNodeId(book.current_node_id ?? "")
     setReturnNotes("")
+    setReturnAtLocationAcknowledged(false)
     setReturnDialogOpen(true)
   }
 
@@ -87,16 +109,51 @@ function MyBooksContent() {
     setReturnBook(null)
     setReturnNodeId("")
     setReturnNotes("")
+    setReturnAtLocationAcknowledged(false)
+  }
+
+  const handleIsbnScannedForReturn = useCallback(
+    (scannedIsbn: string) => {
+      if (!returnBook) return
+      const bookNorm = returnBook.isbn ? normalizeIsbn(returnBook.isbn) : null
+      if (bookNorm !== null && bookNorm !== scannedIsbn) {
+        toast({
+          variant: "destructive",
+          title: "Wrong book",
+          description: "This barcode doesn’t match the book you’re returning.",
+        })
+        return
+      }
+      // Capture book before any state updates; close gate/scanner first
+      const bookToReturn = returnBook
+      setIsbnScannerOpenForReturn(false)
+      setReturnGateOpen(false)
+      // Defer opening return form so scanner dialog can close and focus/stacking is correct
+      requestAnimationFrame(() => {
+        openReturnDialog(bookToReturn)
+      })
+    },
+    [returnBook, toast],
+  )
+
+  const handleOpenReturnPage = () => {
+    if (!returnBook?.checkout_url) return
+    const path = returnBook.checkout_url.startsWith("/") ? returnBook.checkout_url : `/${returnBook.checkout_url}`
+    closeReturnGate()
+    router.push(path)
   }
 
   const handleConfirmReturn = async () => {
     if (!returnBook || !currentUser) return
     setReturning(true)
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 20_000)
     try {
       const res = await fetch("/api/books/return", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
+        signal: controller.signal,
         body: JSON.stringify({
           book_id: returnBook.id,
           user_id: currentUser.id,
@@ -104,6 +161,7 @@ function MyBooksContent() {
           notes: returnNotes.trim() || undefined,
         }),
       })
+      clearTimeout(timeoutId)
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? "Return failed")
       await refetch()
@@ -113,10 +171,15 @@ function MyBooksContent() {
         description: `${returnBook.title} has been returned.`,
       })
     } catch (err) {
+      clearTimeout(timeoutId)
+      const isTimeout = (err instanceof Error && err.name === "AbortError") ||
+        (err instanceof Error && /timeout|abort/i.test(err.message))
       toast({
         variant: "destructive",
         title: "Could not return book",
-        description: err instanceof Error ? err.message : "Something went wrong. Please try again.",
+        description: isTimeout
+          ? "Request timed out. Please try again, or open the return page by scanning the book’s QR or NFC tag."
+          : err instanceof Error ? err.message : "Something went wrong. Please try again.",
       })
     } finally {
       setReturning(false)
@@ -378,18 +441,10 @@ function MyBooksContent() {
                               size="sm"
                               variant="default"
                               className="gap-1.5"
-                              onClick={() => openReturnDialog(book)}
+                              onClick={() => openReturnGate(book)}
                             >
                               <RotateCcw className="h-3.5 w-3.5" />
                               Return
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="gap-1.5 text-foreground bg-transparent"
-                            >
-                              <Settings2 className="h-3.5 w-3.5" />
-                              Edit Terms
                             </Button>
                           </div>
                           )}
@@ -565,7 +620,52 @@ function MyBooksContent() {
           </TabsContent>
         </Tabs>
 
-        {/* Single return dialog — controlled by returnBook / returnDialogOpen */}
+        {/* Return gate: prove you have the book (scan ISBN or open return page via QR/NFC) */}
+        <Dialog open={returnGateOpen} onOpenChange={(open) => !open && closeReturnGate()}>
+          <DialogContent className="max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Return: {returnBook?.title ?? ""}</DialogTitle>
+              <DialogDescription>
+                To return this book we need to verify you have it. Use the ISBN scanner to scan the barcode on the book, or open the return page by scanning the QR or NFC tag on the physical book.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="mt-4 flex flex-col gap-3">
+              {ISBN_CHECKOUT_RETURN_ENABLED && (
+                <Button
+                  className="w-full gap-2"
+                  variant="default"
+                  onClick={() => setIsbnScannerOpenForReturn(true)}
+                >
+                  <Camera className="h-4 w-4" />
+                  Use ISBN scanner
+                </Button>
+              )}
+              <Button
+                className="w-full gap-2"
+                variant="outline"
+                onClick={handleOpenReturnPage}
+              >
+                <QrCode className="h-4 w-4" />
+                Open return page (scan QR or NFC on book)
+              </Button>
+              <Button variant="ghost" size="sm" onClick={closeReturnGate}>
+                Cancel
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {returnBook && (
+          <IsbnScannerDialog
+            open={isbnScannerOpenForReturn}
+            onOpenChange={(open) => {
+              if (!open) setIsbnScannerOpenForReturn(false)
+            }}
+            onScan={handleIsbnScannedForReturn}
+          />
+        )}
+
+        {/* Return form (after gate: node, notes, location ack, confirm) */}
         <Dialog open={returnDialogOpen} onOpenChange={(open) => !open && closeReturnDialog()}>
           <DialogContent>
             <DialogHeader>
@@ -607,10 +707,20 @@ function MyBooksContent() {
                   {returnNotes.length}/200
                 </p>
               </div>
+              <div className="flex items-start gap-2">
+                <Checkbox
+                  id="my-books-return-ack"
+                  checked={returnAtLocationAcknowledged}
+                  onCheckedChange={(c) => setReturnAtLocationAcknowledged(c === true)}
+                />
+                <label htmlFor="my-books-return-ack" className="cursor-pointer text-sm text-muted-foreground">
+                  I am at the selected location (or will return the book there) and will only mark as returned when I have physically returned the book.
+                </label>
+              </div>
               <Button
                 className="gap-2"
                 onClick={handleConfirmReturn}
-                disabled={returning}
+                disabled={!returnAtLocationAcknowledged || returning}
               >
                 {returning ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
