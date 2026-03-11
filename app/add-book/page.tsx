@@ -43,6 +43,7 @@ import { useToast } from "@/hooks/use-toast"
 import { GetLibraryCardModal } from "@/components/get-library-card-modal"
 import { CoverPhotoCapture } from "@/components/cover-photo-capture"
 import { AddBookSuccessCard } from "@/components/add-book-success-card"
+import { IsbnScannerDialog } from "@/components/isbn-scanner-dialog"
 import { generateBookCoverSvg } from "@/lib/book-cover-generator"
 import { DEFAULT_LOAN_PERIOD_DAYS, formatDefaultLoanPeriod } from "@/lib/loan-period"
 
@@ -90,29 +91,7 @@ export default function AddBookPage() {
 
   // Node recommendation dialog for Pocket Library books
   const [showNodeRecommendation, setShowNodeRecommendation] = useState(false)
-
-  // Auto-detect geolocation for Pocket Library books (with cleanup on unmount)
-  useEffect(() => {
-    if (locationType !== "pocket" || currentLocation) return
-    if (!("geolocation" in navigator)) return
-
-    let cancelled = false
-    const id = navigator.geolocation.watchPosition(
-      (position) => {
-        if (cancelled) return
-        const { latitude, longitude } = position.coords
-        setCurrentLocation(`${latitude.toFixed(6)}, ${longitude.toFixed(6)}`)
-      },
-      () => {
-        if (!cancelled) console.log("Geolocation not available")
-      },
-      { timeout: 10_000, maximumAge: 60_000 }
-    )
-    return () => {
-      cancelled = true
-      navigator.geolocation.clearWatch(id)
-    }
-  }, [locationType, currentLocation])
+  const [isbnScannerOpen, setIsbnScannerOpen] = useState(false)
 
   const lookupIsbn = useCallback(async (isbnToLookUp?: string) => {
     const value = (isbnToLookUp ?? isbn).trim().replace(/[\s-]/g, "")
@@ -407,16 +386,29 @@ export default function AddBookPage() {
                 <p className="mb-2 text-sm text-muted-foreground">
                   Enter an ISBN (10 or 13 digits; ISBN-10 can end with X). We&apos;ll look up title, author, and cover automatically.
                 </p>
-                <Input
-                  placeholder="e.g. 9780199678112"
-                  value={isbn}
-                  onChange={(e) => {
-                    setIsbn(e.target.value)
-                    setIsbnLookedUp(false)
-                    setCoverImageUrl("")
-                  }}
-                  className="max-w-sm"
-                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <Input
+                    placeholder="e.g. 9780199678112"
+                    value={isbn}
+                    onChange={(e) => {
+                      setIsbn(e.target.value)
+                      setIsbnLookedUp(false)
+                      setCoverImageUrl("")
+                    }}
+                    className="max-w-sm"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 shrink-0"
+                    onClick={() => setIsbnScannerOpen(true)}
+                    aria-label="Scan ISBN barcode with camera"
+                  >
+                    <Camera className="h-4 w-4" />
+                    Scan
+                  </Button>
+                </div>
                 {lookupInProgress && (
                   <p className="mt-2 text-sm text-muted-foreground">Looking up…</p>
                 )}
@@ -818,6 +810,17 @@ export default function AddBookPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <IsbnScannerDialog
+        open={isbnScannerOpen}
+        onOpenChange={setIsbnScannerOpen}
+        onScan={(value) => {
+          setIsbn(value)
+          setIsbnLookedUp(false)
+          setCoverImageUrl("")
+          setIsbnScannerOpen(false)
+        }}
+      />
     </div>
   )
 }
