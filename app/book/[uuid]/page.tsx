@@ -1,7 +1,8 @@
 "use client"
 
-import { use } from "react"
+import { use, useState, useCallback } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import {
   ArrowLeft,
   MapPin,
@@ -16,6 +17,7 @@ import {
   Mail,
   Building2,
   Loader2,
+  Camera,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -32,6 +34,11 @@ import { BookCover } from "@/components/book-cover"
 import { getBookCoverUrl } from "@/lib/book-cover-generator"
 import { formatLocationForDisplay } from "@/lib/format-location"
 import { useBootstrapData } from "@/hooks/use-bootstrap-data"
+import { useLibraryCard } from "@/hooks/use-library-card"
+import { useToast } from "@/hooks/use-toast"
+import { IsbnScannerDialog } from "@/components/isbn-scanner-dialog"
+import { normalizeIsbn } from "@/lib/isbn-utils"
+import { ISBN_CHECKOUT_RETURN_ENABLED } from "@/lib/feature-flags"
 import { DEFAULT_LOAN_PERIOD_DAYS } from "@/lib/loan-period"
 
 function formatDate(dateStr: string) {
@@ -65,7 +72,10 @@ export default function BookDetailPage({
 }: {
   params: Promise<{ uuid: string }>
 }) {
+  const router = useRouter()
+  const { toast } = useToast()
   const { data, loading } = useBootstrapData()
+  const { card } = useLibraryCard()
   const books = data?.books ?? []
   const nodes = data?.nodes ?? []
   const loanEvents = data?.loanEvents ?? []
@@ -73,6 +83,27 @@ export default function BookDetailPage({
   const book = books.find((b) => b.id === uuid)
   const node = book?.current_node_id ? nodes.find((n) => n.id === book.current_node_id) : null
   const defaultLoanPeriodDays = data?.config?.default_loan_period_days ?? DEFAULT_LOAN_PERIOD_DAYS
+  const [isbnScannerOpen, setIsbnScannerOpen] = useState(false)
+  const isHolder = !!(book && card?.user_id && book.current_holder_id === card.user_id)
+
+  const handleIsbnScanForThisBook = useCallback(
+    (scannedIsbn: string) => {
+      if (!book?.checkout_url) return
+      const bookNorm = book.isbn ? normalizeIsbn(book.isbn) : null
+      if (bookNorm !== null && bookNorm !== scannedIsbn) {
+        toast({
+          variant: "destructive",
+          title: "Wrong book",
+          description: "This barcode doesn’t match the book on this page.",
+        })
+        return
+      }
+      setIsbnScannerOpen(false)
+      const path = book.checkout_url.startsWith("/") ? book.checkout_url : `/${book.checkout_url}`
+      router.push(path)
+    },
+    [book, router, toast],
+  )
   // Directions: node books → node address/coords (correct place); pocket → owner's entered location.
   const directionsHref =
     node != null
@@ -274,6 +305,16 @@ export default function BookDetailPage({
                             </a>
                           </Button>
                         )}
+                        {ISBN_CHECKOUT_RETURN_ENABLED && (
+                          <Button
+                            variant="outline"
+                            className="gap-2"
+                            onClick={() => setIsbnScannerOpen(true)}
+                          >
+                            <Camera className="h-4 w-4" />
+                            Check out via ISBN scanner
+                          </Button>
+                        )}
                       </div>
                     </>
                   ) : (
@@ -290,6 +331,28 @@ export default function BookDetailPage({
                               <MapPin className="h-4 w-4" />
                               Get Directions
                             </a>
+                          </Button>
+                          {ISBN_CHECKOUT_RETURN_ENABLED && (
+                            <Button
+                              variant="outline"
+                              className="gap-2"
+                              onClick={() => setIsbnScannerOpen(true)}
+                            >
+                              <Camera className="h-4 w-4" />
+                              Check out via ISBN scanner
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                      {ISBN_CHECKOUT_RETURN_ENABLED && !directionsHref && (
+                        <div className="mt-4">
+                          <Button
+                            variant="outline"
+                            className="gap-2"
+                            onClick={() => setIsbnScannerOpen(true)}
+                          >
+                            <Camera className="h-4 w-4" />
+                            Check out via ISBN scanner
                           </Button>
                         </div>
                       )}
@@ -334,6 +397,16 @@ export default function BookDetailPage({
                 <p id="notify-caption" className="sr-only">
                   Email notifications for when this book is back will be available in a future update.
                 </p>
+                {ISBN_CHECKOUT_RETURN_ENABLED && isHolder && (
+                  <Button
+                    variant="outline"
+                    className="w-fit gap-2 text-foreground"
+                    onClick={() => setIsbnScannerOpen(true)}
+                  >
+                    <Camera className="h-4 w-4" />
+                    Return via ISBN scanner
+                  </Button>
+                )}
               </div>
             ) : (
               <div className="mt-6 rounded-lg border border-border bg-muted/30 p-4">
@@ -460,6 +533,14 @@ export default function BookDetailPage({
         </Card>
       </div>
       </div>
+
+      {ISBN_CHECKOUT_RETURN_ENABLED && book && (
+        <IsbnScannerDialog
+          open={isbnScannerOpen}
+          onOpenChange={setIsbnScannerOpen}
+          onScan={handleIsbnScanForThisBook}
+        />
+      )}
     </div>
   )
 }

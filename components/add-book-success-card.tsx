@@ -6,6 +6,7 @@ import { Check, Copy, ArrowRight, QrCode, Smartphone } from "lucide-react"
 import { QRCodeSVG } from "qrcode.react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { ISBN_CHECKOUT_RETURN_ENABLED } from "@/lib/feature-flags"
 
 /** Universal link to NFC Tools app site (works on all devices). */
 const NFC_TOOLS_URL = "https://www.nfctools.com/"
@@ -157,6 +158,11 @@ export function AddBookSuccessCard({
           >
             Show how to add link to book
           </Button>
+        )}
+        {!showGuide && ISBN_CHECKOUT_RETURN_ENABLED && (
+          <p className="mt-3 text-center text-xs text-muted-foreground">
+            You can still check out or return this book using the ISBN scanner — find it in the menu under &quot;Scan to checkout or return&quot;.
+          </p>
         )}
 
         {bookId && (

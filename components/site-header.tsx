@@ -15,6 +15,7 @@ import {
   CreditCard,
   ChevronDown,
   LogOut,
+  Camera,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -35,7 +36,9 @@ import {
 } from "@/components/ui/alert-dialog"
 import { GetLibraryCardModal, type GetLibraryCardModalMode } from "@/components/get-library-card-modal"
 import { LoginLibraryCardModal } from "@/components/login-library-card-modal"
+import { IsbnCheckoutReturnDialog } from "@/components/isbn-checkout-return-dialog"
 import { useLibraryCard } from "@/hooks/use-library-card"
+import { ISBN_CHECKOUT_RETURN_ENABLED } from "@/lib/feature-flags"
 
 /** Main nav: Explore, Add a Book, Sharing history. Members linked from footer + ledger. */
 const navLinks = [
@@ -56,6 +59,7 @@ export function SiteHeader() {
   const [libraryCardModalMode, setLibraryCardModalMode] = useState<GetLibraryCardModalMode>("view")
   const [loginModalOpen, setLoginModalOpen] = useState(false)
   const [removeCardConfirmOpen, setRemoveCardConfirmOpen] = useState(false)
+  const [scanCheckoutOpen, setScanCheckoutOpen] = useState(false)
   const { card, clearCard, sessionError } = useLibraryCard()
 
   useEffect(() => {
@@ -102,6 +106,18 @@ export function SiteHeader() {
               </Button>
             </Link>
           ))}
+          {ISBN_CHECKOUT_RETURN_ENABLED && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-2 text-foreground"
+              onClick={() => setScanCheckoutOpen(true)}
+              aria-label="Scan to checkout or return a book"
+            >
+              <Camera className="h-4 w-4" />
+              Scan to checkout or return
+            </Button>
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="sm" className="gap-2 text-foreground">
@@ -201,6 +217,12 @@ export function SiteHeader() {
         open={loginModalOpen}
         onOpenChange={setLoginModalOpen}
       />
+      {ISBN_CHECKOUT_RETURN_ENABLED && (
+        <IsbnCheckoutReturnDialog
+          open={scanCheckoutOpen}
+          onOpenChange={setScanCheckoutOpen}
+        />
+      )}
 
       <AlertDialog open={removeCardConfirmOpen} onOpenChange={setRemoveCardConfirmOpen}>
         <AlertDialogContent className="sm:max-w-md">
@@ -260,6 +282,19 @@ export function SiteHeader() {
                 </Button>
               </Link>
             ))}
+            {ISBN_CHECKOUT_RETURN_ENABLED && (
+              <Button
+                variant="ghost"
+                className="w-full justify-start gap-3 text-foreground"
+                onClick={() => {
+                  setScanCheckoutOpen(true)
+                  setMobileOpen(false)
+                }}
+              >
+                <Camera className="h-5 w-5" />
+                Scan to checkout or return
+              </Button>
+            )}
             <div className="my-1 border-t border-border pt-1">
               <span className="px-2 py-1 text-xs font-medium text-muted-foreground">
                 Admin
