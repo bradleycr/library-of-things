@@ -1,6 +1,7 @@
 "use client"
 
 import type { Book } from "@/lib/types"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -10,13 +11,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { formatBookCopyLabel } from "@/lib/isbn-checkout"
-import { BookOpen, MapPin, Package } from "lucide-react"
+import { BookOpen, MapPin, Package, Plus } from "lucide-react"
 
 export interface IsbnCopyPickerDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   books: Book[]
   onSelect: (book: Book) => void
+  /** When set, show "Add another copy" linking to add-book with this ISBN. */
+  scannedIsbn?: string | null
+  onAddAnotherCopy?: () => void
 }
 
 /**
@@ -28,6 +32,8 @@ export function IsbnCopyPickerDialog({
   onOpenChange,
   books,
   onSelect,
+  scannedIsbn,
+  onAddAnotherCopy,
 }: IsbnCopyPickerDialogProps) {
   if (!books.length) return null
 
@@ -35,7 +41,7 @@ export function IsbnCopyPickerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto" aria-describedby="isbn-copy-picker-desc">
+      <DialogContent className="max-h-[85vh] max-w-[calc(100vw-2rem)] overflow-y-auto" aria-describedby="isbn-copy-picker-desc">
         <DialogHeader>
           <DialogTitle>Multiple copies</DialogTitle>
           <DialogDescription id="isbn-copy-picker-desc">
@@ -69,6 +75,18 @@ export function IsbnCopyPickerDialog({
             )
           })}
         </ul>
+        {scannedIsbn && (
+          <div className="mt-3 border-t border-border pt-3">
+            <Link
+              href={`/add-book?isbn=${encodeURIComponent(scannedIsbn)}`}
+              onClick={onAddAnotherCopy}
+              className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+            >
+              <Plus className="h-4 w-4" />
+              Add another copy of this book
+            </Link>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   )

@@ -224,7 +224,7 @@ export function IsbnScannerDialog({
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent
-        className="max-h-[85vh] overflow-y-auto"
+        className="max-h-[85vh] w-[min(100vw-2rem,28rem)] max-w-[calc(100vw-2rem)] overflow-y-auto"
         aria-describedby="isbn-scanner-description"
       >
         <DialogHeader>
@@ -235,12 +235,12 @@ export function IsbnScannerDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col gap-4">
+        <div className="flex min-w-0 flex-col gap-4">
           {/* Live scanner viewport — Quagga attaches here; keep mounted for error so user can retry */}
           {status !== "no-camera" && (
             <div
               ref={scannerRef}
-              className="relative aspect-video w-full overflow-hidden rounded-lg border border-border bg-muted"
+              className="relative aspect-video w-full min-w-0 max-w-full overflow-hidden rounded-lg border border-border bg-muted"
               aria-hidden="true"
             >
               {status === "loading" && (

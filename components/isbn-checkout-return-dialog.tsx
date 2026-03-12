@@ -28,10 +28,10 @@ export function IsbnCheckoutReturnDialog({
   open,
   onOpenChange,
 }: IsbnCheckoutReturnDialogProps) {
-  const { data } = useBootstrapData()
+  const { data, loading } = useBootstrapData()
   const books = data?.books ?? []
 
-  const [phase, setPhase] = useState<"scanner" | "no-book" | "picker">("scanner")
+  const [phase, setPhase] = useState<"scanner" | "no-book" | "picker" | "catalog-loading">("scanner")
   const [booksForPicker, setBooksForPicker] = useState<Book[]>([])
   const [lastScannedIsbn, setLastScannedIsbn] = useState<string | null>(null)
   /** When true, scanner closed due to a scan (not cancel); don't close parent or we'd lose no-book/picker. */
@@ -56,9 +56,13 @@ export function IsbnCheckoutReturnDialog({
   const handleScan = useCallback(
     (normalizedIsbn: string) => {
       handlingScanRef.current = true
+      setLastScannedIsbn(normalizedIsbn)
       const matches = findBooksByIsbn(books, normalizedIsbn)
       if (matches.length === 0) {
-        setLastScannedIsbn(normalizedIsbn)
+        if (loading) {
+          setPhase("catalog-loading")
+          return
+        }
         setPhase("no-book")
         return
       }
@@ -69,7 +73,7 @@ export function IsbnCheckoutReturnDialog({
       setBooksForPicker(matches)
       setPhase("picker")
     },
-    [books, redirectToCheckout],
+    [books, loading, redirectToCheckout],
   )
 
   const handleClose = useCallback(() => {
@@ -97,9 +101,25 @@ export function IsbnCheckoutReturnDialog({
 
   return (
     <>
+      {phase === "catalog-loading" && (
+        <Dialog open={open} onOpenChange={handleClose}>
+          <DialogContent className="max-w-[calc(100vw-2rem)]">
+            <DialogHeader>
+              <DialogTitle>Loading library catalog</DialogTitle>
+            </DialogHeader>
+            <p className="text-muted-foreground">
+              The catalog is still loading. Please wait a moment and try scanning again.
+            </p>
+            <Button className="mt-4" onClick={() => setPhase("scanner")}>
+              Back to scanner
+            </Button>
+          </DialogContent>
+        </Dialog>
+      )}
+
       {phase === "no-book" && (
         <Dialog open={open} onOpenChange={handleClose}>
-          <DialogContent>
+          <DialogContent className="max-w-[calc(100vw-2rem)]">
             <DialogHeader>
               <DialogTitle>This book is not yet in the library</DialogTitle>
             </DialogHeader>
@@ -143,6 +163,8 @@ export function IsbnCheckoutReturnDialog({
         }}
         books={booksForPicker}
         onSelect={handlePickerSelect}
+        scannedIsbn={lastScannedIsbn}
+        onAddAnotherCopy={() => onOpenChange(false)}
       />
     </>
   )

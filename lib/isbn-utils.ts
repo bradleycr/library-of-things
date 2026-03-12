@@ -23,3 +23,20 @@ export function normalizeIsbn(raw: string): string | null {
   if (cleaned.length === 13 && /^\d{13}$/.test(cleaned)) return cleaned
   return null
 }
+
+/**
+ * Convert a normalized ISBN-10 to ISBN-13 (978 prefix + 9 digits + EAN-13 check digit).
+ * Returns null if input is not a valid 10-digit ISBN.
+ */
+export function isbn10To13(isbn10: string): string | null {
+  const n = normalizeIsbn(isbn10)
+  if (!n || n.length !== 10) return null
+  const nine = n.replace(/X$/i, "9").slice(0, 9)
+  const prefix = "978"
+  const sum = (prefix + nine).split("").reduce(
+    (acc, d, i) => acc + parseInt(d, 10) * (i % 2 === 0 ? 1 : 3),
+    0,
+  )
+  const check = (10 - (sum % 10)) % 10
+  return prefix + nine + String(check)
+}
