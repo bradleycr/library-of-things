@@ -1,7 +1,6 @@
 "use client"
 
-import { useState, useCallback, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useCallback, useEffect, useRef } from "react"
 import Link from "next/link"
 import { IsbnScannerDialog } from "@/components/isbn-scanner-dialog"
 import { IsbnCopyPickerDialog } from "@/components/isbn-copy-picker-dialog"
@@ -29,30 +28,34 @@ export function IsbnCheckoutReturnDialog({
   open,
   onOpenChange,
 }: IsbnCheckoutReturnDialogProps) {
-  const router = useRouter()
   const { data } = useBootstrapData()
   const books = data?.books ?? []
 
   const [phase, setPhase] = useState<"scanner" | "no-book" | "picker">("scanner")
   const [booksForPicker, setBooksForPicker] = useState<Book[]>([])
   const [lastScannedIsbn, setLastScannedIsbn] = useState<string | null>(null)
+  /** When true, scanner closed due to a scan (not cancel); don't close parent or we'd lose no-book/picker. */
+  const handlingScanRef = useRef(false)
 
   const redirectToCheckout = useCallback(
     (book: Book) => {
       const path = book.checkout_url.startsWith("/") ? book.checkout_url : `/${book.checkout_url}`
-      // Navigate first so the transition is scheduled before we close the dialog
-      router.push(path)
+      handlingScanRef.current = true
+      // Full navigation so the checkout/return page reliably opens (dialog closing can interfere with router.push)
+      window.location.href = path
       setTimeout(() => {
+        handlingScanRef.current = false
         onOpenChange(false)
         setPhase("scanner")
         setBooksForPicker([])
-      }, 0)
+      }, 100)
     },
-    [onOpenChange, router],
+    [onOpenChange],
   )
 
   const handleScan = useCallback(
     (normalizedIsbn: string) => {
+      handlingScanRef.current = true
       const matches = findBooksByIsbn(books, normalizedIsbn)
       if (matches.length === 0) {
         setLastScannedIsbn(normalizedIsbn)
@@ -88,6 +91,7 @@ export function IsbnCheckoutReturnDialog({
       setPhase("scanner")
       setBooksForPicker([])
       setLastScannedIsbn(null)
+      handlingScanRef.current = false
     }
   }, [open])
 
@@ -123,7 +127,10 @@ export function IsbnCheckoutReturnDialog({
         <IsbnScannerDialog
           open={open}
           onOpenChange={(next) => {
-            if (!next) handleClose()
+            if (!next) {
+              if (!handlingScanRef.current) handleClose()
+              else handlingScanRef.current = false
+            }
           }}
           onScan={handleScan}
         />
