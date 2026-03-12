@@ -23,7 +23,6 @@ import { BookCover } from "@/components/book-cover"
 import { getBookCoverUrl } from "@/lib/book-cover-generator"
 import { useBootstrapData } from "@/hooks/use-bootstrap-data"
 import { useLibraryCard } from "@/hooks/use-library-card"
-import { useReturnLocation } from "@/hooks/use-return-location"
 import { useToast } from "@/hooks/use-toast"
 import { MAX_BOOKS_CHECKED_OUT } from "@/lib/constants"
 import { DEFAULT_LOAN_PERIOD_DAYS } from "@/lib/loan-period"
@@ -178,8 +177,10 @@ export default function CheckoutPage({
         title="You’ve got it"
         message={
           <>
-            You checked out <strong>{book.title}</strong>. Suggested return within{" "}
-            {book.lending_terms?.loan_period_days ?? defaultLoanPeriodDays} days.
+            <p>You checked out <strong>{book.title}</strong>. Suggested return within{" "}
+              {book.lending_terms?.loan_period_days ?? defaultLoanPeriodDays} days.</p>
+            <p className="mt-3">When you&apos;re ready to return it, tap or scan the book again.</p>
+            <p className="mt-1">Please only mark books as returned when you have actually returned them.</p>
           </>
         }
         action={
@@ -315,7 +316,7 @@ export default function CheckoutPage({
     )
   }
 
-  // Checked out: holder — return flow with node list and optional geofencing
+  // Checked out: holder — return flow with node list; optional geofencing in codebase but not used here
   if (!isAvailable && isHolder) {
     return (
       <ReturnFlow
@@ -384,9 +385,9 @@ function MinimalScreen({
           {title}
         </h1>
         {message && (
-          <p className="mt-2 text-muted-foreground">
+          <div className="mt-2 text-muted-foreground">
             {message}
-          </p>
+          </div>
         )}
         {action && <div className="mt-8 flex flex-wrap justify-center gap-3">{action}</div>}
       </div>
@@ -583,7 +584,7 @@ function AvailableFlow({
 }
 
 // ---------------------------------------------------------------------------
-// Return flow: pick location (geofenced when possible), confirm return
+// Return flow: pick location; optional geofencing available in codebase but not used here.
 // ---------------------------------------------------------------------------
 
 function ReturnFlow({
@@ -608,10 +609,11 @@ function ReturnFlow({
   isTapEntry: boolean
 }) {
   const { toast } = useToast()
-  const { nearbyNodeIds, hasLocation, refreshLocation, loading: locationLoading } = useReturnLocation(nodes)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [returnAtLocationAcknowledged, setReturnAtLocationAcknowledged] = useState(false)
 
   const handleReturn = async (nodeId: string) => {
+    if (!returnAtLocationAcknowledged) return
     setIsSubmitting(true)
     setReturningNodeId(nodeId)
     try {
@@ -671,30 +673,18 @@ function ReturnFlow({
         <p className="mt-6 text-center text-sm font-medium text-foreground">
           Return this book at a location
         </p>
-        {!hasLocation && nodes.some((n) => n.location_lat != null) && (
-          <p className="mt-1 text-center text-xs text-muted-foreground">
-            Location access was denied or unavailable; you can still choose where to return it.
-          </p>
-        )}
-        {hasLocation && nodes.some((n) => n.location_lat != null) && (
-          <div className="mt-2 flex justify-center">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="gap-1.5 text-muted-foreground"
-              onClick={refreshLocation}
-              disabled={locationLoading}
-            >
-              {locationLoading ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <MapPin className="h-3.5 w-3.5" />
-              )}
-              {locationLoading ? "Getting location…" : "Refresh my location"}
-            </Button>
-          </div>
-        )}
+        <div className="mt-4 flex items-start gap-2">
+          <Checkbox
+            id="return-at-location-ack"
+            checked={returnAtLocationAcknowledged}
+            onCheckedChange={(c) => setReturnAtLocationAcknowledged(c === true)}
+          />
+          <label htmlFor="return-at-location-ack" className="cursor-pointer text-sm text-muted-foreground">
+            {book.is_pocket_library
+              ? "I will only mark as returned when I have physically returned the book."
+              : "I am at the location I choose below (or will return the book there) and will only mark as returned when I have physically returned the book."}
+          </label>
+        </div>
         <div className="mt-4">
           <Label className="text-muted-foreground">Optional note (up to 200 characters)</Label>
           <Textarea
@@ -707,41 +697,23 @@ function ReturnFlow({
           <p className="mt-0.5 text-right text-xs text-muted-foreground">{returnNotes.length}/200</p>
         </div>
         <div className="mt-4 space-y-2">
-          {nodes.map((node) => {
-            const hasCoords = node.location_lat != null && node.location_lng != null
-            const isNearby = hasCoords && nearbyNodeIds.includes(node.id)
-            const disabled = hasLocation && hasCoords && !isNearby
-
-            return (
-              <Card
-                key={node.id}
-                className={`border transition-opacity ${disabled ? "opacity-60" : ""}`}
-              >
+          {nodes.map((node) => (
+            <Card key={node.id} className="border">
                 <CardContent className="flex items-center justify-between gap-3 p-4">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
                       <span className="font-medium text-foreground">{node.name}</span>
-                      {isNearby && (
-                        <span className="rounded bg-primary/15 px-1.5 py-0.5 text-xs font-medium text-primary">
-                          Nearby
-                        </span>
-                      )}
-                    </div>
+                  </div>
                     {node.location_address && (
                       <p className="mt-0.5 truncate text-xs text-muted-foreground">
                         {node.location_address}
                       </p>
                     )}
-                    {disabled && (
-                      <p className="mt-1 text-xs text-amber-600">
-                        Return only when you’re at this location (within ~1.5 km).
-                      </p>
-                    )}
                   </div>
                   <Button
                     size="sm"
-                    disabled={disabled || isSubmitting}
+                    disabled={!returnAtLocationAcknowledged || isSubmitting}
                     onClick={() => handleReturn(node.id)}
                     className="shrink-0 gap-1"
                   >
@@ -753,9 +725,8 @@ function ReturnFlow({
                     Return here
                   </Button>
                 </CardContent>
-              </Card>
-            )
-          })}
+            </Card>
+          ))}
         </div>
         {nodes.length === 0 && (
           <p className="mt-4 text-center text-sm text-muted-foreground">

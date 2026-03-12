@@ -57,7 +57,11 @@ export function IsbnScannerDialog({
     (code: string) => {
       if (detectedRef.current) return
       const normalized = normalizeIsbn(code)
-      if (!normalized) return
+      if (!normalized) {
+        setMessage("Barcode not recognized as ISBN (need 10 or 13 digits). Try again or use Take photo.")
+        setStatus("error")
+        return
+      }
       detectedRef.current = true
       stopScanner().then(() => {
         onScan(normalized)
@@ -67,73 +71,99 @@ export function IsbnScannerDialog({
     [onScan, onOpenChange, stopScanner],
   )
 
-  // Start live stream when dialog opens
+  // Start live stream when dialog opens. Wait for ref (portal may mount after first paint).
   useEffect(() => {
-    if (!open || !scannerRef.current) return
-
-    const hasGetUserMedia =
-      typeof navigator !== "undefined" &&
-      navigator.mediaDevices != null &&
-      typeof navigator.mediaDevices.getUserMedia === "function"
-
-    if (!hasGetUserMedia) {
-      setStatus("no-camera")
-      setMessage("Camera not supported in this browser. Use \"Take photo\" instead.")
-      return
-    }
-
-    detectedRef.current = false
-    setStatus("loading")
-    setMessage("Opening camera…")
+    if (!open) return
 
     let cancelled = false
+    let rafId: number
+    let retries = 0
+    const maxRetries = 30
 
-    import("@ericblade/quagga2").then((mod) => {
-      const Quagga = mod.default
-      quaggaRef.current = Quagga
+    const tryStart = () => {
+      if (cancelled) return
+      if (!scannerRef.current) {
+        retries += 1
+        if (retries >= maxRetries) {
+          setStatus("error")
+          setMessage("Scanner view not ready. Please close and try again.")
+          return
+        }
+        rafId = requestAnimationFrame(tryStart)
+        return
+      }
 
-      if (cancelled || !scannerRef.current) return
+      const hasGetUserMedia =
+        typeof navigator !== "undefined" &&
+        navigator.mediaDevices != null &&
+        typeof navigator.mediaDevices.getUserMedia === "function"
 
-      Quagga.init(
-        {
-          inputStream: {
-            type: "LiveStream",
-            target: scannerRef.current,
-            constraints: {
-              width: 640,
-              height: 480,
-              facingMode: "environment",
+      if (!hasGetUserMedia) {
+        setStatus("no-camera")
+        setMessage("Camera not supported in this browser. Use \"Take photo\" instead.")
+        return
+      }
+
+      detectedRef.current = false
+      setStatus("loading")
+      setMessage("Opening camera…")
+
+      import("@ericblade/quagga2").then((mod) => {
+        const Quagga = mod.default
+        if (cancelled) return
+        quaggaRef.current = Quagga
+
+        if (!scannerRef.current) {
+          setStatus("error")
+          setMessage("Scanner view not ready. Please close and try again.")
+          quaggaRef.current = null
+          return
+        }
+
+        Quagga.init(
+          {
+            inputStream: {
+              type: "LiveStream",
+              target: scannerRef.current,
+              constraints: {
+                width: 640,
+                height: 480,
+                facingMode: "environment",
+              },
             },
+            decoder: {
+              readers: ["ean_reader", "ean_8_reader"],
+            },
+            locate: true,
           },
-          decoder: {
-            readers: ["ean_reader", "ean_8_reader"],
+          (err: Error | null) => {
+            if (cancelled) return
+            if (err) {
+              setStatus("no-camera")
+              setMessage(
+                "Could not access the camera. Allow camera permission or try \"Take photo\".",
+              )
+              quaggaRef.current = null
+              return
+            }
+            setStatus("live")
+            setMessage("Point your camera at the barcode on the back of the book.")
+            Quagga.onDetected((data) => {
+              if (cancelled || detectedRef.current) return
+              const code = data?.codeResult?.code ?? null
+              if (code) handleDetected(code)
+            })
+            Quagga.start()
           },
-          locate: true,
-        },
-        (err: Error | null) => {
-          if (cancelled) return
-          if (err) {
-            setStatus("no-camera")
-            setMessage(
-              "Could not access the camera. Allow camera permission or try \"Take photo\".",
-            )
-            quaggaRef.current = null
-            return
-          }
-          setStatus("live")
-          setMessage("Point your camera at the barcode on the back of the book.")
-          Quagga.onDetected((data) => {
-            if (cancelled || detectedRef.current) return
-            const code = data?.codeResult?.code ?? null
-            if (code) handleDetected(code)
-          })
-          Quagga.start()
-        },
-      )
-    })
+        )
+      })
+    }
+
+    rafId = requestAnimationFrame(tryStart)
 
     return () => {
       cancelled = true
+      cancelAnimationFrame(rafId)
       stopScanner()
       setStatus("idle")
       setMessage(null)
@@ -182,7 +212,7 @@ export function IsbnScannerDialog({
             onScan(normalized)
             onOpenChange(false)
           } else {
-            setMessage("No valid ISBN found in the barcode.")
+            setMessage("Barcode not recognized as ISBN (need 10 or 13 digits). Try another photo.")
             setStatus("error")
           }
         },
@@ -206,8 +236,8 @@ export function IsbnScannerDialog({
         </DialogHeader>
 
         <div className="flex flex-col gap-4">
-          {/* Live scanner viewport — Quagga attaches to this */}
-          {status !== "no-camera" && status !== "error" && (
+          {/* Live scanner viewport — Quagga attaches here; keep mounted for error so user can retry */}
+          {status !== "no-camera" && (
             <div
               ref={scannerRef}
               className="relative aspect-video w-full overflow-hidden rounded-lg border border-border bg-muted"
@@ -246,6 +276,19 @@ export function IsbnScannerDialog({
               <Camera className="h-4 w-4" />
               Take photo
             </Button>
+            {status === "error" && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setStatus("live")
+                  setMessage("Point your camera at the barcode on the back of the book.")
+                }}
+              >
+                Try again
+              </Button>
+            )}
             <Button type="button" variant="ghost" size="sm" onClick={handleClose}>
               Cancel
             </Button>

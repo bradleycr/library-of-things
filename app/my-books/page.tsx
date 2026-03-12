@@ -714,7 +714,15 @@ function MyBooksContent() {
                   onCheckedChange={(c) => setReturnAtLocationAcknowledged(c === true)}
                 />
                 <label htmlFor="my-books-return-ack" className="cursor-pointer text-sm text-muted-foreground">
-                  I am at the selected location (or will return the book there) and will only mark as returned when I have physically returned the book.
+                  {returnBook?.is_pocket_library
+                    ? "I will only mark as returned when I have physically returned the book."
+                    : (() => {
+                        const selectedNode = returnNodeId ? nodes.find((n) => n.id === returnNodeId) : null
+                        const locationPhrase = selectedNode
+                          ? `I am at ${selectedNode.name} (or will return the book there)`
+                          : "I am at the selected return location (or will return the book there)"
+                        return `${locationPhrase} and will only mark as returned when I have physically returned the book.`
+                      })()}
                 </label>
               </div>
               <Button
