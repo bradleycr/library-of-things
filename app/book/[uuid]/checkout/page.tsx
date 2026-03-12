@@ -308,9 +308,20 @@ export default function CheckoutPage({
           )
         }
         action={
-          <Link href={`/book/${uuid}`}>
-            <Button variant="outline">View book details</Button>
-          </Link>
+          <div className="flex flex-col gap-2">
+            {book.current_holder_id && (
+              <Link href={`/profile/${book.current_holder_id}`}>
+                <Button variant="outline" className="w-full gap-2">
+                  Contact the person who has it
+                </Button>
+              </Link>
+            )}
+            <Link href={`/book/${uuid}`}>
+              <Button variant={book.current_holder_id ? "ghost" : "outline"} className="w-full">
+                View book details
+              </Button>
+            </Link>
+          </div>
         }
       />
     )

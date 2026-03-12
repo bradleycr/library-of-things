@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { IsbnScannerDialog } from "@/components/isbn-scanner-dialog"
 import { IsbnCopyPickerDialog } from "@/components/isbn-copy-picker-dialog"
 import { findBooksByIsbn } from "@/lib/isbn-checkout"
@@ -34,14 +35,18 @@ export function IsbnCheckoutReturnDialog({
 
   const [phase, setPhase] = useState<"scanner" | "no-book" | "picker">("scanner")
   const [booksForPicker, setBooksForPicker] = useState<Book[]>([])
+  const [lastScannedIsbn, setLastScannedIsbn] = useState<string | null>(null)
 
   const redirectToCheckout = useCallback(
     (book: Book) => {
       const path = book.checkout_url.startsWith("/") ? book.checkout_url : `/${book.checkout_url}`
-      onOpenChange(false)
-      setPhase("scanner")
-      setBooksForPicker([])
+      // Navigate first so the transition is scheduled before we close the dialog
       router.push(path)
+      setTimeout(() => {
+        onOpenChange(false)
+        setPhase("scanner")
+        setBooksForPicker([])
+      }, 0)
     },
     [onOpenChange, router],
   )
@@ -50,6 +55,7 @@ export function IsbnCheckoutReturnDialog({
     (normalizedIsbn: string) => {
       const matches = findBooksByIsbn(books, normalizedIsbn)
       if (matches.length === 0) {
+        setLastScannedIsbn(normalizedIsbn)
         setPhase("no-book")
         return
       }
@@ -66,6 +72,7 @@ export function IsbnCheckoutReturnDialog({
   const handleClose = useCallback(() => {
     setPhase("scanner")
     setBooksForPicker([])
+    setLastScannedIsbn(null)
     onOpenChange(false)
   }, [onOpenChange])
 
@@ -80,6 +87,7 @@ export function IsbnCheckoutReturnDialog({
     if (!open) {
       setPhase("scanner")
       setBooksForPicker([])
+      setLastScannedIsbn(null)
     }
   }, [open])
 
@@ -89,14 +97,24 @@ export function IsbnCheckoutReturnDialog({
         <Dialog open={open} onOpenChange={handleClose}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Book not found</DialogTitle>
+              <DialogTitle>This book is not yet in the library</DialogTitle>
             </DialogHeader>
             <p className="text-muted-foreground">
-              No book with this ISBN is in the library.
+              No book with this ISBN is in the library. Would you like to add it?
             </p>
-            <Button variant="outline" onClick={handleClose} className="mt-4">
-              Close
-            </Button>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {lastScannedIsbn != null && (
+                <Link
+                  href={`/add-book?isbn=${encodeURIComponent(lastScannedIsbn)}`}
+                  onClick={() => onOpenChange(false)}
+                >
+                  <Button>Yes, add it</Button>
+                </Link>
+              )}
+              <Button variant="outline" onClick={handleClose}>
+                No, close
+              </Button>
+            </div>
           </DialogContent>
         </Dialog>
       )}

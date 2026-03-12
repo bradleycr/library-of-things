@@ -1,8 +1,9 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useRef, useCallback, Suspense } from "react"
 import Link from "next/link"
+import { useSearchParams } from "next/navigation"
 import {
   BookOpen,
   Search,
@@ -47,7 +48,8 @@ import { IsbnScannerDialog } from "@/components/isbn-scanner-dialog"
 import { generateBookCoverSvg } from "@/lib/book-cover-generator"
 import { DEFAULT_LOAN_PERIOD_DAYS, formatDefaultLoanPeriod } from "@/lib/loan-period"
 
-export default function AddBookPage() {
+function AddBookContent() {
+  const searchParams = useSearchParams()
   const { data } = useBootstrapData()
   const { card, mounted } = useLibraryCard()
   const { toast } = useToast()
@@ -92,6 +94,16 @@ export default function AddBookPage() {
   // Node recommendation dialog for Pocket Library books
   const [showNodeRecommendation, setShowNodeRecommendation] = useState(false)
   const [isbnScannerOpen, setIsbnScannerOpen] = useState(false)
+
+  // Prefill ISBN from URL (e.g. from "Scan to checkout" → book not in library → "Yes, add it")
+  useEffect(() => {
+    const isbnFromUrl = searchParams.get("isbn")?.trim()
+    if (isbnFromUrl) {
+      setIsbn(isbnFromUrl)
+      setIsbnLookedUp(false)
+      setCoverImageUrl("")
+    }
+  }, [searchParams])
 
   const lookupIsbn = useCallback(async (isbnToLookUp?: string) => {
     const value = (isbnToLookUp ?? isbn).trim().replace(/[\s-]/g, "")
@@ -822,5 +834,19 @@ export default function AddBookPage() {
         }}
       />
     </div>
+  )
+}
+
+export default function AddBookPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-[50vh] items-center justify-center">
+          <p className="text-muted-foreground">Loading…</p>
+        </div>
+      }
+    >
+      <AddBookContent />
+    </Suspense>
   )
 }
