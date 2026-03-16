@@ -39,14 +39,14 @@ export function useBootstrapData() {
   const retryCount = useRef(0)
   const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const refetch = useCallback(async (skipCache = false) => {
+  const refetch = useCallback(async (skipCache = false): Promise<BootstrapPayload | null> => {
     if (!skipCache) {
       const cached = getCachedIfFresh()
       if (cached) {
         setData(cached)
         setLoading(false)
         setError(null)
-        return
+        return cached
       }
     }
 
@@ -60,6 +60,7 @@ export function useBootstrapData() {
       setData(payload)
       setError(null)
       retryCount.current = 0
+      return payload
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to load data"
       setError(msg)
@@ -73,6 +74,7 @@ export function useBootstrapData() {
         retryCount.current += 1
         retryTimer.current = setTimeout(() => refetch(true), delay)
       }
+      return null
     } finally {
       setLoading(false)
     }

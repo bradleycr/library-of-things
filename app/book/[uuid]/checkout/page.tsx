@@ -358,7 +358,7 @@ export default function CheckoutPage({
       isProcessing={isProcessing}
       setIsProcessing={setIsProcessing}
       setCheckoutComplete={setCheckoutComplete}
-      refetchBootstrap={refetch}
+      refetchBootstrap={async () => { await refetch() }}
       isTapEntry={isTapEntry}
     />
   )
@@ -627,11 +627,14 @@ function ReturnFlow({
     if (!returnAtLocationAcknowledged) return
     setIsSubmitting(true)
     setReturningNodeId(nodeId)
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 8_000)
     try {
       const res = await fetch("/api/books/return", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
+        signal: controller.signal,
         body: JSON.stringify({
           book_id: book.id,
           user_id: userId,
@@ -639,6 +642,7 @@ function ReturnFlow({
           notes: returnNotes.trim() || undefined,
         }),
       })
+      clearTimeout(timeoutId)
       if (res.ok) onReturnComplete()
       else {
         const j = await res.json().catch(() => ({}))
@@ -649,11 +653,14 @@ function ReturnFlow({
         })
       }
     } catch (e) {
-      console.error(e)
+      clearTimeout(timeoutId)
+      const isTimeout = e instanceof Error && (e.name === "AbortError" || /timeout|abort/i.test(e.message))
       toast({
         variant: "destructive",
-        title: "Something went wrong",
-        description: "Please try again.",
+        title: isTimeout ? "Request timed out" : "Something went wrong",
+        description: isTimeout
+          ? "Please try again, or open the return page by scanning the book's QR or NFC tag."
+          : "Please try again.",
       })
     } finally {
       setIsSubmitting(false)

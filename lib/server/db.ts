@@ -53,7 +53,7 @@ function isTransient(err: unknown): boolean {
   )
 }
 
-const RETRY_LIMIT = 2
+const RETRY_LIMIT = 1
 const RETRY_BASE_MS = 600
 
 function pause(ms: number) {
@@ -70,9 +70,8 @@ function pause(ms: number) {
  *          a cluster of requests (page + bootstrap + actions) without
  *          forcing a new TLS handshake every time.
  *
- * connectionTimeoutMillis: 8s — aggressive enough to fail fast so our
- *          retry logic can spin up a fresh attempt rather than blocking
- *          for ages on a single try.
+ * connectionTimeoutMillis: 3s — fail fast so return/checkout either complete
+ *          quickly or surface a clear error; one retry keeps worst case ~7s.
  */
 const globalForDb = globalThis as unknown as { pool?: Pool }
 
@@ -93,7 +92,7 @@ function getPool(): Pool {
     ssl: sslConfig(connStr),
     max: 1,
     idleTimeoutMillis: 20_000,
-    connectionTimeoutMillis: 8_000,
+    connectionTimeoutMillis: 3_000,
   })
 
   /* Surface idle-client errors so Node doesn't crash with unhandled rejection. */

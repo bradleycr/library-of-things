@@ -147,7 +147,9 @@ function MyBooksContent() {
     if (!returnBook || !currentUser) return
     setReturning(true)
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 20_000)
+    const timeoutMs = 8_000
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+    const bookIdReturning = returnBook.id
     try {
       const res = await fetch("/api/books/return", {
         method: "POST",
@@ -163,7 +165,23 @@ function MyBooksContent() {
       })
       clearTimeout(timeoutId)
       const json = await res.json()
-      if (!res.ok) throw new Error(json.error ?? "Return failed")
+      if (!res.ok) {
+        if (res.status === 503) {
+          const fresh = await refetch()
+          const stillBorrowed = fresh?.books?.some(
+            (b) => b.id === bookIdReturning && b.current_holder_id === currentUser?.id
+          )
+          if (!stillBorrowed) {
+            closeReturnDialog()
+            toast({
+              title: "Book returned",
+              description: "The return completed. Your list has been updated.",
+            })
+            return
+          }
+        }
+        throw new Error(json.error ?? "Return failed")
+      }
       await refetch()
       closeReturnDialog()
       toast({
@@ -174,6 +192,20 @@ function MyBooksContent() {
       clearTimeout(timeoutId)
       const isTimeout = (err instanceof Error && err.name === "AbortError") ||
         (err instanceof Error && /timeout|abort/i.test(err.message))
+      if (isTimeout) {
+        const fresh = await refetch()
+        const stillBorrowed = fresh?.books?.some(
+          (b) => b.id === bookIdReturning && b.current_holder_id === currentUser?.id
+        )
+        if (!stillBorrowed) {
+          closeReturnDialog()
+          toast({
+            title: "Book returned",
+            description: "The return completed. Your list has been updated.",
+          })
+          return
+        }
+      }
       toast({
         variant: "destructive",
         title: "Could not return book",
