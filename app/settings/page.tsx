@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from "react"
 import { useRouter } from "next/navigation"
-import { Trash2, Save, Loader2, CreditCard, LogIn } from "lucide-react"
+import { Trash2, Save, Loader2, CreditCard, LogIn, LogOut } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -20,6 +20,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { GetLibraryCardModal } from "@/components/get-library-card-modal"
 import { LoginLibraryCardModal } from "@/components/login-library-card-modal"
 import { useBootstrapData } from "@/hooks/use-bootstrap-data"
@@ -88,6 +98,9 @@ export default function SettingsPage() {
   const [publicProfileDialogOpen, setPublicProfileDialogOpen] = useState(false)
   const [pendingPrivate, setPendingPrivate] = useState(false)
   const [savingPrivacy, setSavingPrivacy] = useState(false)
+
+  /* ── Remove card from this device ── */
+  const [removeCardConfirmOpen, setRemoveCardConfirmOpen] = useState(false)
 
   /* ── Delete account ── */
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -706,6 +719,48 @@ export default function SettingsPage() {
                   </div>
                 </DialogContent>
               </Dialog>
+            </CardContent>
+          </Card>
+
+          {/* ─── Library card on this device ─── */}
+          <Card className="border-border">
+            <CardHeader>
+              <CardTitle className="text-card-foreground">Library card on this device</CardTitle>
+              <CardDescription>
+                Your library card is stored on this browser. Remove it to sign out here (e.g. on a shared device). You can log in again with your card number and PIN.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button
+                variant="outline"
+                className="gap-2 text-muted-foreground"
+                onClick={() => setRemoveCardConfirmOpen(true)}
+              >
+                <LogOut className="h-4 w-4" />
+                Remove card from this device
+              </Button>
+              <AlertDialog open={removeCardConfirmOpen} onOpenChange={setRemoveCardConfirmOpen}>
+                <AlertDialogContent className="sm:max-w-md">
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Remove card from this device?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Make sure you save your card number and PIN. Otherwise, you won&apos;t have access to this account.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => {
+                        clearCard()
+                        setRemoveCardConfirmOpen(false)
+                      }}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      Remove card
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </CardContent>
           </Card>
 

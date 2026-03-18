@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { normalizeIsbn } from "@/lib/isbn-utils"
+import { normalizeIsbn, validateIsbnCheckDigit, isBooklandEan13 } from "@/lib/isbn-utils"
 
 export interface IsbnScannerDialogProps {
   open: boolean
@@ -38,6 +38,12 @@ export function IsbnScannerDialog({
     null,
   )
   const detectedRef = useRef(false)
+  /** Require 3 consecutive identical *valid* reads (check digit) to avoid accepting misreads. */
+  const lastCodeRef = useRef<string | null>(null)
+  const lastCodeAtRef = useRef<number>(0)
+  const sameCodeCountRef = useRef<number>(0)
+  const STABLE_READ_MS = 400
+  const STABLE_READ_COUNT = 3
 
   const stopScanner = useCallback(async () => {
     const Quagga = quaggaRef.current
@@ -62,6 +68,32 @@ export function IsbnScannerDialog({
         setStatus("error")
         return
       }
+      if (!validateIsbnCheckDigit(normalized)) {
+        setMessage("Invalid barcode (check digit). Aim at the book's barcode and hold steady, or use Take photo.")
+        setStatus("error")
+        sameCodeCountRef.current = 0
+        lastCodeRef.current = null
+        return
+      }
+      if (normalized.length === 13 && !isBooklandEan13(normalized)) {
+        setMessage("Not a book barcode. Point at the ISBN on the back of the book (usually starts with 978 or 979).")
+        setStatus("error")
+        sameCodeCountRef.current = 0
+        lastCodeRef.current = null
+        return
+      }
+      const now = Date.now()
+      const lastCode = lastCodeRef.current
+      const lastAt = lastCodeAtRef.current
+      if (normalized === lastCode && now - lastAt <= STABLE_READ_MS) {
+        sameCodeCountRef.current += 1
+      } else {
+        sameCodeCountRef.current = 1
+      }
+      lastCodeRef.current = normalized
+      lastCodeAtRef.current = now
+      if (sameCodeCountRef.current < STABLE_READ_COUNT) return
+
       detectedRef.current = true
       stopScanner().then(() => {
         onScan(normalized)
@@ -105,6 +137,9 @@ export function IsbnScannerDialog({
       }
 
       detectedRef.current = false
+      lastCodeRef.current = null
+      lastCodeAtRef.current = 0
+      sameCodeCountRef.current = 0
       setStatus("loading")
       setMessage("Opening camera…")
 
@@ -128,13 +163,17 @@ export function IsbnScannerDialog({
               constraints: {
                 width: 640,
                 height: 480,
-                facingMode: "environment",
+                // Prefer back camera on phones; on desktop (e.g. MacBook) there is no
+                // "environment" camera, so use ideal to avoid OverconstrainedError
+                // and let the browser use the only available camera.
+                facingMode: { ideal: "environment" },
               },
             },
             decoder: {
               readers: ["ean_reader", "ean_8_reader"],
             },
             locate: true,
+            frequency: 8,
           },
           (err: Error | null) => {
             if (cancelled) return
@@ -208,13 +247,23 @@ export function IsbnScannerDialog({
             return
           }
           const normalized = normalizeIsbn(code)
-          if (normalized) {
-            onScan(normalized)
-            onOpenChange(false)
-          } else {
+          if (!normalized) {
             setMessage("Barcode not recognized as ISBN (need 10 or 13 digits). Try another photo.")
             setStatus("error")
+            return
           }
+          if (!validateIsbnCheckDigit(normalized)) {
+            setMessage("Invalid barcode (check digit). Try a clearer photo of the book's barcode.")
+            setStatus("error")
+            return
+          }
+          if (normalized.length === 13 && !isBooklandEan13(normalized)) {
+            setMessage("Not a book barcode. Photo the ISBN on the back of the book (usually starts with 978 or 979).")
+            setStatus("error")
+            return
+          }
+          onScan(normalized)
+          onOpenChange(false)
         },
       )
     },

@@ -340,6 +340,9 @@ export default function CheckoutPage({
         returnNotes={returnNotes}
         setReturnNotes={setReturnNotes}
         isTapEntry={isTapEntry}
+        refetchBootstrap={async () => {
+          await refetch()
+        }}
       />
     )
   }
@@ -608,6 +611,7 @@ function ReturnFlow({
   returnNotes,
   setReturnNotes,
   isTapEntry,
+  refetchBootstrap,
 }: {
   book: Book
   nodes: Node[]
@@ -618,6 +622,7 @@ function ReturnFlow({
   returnNotes: string
   setReturnNotes: (s: string) => void
   isTapEntry: boolean
+  refetchBootstrap: () => Promise<void>
 }) {
   const { toast } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -643,18 +648,43 @@ function ReturnFlow({
         }),
       })
       clearTimeout(timeoutId)
-      if (res.ok) onReturnComplete()
-      else {
-        const j = await res.json().catch(() => ({}))
-        toast({
-          variant: "destructive",
-          title: "Return failed",
-          description: (j?.error as string) ?? "Please try again.",
-        })
+      if (res.ok) {
+        onReturnComplete()
+        return
       }
+
+      const j = await res.json().catch(() => ({}))
+
+      if (res.status === 503) {
+        const fresh = await refetchBootstrap()
+        const stillBorrowed = fresh?.books?.some(
+          (b) => b.id === book.id && b.current_holder_id === userId,
+        )
+        if (!stillBorrowed) {
+          onReturnComplete()
+          return
+        }
+      }
+
+      toast({
+        variant: "destructive",
+        title: "Return failed",
+        description: (j?.error as string) ?? "Please try again.",
+      })
     } catch (e) {
       clearTimeout(timeoutId)
       const isTimeout = e instanceof Error && (e.name === "AbortError" || /timeout|abort/i.test(e.message))
+      if (isTimeout) {
+        const fresh = await refetchBootstrap()
+        const stillBorrowed = fresh?.books?.some(
+          (b) => b.id === book.id && b.current_holder_id === userId,
+        )
+        if (!stillBorrowed) {
+          onReturnComplete()
+          return
+        }
+      }
+
       toast({
         variant: "destructive",
         title: isTimeout ? "Request timed out" : "Something went wrong",

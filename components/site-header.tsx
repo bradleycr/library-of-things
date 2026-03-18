@@ -8,13 +8,11 @@ import {
   X,
   Search,
   User,
-  Settings,
   LayoutDashboard,
   ScrollText,
   PlusCircle,
   CreditCard,
   ChevronDown,
-  LogOut,
   Camera,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -24,16 +22,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
 import { GetLibraryCardModal, type GetLibraryCardModalMode } from "@/components/get-library-card-modal"
 import { LoginLibraryCardModal } from "@/components/login-library-card-modal"
 import { IsbnCheckoutReturnDialog } from "@/components/isbn-checkout-return-dialog"
@@ -58,23 +46,12 @@ export function SiteHeader() {
   const [libraryCardModalOpen, setLibraryCardModalOpen] = useState(false)
   const [libraryCardModalMode, setLibraryCardModalMode] = useState<GetLibraryCardModalMode>("view")
   const [loginModalOpen, setLoginModalOpen] = useState(false)
-  const [removeCardConfirmOpen, setRemoveCardConfirmOpen] = useState(false)
   const [scanCheckoutOpen, setScanCheckoutOpen] = useState(false)
-  const { card, clearCard, sessionError } = useLibraryCard()
+  const { card } = useLibraryCard()
 
   useEffect(() => {
     setMobileOpen(false)
   }, [pathname])
-
-  const handleRemoveCardClick = () => {
-    setRemoveCardConfirmOpen(true)
-    setMobileOpen(false)
-  }
-
-  const handleRemoveCardConfirm = () => {
-    clearCard()
-    setRemoveCardConfirmOpen(false)
-  }
 
   const openLibraryCardModal = (mode: GetLibraryCardModalMode) => {
     setLibraryCardModalMode(mode)
@@ -172,26 +149,11 @@ export function SiteHeader() {
                   Profile
                 </Link>
               </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/settings" className="flex items-center gap-2">
-                  <Settings className="h-4 w-4" />
-                  Settings
-                </Link>
-              </DropdownMenuItem>
               {card && (
-                <>
-                  <DropdownMenuItem onClick={() => openLibraryCardModal("view")}>
-                    <CreditCard className="h-4 w-4" />
-                    View library card
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={handleRemoveCardClick}
-                    className="text-muted-foreground"
-                  >
-                    <LogOut className="h-4 w-4" />
-                    Remove card from this device
-                  </DropdownMenuItem>
-                </>
+                <DropdownMenuItem onClick={() => openLibraryCardModal("view")}>
+                  <CreditCard className="h-4 w-4" />
+                  View library card
+                </DropdownMenuItem>
               )}
             </DropdownMenuContent>
           </DropdownMenu>
@@ -223,26 +185,6 @@ export function SiteHeader() {
           onOpenChange={setScanCheckoutOpen}
         />
       )}
-
-      <AlertDialog open={removeCardConfirmOpen} onOpenChange={setRemoveCardConfirmOpen}>
-        <AlertDialogContent className="sm:max-w-md">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remove card from this device?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Make sure you save your card number and PIN. Otherwise, you won&apos;t have access to this account.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleRemoveCardConfirm}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Remove card
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       {mobileOpen && (
         <nav className="border-t border-border bg-background px-4 pb-4 pt-2 md:hidden">
@@ -315,34 +257,18 @@ export function SiteHeader() {
                   Profile
                 </Button>
               </Link>
-              <Link href="/settings" onClick={() => setMobileOpen(false)}>
-                <Button variant="ghost" className="w-full justify-start gap-3 text-foreground">
-                  <Settings className="h-5 w-5" />
-                  Settings
-                </Button>
-              </Link>
               {card && (
-                <>
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-start gap-3 text-foreground"
-                    onClick={() => {
-                      openLibraryCardModal("view")
-                      setMobileOpen(false)
-                    }}
-                  >
-                    <CreditCard className="h-5 w-5" />
-                    View library card
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-start gap-3 text-muted-foreground"
-                    onClick={handleRemoveCardClick}
-                  >
-                    <LogOut className="h-5 w-5" />
-                    Remove card from this device
-                  </Button>
-                </>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start gap-3 text-foreground"
+                  onClick={() => {
+                    openLibraryCardModal("view")
+                    setMobileOpen(false)
+                  }}
+                >
+                  <CreditCard className="h-5 w-5" />
+                  View library card
+                </Button>
               )}
             </div>
           </div>

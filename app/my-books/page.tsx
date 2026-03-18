@@ -46,7 +46,7 @@ import { useToast } from "@/hooks/use-toast"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { getAvatarUrl, getInitials, getAvatarSeed } from "@/lib/avatar"
 import { IsbnScannerDialog } from "@/components/isbn-scanner-dialog"
-import { normalizeIsbn } from "@/lib/isbn-utils"
+import { normalizeIsbn, isbn10To13 } from "@/lib/isbn-utils"
 import { ISBN_CHECKOUT_RETURN_ENABLED } from "@/lib/feature-flags"
 import type { Book, User } from "@/lib/types"
 
@@ -116,7 +116,12 @@ function MyBooksContent() {
     (scannedIsbn: string) => {
       if (!returnBook) return
       const bookNorm = returnBook.isbn ? normalizeIsbn(returnBook.isbn) : null
-      if (bookNorm !== null && bookNorm !== scannedIsbn) {
+      const bookIsbn13 = bookNorm && bookNorm.length === 10 ? isbn10To13(bookNorm) : bookNorm
+      const matchesScanned =
+        bookNorm !== null &&
+        (bookNorm === scannedIsbn || (bookIsbn13 != null && bookIsbn13 === scannedIsbn))
+
+      if (!matchesScanned) {
         toast({
           variant: "destructive",
           title: "Wrong book",
