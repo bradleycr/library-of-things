@@ -60,6 +60,31 @@ function coverImageUrlFor(normalizedIsbn: string) {
   return `https://covers.openlibrary.org/b/isbn/${encodeURIComponent(normalizedIsbn)}-L.jpg`
 }
 
+/**
+ * Verify that OpenLibrary actually has a cover for this ISBN.
+ * Appending `?default=false` makes them return 404 instead of a 1px blank.
+ * Uses a HEAD request to avoid downloading the full image.
+ */
+async function verifiedCoverUrl(normalizedIsbn: string): Promise<string | undefined> {
+  const url = coverImageUrlFor(normalizedIsbn)
+  try {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 3_000)
+    const res = await fetch(`${url}?default=false`, {
+      method: "HEAD",
+      signal: controller.signal,
+      redirect: "follow",
+    })
+    clearTimeout(timeoutId)
+    if (res.ok) return url
+  } catch {
+    // Network error or timeout — optimistically return the URL anyway;
+    // the client BookCover component will handle the fallback.
+    return url
+  }
+  return undefined
+}
+
 async function fetchEditionMetadata(normalizedIsbn: string): Promise<IsbnMetadata | null> {
   const edition = await fetchJson<OpenLibraryEdition>(
     `https://openlibrary.org/isbn/${encodeURIComponent(normalizedIsbn)}.json`,
@@ -88,13 +113,15 @@ async function fetchEditionMetadata(normalizedIsbn: string): Promise<IsbnMetadat
     }
   }
 
+  const coverImageUrl = await verifiedCoverUrl(normalizedIsbn)
+
   return {
     isbn: normalizedIsbn,
     title: edition.title.trim(),
     author,
     edition: edition.edition_name?.trim() || edition.publish_date?.trim() || undefined,
     description,
-    coverImageUrl: coverImageUrlFor(normalizedIsbn),
+    coverImageUrl,
   }
 }
 
@@ -105,6 +132,8 @@ async function fetchSearchMetadata(normalizedIsbn: string): Promise<IsbnMetadata
   const doc = search?.docs?.[0]
   if (!doc?.title) return null
 
+  const coverImageUrl = await verifiedCoverUrl(normalizedIsbn)
+
   return {
     isbn: normalizedIsbn,
     title: doc.title.trim(),
@@ -113,7 +142,7 @@ async function fetchSearchMetadata(normalizedIsbn: string): Promise<IsbnMetadata
       typeof doc.first_publish_year === "number"
         ? String(doc.first_publish_year)
         : undefined,
-    coverImageUrl: coverImageUrlFor(normalizedIsbn),
+    coverImageUrl,
   }
 }
 

@@ -31,7 +31,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { BookCover } from "@/components/book-cover"
-import { getBookCoverUrl } from "@/lib/book-cover-generator"
+import { getBookCoverSrcs } from "@/lib/book-cover-generator"
 import { formatLocationForDisplay } from "@/lib/format-location"
 import { useBootstrapData } from "@/hooks/use-bootstrap-data"
 import { useLibraryCard } from "@/hooks/use-library-card"
@@ -39,7 +39,7 @@ import { useToast } from "@/hooks/use-toast"
 import { IsbnScannerDialog } from "@/components/isbn-scanner-dialog"
 import { normalizeIsbn } from "@/lib/isbn-utils"
 import { ISBN_CHECKOUT_RETURN_ENABLED } from "@/lib/feature-flags"
-import { DEFAULT_LOAN_PERIOD_DAYS } from "@/lib/loan-period"
+import { DEFAULT_LOAN_PERIOD_DAYS, resolveLoanPeriodDays } from "@/lib/loan-period"
 
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("en-US", {
@@ -83,6 +83,9 @@ export default function BookDetailPage({
   const book = books.find((b) => b.id === uuid)
   const node = book?.current_node_id ? nodes.find((n) => n.id === book.current_node_id) : null
   const defaultLoanPeriodDays = data?.config?.default_loan_period_days ?? DEFAULT_LOAN_PERIOD_DAYS
+  const suggestedLoanPeriodDays = book
+    ? resolveLoanPeriodDays(book.lending_terms?.loan_period_days, defaultLoanPeriodDays)
+    : defaultLoanPeriodDays
   const [isbnScannerOpen, setIsbnScannerOpen] = useState(false)
   const isHolder = !!(book && card?.user_id && book.current_holder_id === card.user_id)
 
@@ -178,7 +181,7 @@ export default function BookDetailPage({
         <div className="grid gap-8 md:grid-cols-[280px_1fr]">
           {/* Cover */}
           <div className="aspect-[2/3] overflow-hidden rounded-lg bg-muted shadow-md">
-            <BookCover src={getBookCoverUrl(book)} title={book.title} />
+            <BookCover {...getBookCoverSrcs(book)} title={book.title} />
           </div>
 
           {/* Details */}
@@ -430,7 +433,7 @@ export default function BookDetailPage({
                   <div className="flex items-center gap-2 text-card-foreground">
                     <Clock className="h-4 w-4 text-muted-foreground" />
                     <span>
-                      {book.lending_terms?.loan_period_days ?? defaultLoanPeriodDays} day borrow period (suggested)
+                      {suggestedLoanPeriodDays} day borrow period (suggested)
                     </span>
                   </div>
                   <div className="flex items-center gap-2 text-card-foreground">

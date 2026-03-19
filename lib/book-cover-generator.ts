@@ -11,6 +11,23 @@ export function getBookCoverUrl(book: {
   return book.cover_image_url?.trim() || `/api/books/${book.id}/cover`
 }
 
+/**
+ * Returns both the primary cover source and a fallback (the generated SVG
+ * endpoint). Consumers should pass both to `<BookCover>` so it can chain
+ * gracefully when the primary image is a dead OpenLibrary URL or data URI.
+ */
+export function getBookCoverSrcs(book: {
+  id: string
+  cover_image_url?: string | null
+}): { src: string; fallbackSrc?: string } {
+  const generated = `/api/books/${book.id}/cover`
+  const primary = book.cover_image_url?.trim()
+  if (primary) {
+    return { src: primary, fallbackSrc: generated }
+  }
+  return { src: generated }
+}
+
 const PASTEL_PALETTE = [
   "#E8D5E0", "#F5D7E3", "#F0E6EF", "#E8E0E8", "#DDD5E8",
   "#D5E0E8", "#D5E8E5", "#E0E8D5", "#E8E5D5", "#E8DDD5",

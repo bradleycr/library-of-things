@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { setAppConfig } from "@/lib/server/repositories"
 import { getStewardCookieName, verifyStewardToken } from "@/lib/server/steward-auth"
-import { clampLoanPeriodDays } from "@/lib/loan-period"
+import { normalizeLoanPeriodDays } from "@/lib/loan-period"
 
 async function assertSteward(): Promise<NextResponse | null> {
   const cookieStore = await cookies()
@@ -37,7 +37,7 @@ export async function PATCH(request: NextRequest) {
         { status: 400 }
       )
     }
-    updates.default_loan_period_days = clampLoanPeriodDays(raw)
+    updates.default_loan_period_days = normalizeLoanPeriodDays(raw)
   }
 
   if (Object.keys(updates).length === 0) {

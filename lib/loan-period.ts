@@ -19,3 +19,36 @@ export function formatDefaultLoanPeriod(days: number = DEFAULT_LOAN_PERIOD_DAYS)
 export function clampLoanPeriodDays(value: number): number {
   return Math.max(1, Math.min(365, Math.round(value)))
 }
+
+/**
+ * The app’s default is 60 days, and **21 days should not be used anywhere**.
+ * Older deployments may have baked 21 into `books.lending_terms` and/or config.
+ * We normalize it away to keep all copy + due dates aligned.
+ */
+export const LEGACY_BAKED_IN_LOAN_PERIOD_DAYS = 21
+
+/** Clamp + normalize disallowed legacy value (21 → 60). */
+export function normalizeLoanPeriodDays(value: number): number {
+  const clamped = clampLoanPeriodDays(value)
+  return clamped === LEGACY_BAKED_IN_LOAN_PERIOD_DAYS ? DEFAULT_LOAN_PERIOD_DAYS : clamped
+}
+
+/**
+ * Effective borrow window for a book: steward/custom value when set, otherwise
+ * library default, with legacy 21 → 60 normalization.
+ */
+export function resolveLoanPeriodDays(
+  storedLoanPeriodDays: unknown,
+  configDefault: number
+): number {
+  const fallback = normalizeLoanPeriodDays(configDefault)
+  const raw =
+    typeof storedLoanPeriodDays === "number"
+      ? storedLoanPeriodDays
+      : storedLoanPeriodDays != null && String(storedLoanPeriodDays).trim() !== ""
+        ? Number(storedLoanPeriodDays)
+        : NaN
+  if (!Number.isFinite(raw) || raw < 1) return fallback
+  const normalized = normalizeLoanPeriodDays(raw)
+  return normalized
+}

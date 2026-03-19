@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/select"
 import { BookCard } from "@/components/book-card"
 import { BookCover } from "@/components/book-cover"
-import { getBookCoverUrl } from "@/lib/book-cover-generator"
+import { getBookCoverSrcs } from "@/lib/book-cover-generator"
 import { formatLocationForDisplay } from "@/lib/format-location"
 import { useBootstrapData } from "@/hooks/use-bootstrap-data"
 import type { Book } from "@/lib/types"
@@ -344,7 +344,7 @@ function ExplorePageContent() {
               >
                 <div className="h-16 w-12 shrink-0 overflow-hidden rounded bg-muted">
                   <BookCover
-                    src={getBookCoverUrl(book)}
+                    {...getBookCoverSrcs(book)}
                     title={book.title}
                     className="h-full w-full object-cover"
                   />

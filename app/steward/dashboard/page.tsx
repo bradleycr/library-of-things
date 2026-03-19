@@ -64,7 +64,12 @@ import {
 import { useBootstrapData } from "@/hooks/use-bootstrap-data"
 import { compressBookCoverPhoto } from "@/lib/image-utils"
 import type { IsbnMetadataLookupResponse } from "@/lib/isbn-lookup"
-import { DEFAULT_LOAN_PERIOD_DAYS, clampLoanPeriodDays } from "@/lib/loan-period"
+import {
+  DEFAULT_LOAN_PERIOD_DAYS,
+  clampLoanPeriodDays,
+  normalizeLoanPeriodDays,
+  resolveLoanPeriodDays,
+} from "@/lib/loan-period"
 import type { Book, Node as NodeType, User } from "@/lib/types"
 
 type StewardBookStatus = "available" | "checked_out" | "unavailable" | "missing"
@@ -185,7 +190,10 @@ export default function StewardDashboardPage() {
         current_holder_id: editingBook.current_holder_id ?? "",
         note: "",
         contact_required: editingBook.lending_terms?.contact_required ?? false,
-        loan_period_days: editingBook.lending_terms?.loan_period_days ?? defaultLoanPeriodDays,
+        loan_period_days: resolveLoanPeriodDays(
+          editingBook.lending_terms?.loan_period_days,
+          defaultLoanPeriodDays
+        ),
       })
       setEditError(null)
     }
@@ -508,7 +516,9 @@ export default function StewardDashboardPage() {
           lending_terms: {
             ...editingBook.lending_terms,
             contact_required: editForm.contact_required,
-            loan_period_days: clampLoanPeriodDays(Number(editForm.loan_period_days) || defaultLoanPeriodDays),
+            loan_period_days: normalizeLoanPeriodDays(
+              clampLoanPeriodDays(Number(editForm.loan_period_days) || defaultLoanPeriodDays)
+            ),
           },
         }),
       })
@@ -987,7 +997,9 @@ export default function StewardDashboardPage() {
                 onChange={(e) =>
                   setConfigForm((f) => ({
                     ...f,
-                    default_loan_period_days: Math.max(1, Math.min(365, Number(e.target.value) || DEFAULT_LOAN_PERIOD_DAYS)),
+                    default_loan_period_days: normalizeLoanPeriodDays(
+                      Math.max(1, Math.min(365, Number(e.target.value) || DEFAULT_LOAN_PERIOD_DAYS))
+                    ),
                   }))
                 }
               />

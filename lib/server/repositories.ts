@@ -1,7 +1,11 @@
 import "server-only"
 
 import { MAX_BOOKS_CHECKED_OUT } from "@/lib/constants"
-import { DEFAULT_LOAN_PERIOD_DAYS } from "@/lib/loan-period"
+import {
+  DEFAULT_LOAN_PERIOD_DAYS,
+  normalizeLoanPeriodDays,
+  resolveLoanPeriodDays,
+} from "@/lib/loan-period"
 import type { Book, LoanEvent, Node, TrustEvent, User } from "@/lib/types"
 import { resilientQuery, resilientConnect } from "@/lib/server/db"
 import {
@@ -175,11 +179,13 @@ export async function getAppConfig(): Promise<AppConfig> {
     )
     const row = rows[0]
     if (row && typeof row.value === "number" && row.value >= 1 && row.value <= 365) {
-      return { default_loan_period_days: Math.round(row.value) }
+      return { default_loan_period_days: normalizeLoanPeriodDays(row.value) }
     }
     if (row && typeof row.value === "string") {
       const n = parseInt(row.value, 10)
-      if (!Number.isNaN(n) && n >= 1 && n <= 365) return { default_loan_period_days: n }
+      if (!Number.isNaN(n) && n >= 1 && n <= 365) {
+        return { default_loan_period_days: normalizeLoanPeriodDays(n) }
+      }
     }
   } catch {
     // Table may not exist yet (e.g. before ensure-schema); use defaults.
@@ -192,7 +198,7 @@ export async function setAppConfig(updates: Partial<AppConfig>): Promise<AppConf
   const client = await resilientConnect()
   try {
     if (typeof updates.default_loan_period_days === "number") {
-      const days = Math.max(1, Math.min(365, Math.round(updates.default_loan_period_days)))
+      const days = normalizeLoanPeriodDays(updates.default_loan_period_days)
       await client.query(
         `insert into app_config (key, value, updated_at) values ('default_loan_period_days', $1::jsonb, now())
          on conflict (key) do update set value = $1::jsonb, updated_at = now()`,
@@ -286,15 +292,19 @@ export async function updateBook(
       input.lending_terms != null
         ? input.lending_terms
         : ((current.lending_terms as Book["lending_terms"]) ?? {})
+    // 21 days is no longer valid anywhere; normalize legacy/stale values on write.
+    if (Number(lending_terms_obj?.loan_period_days) === 21) {
+      lending_terms_obj.loan_period_days = config.default_loan_period_days
+    }
     const lending_terms = JSON.stringify(lending_terms_obj)
 
     const availability_status =
       input.availability_status !== undefined
         ? input.availability_status
         : current.availability_status
-    const loanPeriodDays = Math.max(
-      1,
-      Number(lending_terms_obj?.loan_period_days) || config.default_loan_period_days
+    const loanPeriodDays = resolveLoanPeriodDays(
+      lending_terms_obj?.loan_period_days,
+      config.default_loan_period_days
     )
     const expected_return_date =
       availability_status === "checked_out"
@@ -828,7 +838,10 @@ export async function checkoutBook(params: { bookId: string; userId: string }) {
 
     const displayNameForPublic = await getPublicDisplayNameWithClient(client, params.userId)
 
-    const loanDays = Number(book.lending_terms?.loan_period_days) || config.default_loan_period_days
+    const loanDays = resolveLoanPeriodDays(
+      book.lending_terms?.loan_period_days,
+      config.default_loan_period_days
+    )
     const expectedReturn = new Date(Date.now() + loanDays * 24 * 60 * 60 * 1000).toISOString()
     await client.query(
       `update books

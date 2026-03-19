@@ -4,6 +4,7 @@ import { createBook, getAppConfig } from "@/lib/server/repositories"
 import { getSessionUserId } from "@/lib/server/session"
 import { parseJsonBody, isUuid, LIMITS, clampString } from "@/lib/server/validate"
 import { sanitizeCoverUrl } from "@/lib/server/sanitize-cover-url"
+import { normalizeLoanPeriodDays } from "@/lib/loan-period"
 
 export async function POST(request: NextRequest) {
   const parsed = await parseJsonBody<Record<string, unknown>>(request)
@@ -118,7 +119,10 @@ export async function POST(request: NextRequest) {
     requires_id: typeof raw.requires_id === "boolean" ? raw.requires_id : defaultTerms.requires_id,
     pseudonymous_allowed: typeof raw.pseudonymous_allowed === "boolean" ? raw.pseudonymous_allowed : defaultTerms.pseudonymous_allowed,
     contact_required: typeof raw.contact_required === "boolean" ? raw.contact_required : defaultTerms.contact_required,
-    loan_period_days: typeof raw.loan_period_days === "number" && raw.loan_period_days >= 1 ? raw.loan_period_days : defaultTerms.loan_period_days,
+    loan_period_days:
+      typeof raw.loan_period_days === "number" && raw.loan_period_days >= 1
+        ? normalizeLoanPeriodDays(raw.loan_period_days)
+        : defaultTerms.loan_period_days,
     contact_opt_in: typeof raw.contact_opt_in === "boolean" ? raw.contact_opt_in : defaultTerms.contact_opt_in,
   }
   mergedTerms.shipping_allowed = false

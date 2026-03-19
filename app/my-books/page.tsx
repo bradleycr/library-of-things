@@ -38,7 +38,7 @@ import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { BookCover } from "@/components/book-cover"
 import { TrustScoreWithBreakdown } from "@/components/trust-score-breakdown"
-import { getBookCoverUrl } from "@/lib/book-cover-generator"
+import { getBookCoverSrcs } from "@/lib/book-cover-generator"
 import { formatLocationForDisplay } from "@/lib/format-location"
 import { useBootstrapData } from "@/hooks/use-bootstrap-data"
 import { useLibraryCard } from "@/hooks/use-library-card"
@@ -445,7 +445,7 @@ function MyBooksContent() {
                       <CardContent className="flex gap-4 p-4">
                         <Link href={`/book/${book.id}`} className="shrink-0">
                           <div className="h-28 w-20 overflow-hidden rounded bg-muted">
-                            <BookCover src={getBookCoverUrl(book)} title={book.title} />
+                            <BookCover {...getBookCoverSrcs(book)} title={book.title} />
                           </div>
                         </Link>
                         <div className="flex flex-1 flex-col">
@@ -530,7 +530,7 @@ function MyBooksContent() {
                     <CardContent className="flex gap-4 p-4">
                       <Link href={`/book/${book.id}`} className="shrink-0">
                         <div className="h-28 w-20 overflow-hidden rounded bg-muted">
-                          <BookCover src={getBookCoverUrl(book)} title={book.title} />
+                          <BookCover {...getBookCoverSrcs(book)} title={book.title} />
                         </div>
                       </Link>
                       <div className="flex flex-1 flex-col">

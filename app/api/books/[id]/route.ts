@@ -5,6 +5,7 @@ import { updateBook, deleteBook } from "@/lib/server/repositories"
 import { getStewardCookieName, verifyStewardToken } from "@/lib/server/steward-auth"
 import { parseJsonBody, isUuid, LIMITS, clampString } from "@/lib/server/validate"
 import { sanitizeCoverUrl } from "@/lib/server/sanitize-cover-url"
+import { normalizeLoanPeriodDays } from "@/lib/loan-period"
 
 /**
  * DELETE /api/books/[id]
@@ -131,6 +132,12 @@ export async function PATCH(
   let parsedTerms: LendingTerms | undefined
   if (lending_terms != null && typeof lending_terms === "object") {
     parsedTerms = lending_terms as unknown as LendingTerms
+    // 21 days is deprecated; normalize any incoming value immediately.
+    if (typeof (parsedTerms as any)?.loan_period_days === "number") {
+      ;(parsedTerms as any).loan_period_days = normalizeLoanPeriodDays(
+        (parsedTerms as any).loan_period_days
+      )
+    }
   }
 
   try {

@@ -20,13 +20,13 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { BookCover } from "@/components/book-cover"
-import { getBookCoverUrl } from "@/lib/book-cover-generator"
+import { getBookCoverSrcs } from "@/lib/book-cover-generator"
 import type { BootstrapPayload } from "@/lib/client/bootstrap"
 import { useBootstrapData } from "@/hooks/use-bootstrap-data"
 import { useLibraryCard } from "@/hooks/use-library-card"
 import { useToast } from "@/hooks/use-toast"
 import { MAX_BOOKS_CHECKED_OUT } from "@/lib/constants"
-import { DEFAULT_LOAN_PERIOD_DAYS } from "@/lib/loan-period"
+import { DEFAULT_LOAN_PERIOD_DAYS, resolveLoanPeriodDays } from "@/lib/loan-period"
 import type { Book, Node } from "@/lib/types"
 
 // ---------------------------------------------------------------------------
@@ -76,6 +76,11 @@ export default function CheckoutPage({
   const book = tapData?.book ?? (data?.books ?? []).find((b) => b.id === uuid)
   const nodes = tapData?.nodes ?? data?.nodes ?? []
   const defaultLoanPeriodDays = data?.config?.default_loan_period_days ?? DEFAULT_LOAN_PERIOD_DAYS
+  /** Aligns with server checkout: legacy 21-day JSON defaults normalize to 60. */
+  const suggestedLoanPeriodDays = resolveLoanPeriodDays(
+    book?.lending_terms?.loan_period_days,
+    defaultLoanPeriodDays
+  )
 
   const [email, setEmail] = useState("")
   const [agreedToTerms, setAgreedToTerms] = useState(false)
@@ -179,7 +184,7 @@ export default function CheckoutPage({
         message={
           <>
             <p>You checked out <strong>{book.title}</strong>. Suggested return within{" "}
-              {book.lending_terms?.loan_period_days ?? defaultLoanPeriodDays} days.</p>
+              {suggestedLoanPeriodDays} days.</p>
             <p className="mt-3">When you&apos;re ready to return it, tap or scan the book again.</p>
             <p className="mt-1">Please only mark books as returned when you have actually returned them.</p>
           </>
@@ -351,7 +356,7 @@ export default function CheckoutPage({
     <AvailableFlow
       book={book}
       uuid={uuid}
-      defaultLoanPeriodDays={defaultLoanPeriodDays}
+      suggestedLoanPeriodDays={suggestedLoanPeriodDays}
       cardUserId={card?.user_id}
       email={email}
       setEmail={setEmail}
@@ -389,7 +394,7 @@ function MinimalScreen({
         {book && (
           <div className="mx-auto mb-6 w-28 flex-shrink-0 overflow-hidden rounded-lg shadow-md">
             <div className="aspect-[2/3] w-full">
-              <BookCover src={getBookCoverUrl(book)} title={book.title} />
+              <BookCover {...getBookCoverSrcs(book)} title={book.title} />
             </div>
           </div>
         )}
@@ -415,7 +420,7 @@ function MinimalScreen({
 function AvailableFlow({
   book,
   uuid,
-  defaultLoanPeriodDays,
+  suggestedLoanPeriodDays,
   cardUserId,
   email,
   setEmail,
@@ -429,7 +434,8 @@ function AvailableFlow({
 }: {
   book: Book
   uuid: string
-  defaultLoanPeriodDays: number
+  /** Effective period shown in the pledge; matches server checkout + legacy 21 handling. */
+  suggestedLoanPeriodDays: number
   cardUserId?: string
   email: string
   setEmail: (s: string) => void
@@ -502,7 +508,7 @@ function AvailableFlow({
         <div className="mx-auto w-full max-w-sm text-center">
           <div className="mx-auto mb-6 w-28 flex-shrink-0 overflow-hidden rounded-lg shadow-md">
             <div className="aspect-[2/3] w-full">
-              <BookCover src={getBookCoverUrl(book)} title={book.title} />
+              <BookCover {...getBookCoverSrcs(book)} title={book.title} />
             </div>
           </div>
           <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
@@ -539,7 +545,7 @@ function AvailableFlow({
         <div className="mx-auto max-w-md">
           <div className="mb-6 flex gap-4">
             <div className="w-20 flex-shrink-0 overflow-hidden rounded-lg">
-              <BookCover src={getBookCoverUrl(book)} title={book.title} />
+              <BookCover {...getBookCoverSrcs(book)} title={book.title} />
             </div>
             <div>
               <h2 className="font-semibold text-foreground">{book.title}</h2>
@@ -567,7 +573,7 @@ function AvailableFlow({
                     onCheckedChange={(c) => setAgreedToTerms(c === true)}
                   />
                   <label htmlFor="terms" className="cursor-pointer text-sm text-muted-foreground">
-                    I’ll return it within {book.lending_terms?.loan_period_days ?? defaultLoanPeriodDays} days and treat it with care.
+                    I’ll return it within {suggestedLoanPeriodDays} days and treat it with care.
                   </label>
                 </div>
                 <Button
@@ -710,7 +716,7 @@ function ReturnFlow({
       <div className="mx-auto w-full max-w-md">
         <div className="mb-6 flex justify-center">
           <div className="w-28 flex-shrink-0 overflow-hidden rounded-lg shadow-md">
-            <BookCover src={getBookCoverUrl(book)} title={book.title} />
+            <BookCover {...getBookCoverSrcs(book)} title={book.title} />
           </div>
         </div>
         <h1 className="text-center text-xl font-semibold text-foreground">{book.title}</h1>

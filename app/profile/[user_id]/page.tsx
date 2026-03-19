@@ -29,7 +29,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { BookCover } from "@/components/book-cover"
-import { getBookCoverUrl } from "@/lib/book-cover-generator"
+import { getBookCoverSrcs } from "@/lib/book-cover-generator"
 import { LibraryCard } from "@/components/library-card"
 import { GetLibraryCardModal } from "@/components/get-library-card-modal"
 import { TrustScoreWithBreakdown } from "@/components/trust-score-breakdown"
@@ -405,7 +405,7 @@ export default function ProfilePage({
                     className="flex items-center gap-3 rounded-lg p-2 transition-colors hover:bg-muted"
                   >
                     <div className="h-14 w-10 shrink-0 overflow-hidden rounded bg-muted">
-                      <BookCover src={getBookCoverUrl(book)} title={book.title} />
+                      <BookCover {...getBookCoverSrcs(book)} title={book.title} />
                     </div>
                     <div>
                       <p className="text-sm font-medium text-foreground">
