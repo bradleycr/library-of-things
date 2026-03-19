@@ -1,8 +1,9 @@
 import Link from "next/link"
-import { BookOpen, ArrowRight, MapPin } from "lucide-react"
+import { MapPin } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { BookCard } from "@/components/book-card"
+import { HomeHeroActions } from "@/components/home-hero-actions"
 import type { Book, LoanEvent, Node } from "@/lib/types"
 import { listBooks, listLoanEvents, listNodes } from "@/lib/server/repositories"
 
@@ -62,20 +63,7 @@ export default async function HomePage() {
             Tag books with NFC/QR codes, check them out, return when you're done.
             Trust-based and pseudonymous — no late fees, just the sharing history.
           </p>
-          <div className="mt-6 flex flex-wrap gap-3 sm:mt-8">
-            <Link href="/explore">
-              <Button size="default" className="gap-2 min-h-11 min-w-[44px] sm:min-w-0">
-                Find a book
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
-            <Link href="/add-book">
-              <Button variant="outline" size="default" className="gap-2 min-h-11 min-w-[44px] sm:min-w-0">
-                <BookOpen className="h-4 w-4" />
-                Add a book
-              </Button>
-            </Link>
-          </div>
+          <HomeHeroActions />
 
           {/* Stats — only show when data loaded successfully */}
           {ok && (

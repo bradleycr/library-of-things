@@ -19,7 +19,7 @@
 
 | Route | Purpose |
 |-------|---------|
-| `/` | Home; catalog stats; “Available now” books first, then How it works, **library nodes** (View Collection + address link for directions) |
+| `/` | Home; catalog stats; hero CTAs (**Find a book**, **Get library card** when no card on device, **Add a book**); “Available now” books first, then How it works, **library nodes** (View Collection + address link for directions) |
 | `/explore` | Browse books; supports node-specific collection views via `?node=` |
 | `/add-book` | Add a book (node or Pocket Library); ISBN lookup with optional **Scan** (camera or photo); optional cover photo capture |
 | `/add-book/print-qr` | Print-ready QR code page (?url= checkout URL); centered 2″ label with cut line; Print or Save as PDF |
@@ -105,6 +105,8 @@
 - **Steward cover image editing** — Edit Book dialog supports pasting a URL or uploading a photo (compressed client-side via `compressBookCoverPhoto`) with a live preview. Uploaded images show as "(uploaded photo)" with a Remove button to switch back to URL entry.
 - **Delete book from library** — Steward dashboard Book Management: Delete (trash) button opens a confirmation dialog; optional ledger note. `DELETE /api/books/[id]` (steward-only) inserts a `removed` ledger event then deletes the book. `loan_events.book_id` is nullable with ON DELETE SET NULL so removed events remain in the ledger with book title preserved.
 - **ensure-schema covers Pocket Library** — `pnpm db:ensure-schema` now adds `owner_contact_email` and `is_pocket_library` columns to `books`; no separate migration script needed for new setups.
+- **API smoke test** — `pnpm test:api-smoke` (with `pnpm dev` running) calls generate → checkout → tap → return and asserts bootstrap + optional direct Postgres checks on `loan_events` / `books`. See README.
+- **Home hero — Get library card** — `components/home-hero-actions.tsx` (client): shows **Get library card** → `/settings` next to Find a book / Add a book only after hydration when `useLibraryCard()` reports no stored card.
 - **Docs reorganized** — Operational docs (`DEPLOY.md`, `DATABASE.md`, `POCKET_LIBRARY.md`) live in `docs/`. Root keeps README, CONTRIBUTING, LICENSE, and AI context files (claude.md, AGENTS.md). `docs/DIAGNOSE_CARD_LOGIN.md` has SQL snippets to check if a library card exists and troubleshoot login (card number normalized by removing spaces; PIN is hashed so cannot be read back).
 - **Profile "Their books"** — On another member's profile, the quick action shows "[Name]'s Books" and links to `/my-books?user=<id>`. My Books page supports `?user=` for a read-only view (borrowed, added, sharing history) with that member's avatar, name, and trust score in the header; "View profile" back link when viewing someone else. Own My Books shows "My Books" with avatar and "You" so it's clear whose page it is.
 - **Settings buttons** — Profile card: "Update display name" (sends only display_name). Contact card: "Update contact info."

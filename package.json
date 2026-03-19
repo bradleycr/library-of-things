@@ -17,7 +17,8 @@
     "db:fix-ledger-constraint": "node --env-file=.env.local scripts/fix-loan-events-constraint.mjs",
     "db:migrate-pocket-library": "node --env-file=.env.local scripts/migrate-pocket-library.mjs",
     "db:normalize-nodes": "node --env-file=.env.local scripts/normalize-node-names.mjs",
-    "db:check": "node --env-file=.env.local -e \"if(!process.env.DATABASE_URL){throw new Error('DATABASE_URL missing')}console.log('DATABASE_URL is set')\""
+    "db:check": "node --env-file=.env.local -e \"if(!process.env.DATABASE_URL){throw new Error('DATABASE_URL missing')}console.log('DATABASE_URL is set')\"",
+    "test:api-smoke": "node --env-file=.env.local scripts/api-smoke-test.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",

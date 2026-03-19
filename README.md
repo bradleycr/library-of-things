@@ -62,6 +62,16 @@ You need PostgreSQL. Two options:
 Run `pnpm db:ensure-schema` once to create tables. Optionally `pnpm db:provision`
 to seed demo data (destructive — dev only).
 
+### API smoke test (checkout + return + ledger)
+
+With the dev server running (`pnpm dev` in another terminal):
+
+```bash
+pnpm test:api-smoke
+```
+
+This exercises card generation, checkout, the tap endpoint, return, and confirms bootstrap + (if `DATABASE_URL` is set for the script) `loan_events` / `books` rows. Override base URL with `BASE_URL=http://localhost:3000`.
+
 ### Environment
 
 Copy `env.example` → `.env.local`:

@@ -26,7 +26,7 @@ Library of Things is a single Next.js 16 full-stack app (App Router, React 19, T
 - **Checkout requires a token**: The `/book/[uuid]/checkout` route requires a `?token=` query param generated from QR/NFC tags. Direct navigation without a token shows "Invalid link". The steward dashboard shows full checkout URLs under "Bulk NFC Tag URLs".
 - **DB scripts use `--env-file`**: All `pnpm db:*` scripts load env from `.env.local` via Node's `--env-file` flag. The `.env.local` file must exist for these to work.
 - **Schema before first run**: Run `pnpm db:ensure-schema` before the first `pnpm dev` to create tables. Re-run after pulling if the codebase adds new columns. Optionally `pnpm db:provision` to seed demo data (destructive).
-- **No automated test suite**: The project has no unit/integration tests. Validation is done via `pnpm build` (TypeScript + Next.js compilation).
+- **API smoke test**: With `pnpm dev` running, `pnpm test:api-smoke` hits `/api/bootstrap`, card **generate**, **checkout**, **tap**, **return**, then re-checks bootstrap and (when `DATABASE_URL` is loaded) verifies `loan_events` and `books` in Postgres. Not a full test suite; use `pnpm build` as the primary compile check.
 - **Location not used**: The app does not request geolocation or use location tracking. Optional geofencing code exists in `lib/geofence.ts` and `hooks/use-return-location.ts` but is not wired into the UI; return flows use a required checkbox acknowledgment instead.
 
 ### Authentication model
