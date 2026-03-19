@@ -21,6 +21,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { BookCover } from "@/components/book-cover"
 import { getBookCoverUrl } from "@/lib/book-cover-generator"
+import type { BootstrapPayload } from "@/lib/client/bootstrap"
 import { useBootstrapData } from "@/hooks/use-bootstrap-data"
 import { useLibraryCard } from "@/hooks/use-library-card"
 import { useToast } from "@/hooks/use-toast"
@@ -340,9 +341,7 @@ export default function CheckoutPage({
         returnNotes={returnNotes}
         setReturnNotes={setReturnNotes}
         isTapEntry={isTapEntry}
-        refetchBootstrap={async () => {
-          await refetch()
-        }}
+        refetchBootstrap={() => refetch()}
       />
     )
   }
@@ -361,7 +360,7 @@ export default function CheckoutPage({
       isProcessing={isProcessing}
       setIsProcessing={setIsProcessing}
       setCheckoutComplete={setCheckoutComplete}
-      refetchBootstrap={async () => { await refetch() }}
+      refetchBootstrap={() => refetch()}
       isTapEntry={isTapEntry}
     />
   )
@@ -439,7 +438,7 @@ function AvailableFlow({
   isProcessing: boolean
   setIsProcessing: (b: boolean) => void
   setCheckoutComplete: (b: boolean) => void
-  refetchBootstrap: () => Promise<void>
+  refetchBootstrap: () => Promise<BootstrapPayload | null>
   isTapEntry: boolean
 }) {
   const { toast } = useToast()
@@ -622,7 +621,7 @@ function ReturnFlow({
   returnNotes: string
   setReturnNotes: (s: string) => void
   isTapEntry: boolean
-  refetchBootstrap: () => Promise<void>
+  refetchBootstrap: () => Promise<BootstrapPayload | null>
 }) {
   const { toast } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -633,7 +632,7 @@ function ReturnFlow({
     setIsSubmitting(true)
     setReturningNodeId(nodeId)
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 8_000)
+    const timeoutId = setTimeout(() => controller.abort(), 12_000)
     try {
       const res = await fetch("/api/books/return", {
         method: "POST",

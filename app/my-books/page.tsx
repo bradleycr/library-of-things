@@ -152,7 +152,7 @@ function MyBooksContent() {
     if (!returnBook || !currentUser) return
     setReturning(true)
     const controller = new AbortController()
-    const timeoutMs = 8_000
+    const timeoutMs = 12_000
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
     const bookIdReturning = returnBook.id
     try {

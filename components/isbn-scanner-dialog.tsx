@@ -1,8 +1,11 @@
 "use client"
 
+import Quagga, { type QuaggaJSResultObject, type QuaggaJSStatic } from "@ericblade/quagga2"
 import { useRef, useState, useEffect, useCallback } from "react"
 import { Camera, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import {
   Dialog,
   DialogContent,
@@ -18,10 +21,52 @@ export interface IsbnScannerDialogProps {
   onScan: (isbn: string) => void
 }
 
+const CAMERA_WARMUP_MS = 1200
+const STABLE_READ_MS = 1500
+const STABLE_READ_COUNT = 4
+const MAX_SCANNER_REF_RETRIES = 60
+
+const PREFERRED_CAMERA_CONSTRAINTS: MediaTrackConstraints = {
+  width: { ideal: 1280 },
+  height: { ideal: 720 },
+  facingMode: { ideal: "environment" },
+}
+
+const FALLBACK_CAMERA_CONSTRAINTS: MediaTrackConstraints = {
+  width: { ideal: 1280 },
+  height: { ideal: 720 },
+}
+
+type ScannerStatus = "idle" | "loading" | "live" | "photo" | "error" | "no-camera"
+
+function validateScannedIsbn(raw: string): { normalized: string } | { error: string } {
+  const normalized = normalizeIsbn(raw)
+  if (!normalized) {
+    return {
+      error: "Barcode not recognized as ISBN. Use the 13-digit ISBN barcode on the back of the book, or type it manually.",
+    }
+  }
+
+  if (!validateIsbnCheckDigit(normalized)) {
+    return {
+      error: "That ISBN does not pass its check digit. Try again with a clearer image or type it manually.",
+    }
+  }
+
+  if (normalized.length === 13 && !isBooklandEan13(normalized)) {
+    return {
+      error: "That barcode is not a book ISBN. Scan the ISBN barcode on the back of the book, usually starting with 978 or 979.",
+    }
+  }
+
+  return { normalized }
+}
+
 /**
  * Dialog that scans an ISBN via live camera or a photo.
- * Uses Quagga2 for EAN-13 (and EAN-8) decoding; result is normalized
- * and passed to onScan. Manual entry remains on the parent form.
+ * Uses a tightened Quagga2 configuration for ISBN-only scanning:
+ * warm up the camera, read only EAN-13, require stable repeated matches,
+ * and keep a manual ISBN fallback inside the same production flow.
  */
 export function IsbnScannerDialog({
   open,
@@ -30,26 +75,31 @@ export function IsbnScannerDialog({
 }: IsbnScannerDialogProps) {
   const scannerRef = useRef<HTMLDivElement>(null)
   const photoInputRef = useRef<HTMLInputElement>(null)
-  const [status, setStatus] = useState<
-    "idle" | "loading" | "live" | "photo" | "error" | "no-camera"
-  >("idle")
+  const [status, setStatus] = useState<ScannerStatus>("idle")
   const [message, setMessage] = useState<string | null>(null)
-  const quaggaRef = useRef<typeof import("@ericblade/quagga2").default | null>(
-    null,
-  )
+  const [manualIsbn, setManualIsbn] = useState("")
+  const [manualError, setManualError] = useState<string | null>(null)
+  const [restartNonce, setRestartNonce] = useState(0)
+  const quaggaRef = useRef<QuaggaJSStatic | null>(null)
+  const detectedHandlerRef = useRef<((data: QuaggaJSResultObject) => void) | null>(null)
   const detectedRef = useRef(false)
-  /** Require 3 consecutive identical *valid* reads (check digit) to avoid accepting misreads. */
+  const liveReadyAtRef = useRef(0)
+  /** Require several identical valid reads after autofocus settles. */
   const lastCodeRef = useRef<string | null>(null)
   const lastCodeAtRef = useRef<number>(0)
   const sameCodeCountRef = useRef<number>(0)
-  const STABLE_READ_MS = 400
-  const STABLE_READ_COUNT = 3
 
   const stopScanner = useCallback(async () => {
     const Quagga = quaggaRef.current
     if (!Quagga) return
     try {
-      Quagga.stop()
+      if (detectedHandlerRef.current) {
+        Quagga.offDetected(detectedHandlerRef.current)
+        detectedHandlerRef.current = null
+      } else {
+        Quagga.offDetected()
+      }
+      await Quagga.stop()
       if (typeof Quagga.CameraAccess?.release === "function") {
         await Quagga.CameraAccess.release()
       }
@@ -59,29 +109,39 @@ export function IsbnScannerDialog({
     quaggaRef.current = null
   }, [])
 
+  const finishScan = useCallback(
+    (normalized: string) => {
+      detectedRef.current = true
+      setStatus("loading")
+      setMessage(`ISBN confirmed: ${normalized}. Opening…`)
+      void stopScanner().then(() => {
+        onScan(normalized)
+        onOpenChange(false)
+      })
+    },
+    [onOpenChange, onScan, stopScanner],
+  )
+
   const handleDetected = useCallback(
-    (code: string) => {
+    (result: QuaggaJSResultObject) => {
       if (detectedRef.current) return
-      const normalized = normalizeIsbn(code)
-      if (!normalized) {
-        setMessage("Barcode not recognized as ISBN (need 10 or 13 digits). Try again or use Take photo.")
-        setStatus("error")
+      if (Date.now() < liveReadyAtRef.current) return
+
+      const codeResult = result?.codeResult
+      const code = codeResult?.code ?? null
+      if (!code || codeResult?.format !== "ean_13") {
         return
       }
-      if (!validateIsbnCheckDigit(normalized)) {
-        setMessage("Invalid barcode (check digit). Aim at the book's barcode and hold steady, or use Take photo.")
-        setStatus("error")
+
+      const validated = validateScannedIsbn(code)
+      if ("error" in validated) {
+        setMessage("Center the 13-digit ISBN barcode inside the guide and hold steady.")
         sameCodeCountRef.current = 0
         lastCodeRef.current = null
         return
       }
-      if (normalized.length === 13 && !isBooklandEan13(normalized)) {
-        setMessage("Not a book barcode. Point at the ISBN on the back of the book (usually starts with 978 or 979).")
-        setStatus("error")
-        sameCodeCountRef.current = 0
-        lastCodeRef.current = null
-        return
-      }
+
+      const normalized = validated.normalized
       const now = Date.now()
       const lastCode = lastCodeRef.current
       const lastAt = lastCodeAtRef.current
@@ -92,31 +152,132 @@ export function IsbnScannerDialog({
       }
       lastCodeRef.current = normalized
       lastCodeAtRef.current = now
-      if (sameCodeCountRef.current < STABLE_READ_COUNT) return
+      if (sameCodeCountRef.current < STABLE_READ_COUNT) {
+        setMessage(`Possible ISBN: ${normalized}. Hold steady to confirm.`)
+        return
+      }
 
-      detectedRef.current = true
-      stopScanner().then(() => {
-        onScan(normalized)
-        onOpenChange(false)
-      })
+      finishScan(normalized)
     },
-    [onScan, onOpenChange, stopScanner],
+    [finishScan],
   )
 
-  // Start live stream when dialog opens. Wait for ref (portal may mount after first paint).
   useEffect(() => {
     if (!open) return
 
     let cancelled = false
     let rafId: number
     let retries = 0
-    const maxRetries = 30
+
+    const startScanner = async (
+      constraints: MediaTrackConstraints,
+      allowFallback: boolean,
+    ) => {
+      if (cancelled || !scannerRef.current) return
+
+      quaggaRef.current = Quagga
+
+      try {
+        await new Promise<void>((resolve, reject) => {
+          Quagga.init(
+            {
+              inputStream: {
+                type: "LiveStream",
+                target: scannerRef.current!,
+                constraints,
+                willReadFrequently: true,
+                area: {
+                  top: "22%",
+                  right: "8%",
+                  left: "8%",
+                  bottom: "22%",
+                  borderColor: "rgba(255,255,255,0.92)",
+                  borderWidth: 2,
+                  backgroundColor: "rgba(255,255,255,0.04)",
+                },
+              },
+              decoder: {
+                readers: ["ean_reader"],
+              },
+              locate: true,
+              frequency: 10,
+              numOfWorkers:
+                typeof navigator !== "undefined"
+                  ? Math.max(1, Math.min(2, navigator.hardwareConcurrency || 1))
+                  : 1,
+              locator: {
+                halfSample: true,
+                patchSize: "small",
+              },
+              canvas: {
+                createOverlay: true,
+              },
+            },
+            (err: Error | null) => {
+              if (err) {
+                reject(err)
+                return
+              }
+              resolve()
+            },
+          )
+        })
+      } catch {
+        await stopScanner()
+        if (!cancelled && allowFallback) {
+          setMessage("Trying your default camera…")
+          await startScanner(FALLBACK_CAMERA_CONSTRAINTS, false)
+          return
+        }
+        if (!cancelled) {
+          setStatus("no-camera")
+          setMessage(
+            "Could not open the camera. Allow camera access and try again, or use Take photo / type the ISBN below.",
+          )
+        }
+        return
+      }
+
+      if (cancelled) {
+        await stopScanner()
+        return
+      }
+
+      const detectedHandler = (data: QuaggaJSResultObject) => {
+        if (cancelled || detectedRef.current) return
+        handleDetected(data)
+      }
+      detectedHandlerRef.current = detectedHandler
+      Quagga.onDetected(detectedHandler)
+
+      try {
+        Quagga.start()
+      } catch {
+        await stopScanner()
+        if (!cancelled && allowFallback) {
+          setMessage("Trying your default camera…")
+          await startScanner(FALLBACK_CAMERA_CONSTRAINTS, false)
+          return
+        }
+        if (!cancelled) {
+          setStatus("no-camera")
+          setMessage(
+            "Could not start the camera stream. Try again, use Take photo, or type the ISBN below.",
+          )
+        }
+        return
+      }
+
+      liveReadyAtRef.current = Date.now() + CAMERA_WARMUP_MS
+      setStatus("live")
+      setMessage("Center the 13-digit ISBN barcode inside the guide and hold steady.")
+    }
 
     const tryStart = () => {
       if (cancelled) return
       if (!scannerRef.current) {
         retries += 1
-        if (retries >= maxRetries) {
+        if (retries >= MAX_SCANNER_REF_RETRIES) {
           setStatus("error")
           setMessage("Scanner view not ready. Please close and try again.")
           return
@@ -132,70 +293,19 @@ export function IsbnScannerDialog({
 
       if (!hasGetUserMedia) {
         setStatus("no-camera")
-        setMessage("Camera not supported in this browser. Use \"Take photo\" instead.")
+        setMessage("Camera not supported in this browser. Use Take photo or type the ISBN below.")
         return
       }
 
       detectedRef.current = false
+      liveReadyAtRef.current = 0
       lastCodeRef.current = null
       lastCodeAtRef.current = 0
       sameCodeCountRef.current = 0
+      setManualError(null)
       setStatus("loading")
       setMessage("Opening camera…")
-
-      import("@ericblade/quagga2").then((mod) => {
-        const Quagga = mod.default
-        if (cancelled) return
-        quaggaRef.current = Quagga
-
-        if (!scannerRef.current) {
-          setStatus("error")
-          setMessage("Scanner view not ready. Please close and try again.")
-          quaggaRef.current = null
-          return
-        }
-
-        Quagga.init(
-          {
-            inputStream: {
-              type: "LiveStream",
-              target: scannerRef.current,
-              constraints: {
-                width: 640,
-                height: 480,
-                // Prefer back camera on phones; on desktop (e.g. MacBook) there is no
-                // "environment" camera, so use ideal to avoid OverconstrainedError
-                // and let the browser use the only available camera.
-                facingMode: { ideal: "environment" },
-              },
-            },
-            decoder: {
-              readers: ["ean_reader", "ean_8_reader"],
-            },
-            locate: true,
-            frequency: 8,
-          },
-          (err: Error | null) => {
-            if (cancelled) return
-            if (err) {
-              setStatus("no-camera")
-              setMessage(
-                "Could not access the camera. Allow camera permission or try \"Take photo\".",
-              )
-              quaggaRef.current = null
-              return
-            }
-            setStatus("live")
-            setMessage("Point your camera at the barcode on the back of the book.")
-            Quagga.onDetected((data) => {
-              if (cancelled || detectedRef.current) return
-              const code = data?.codeResult?.code ?? null
-              if (code) handleDetected(code)
-            })
-            Quagga.start()
-          },
-        )
-      })
+      void startScanner(PREFERRED_CAMERA_CONSTRAINTS, true)
     }
 
     rafId = requestAnimationFrame(tryStart)
@@ -207,12 +317,13 @@ export function IsbnScannerDialog({
       setStatus("idle")
       setMessage(null)
     }
-  }, [open, handleDetected, stopScanner])
+  }, [open, restartNonce, handleDetected, stopScanner])
 
   const handleClose = useCallback(() => {
-    stopScanner()
+    void stopScanner()
     setStatus("idle")
     setMessage(null)
+    setManualError(null)
     onOpenChange(false)
   }, [onOpenChange, stopScanner])
 
@@ -226,49 +337,64 @@ export function IsbnScannerDialog({
       if (photoInputRef.current) photoInputRef.current.value = ""
       if (!file) return
 
+      setManualError(null)
       setStatus("photo")
       setMessage("Scanning image…")
 
-      const Quagga = await import("@ericblade/quagga2").then((m) => m.default)
       const url = URL.createObjectURL(file)
 
-      Quagga.decodeSingle(
-        {
-          decoder: { readers: ["ean_reader", "ean_8_reader"] },
+      try {
+        const result = await Quagga.decodeSingle({
+          decoder: { readers: ["ean_reader"] },
+          inputStream: {
+            size: 1280,
+          },
           locate: true,
           src: url,
-        },
-        (result: { codeResult?: { code?: string | null } } | undefined) => {
-          URL.revokeObjectURL(url)
-          const code = result?.codeResult?.code ?? null
-          if (!code) {
-            setMessage("No barcode found. Try a clearer photo of the back of the book.")
-            setStatus("error")
-            return
-          }
-          const normalized = normalizeIsbn(code)
-          if (!normalized) {
-            setMessage("Barcode not recognized as ISBN (need 10 or 13 digits). Try another photo.")
-            setStatus("error")
-            return
-          }
-          if (!validateIsbnCheckDigit(normalized)) {
-            setMessage("Invalid barcode (check digit). Try a clearer photo of the book's barcode.")
-            setStatus("error")
-            return
-          }
-          if (normalized.length === 13 && !isBooklandEan13(normalized)) {
-            setMessage("Not a book barcode. Photo the ISBN on the back of the book (usually starts with 978 or 979).")
-            setStatus("error")
-            return
-          }
-          onScan(normalized)
-          onOpenChange(false)
-        },
-      )
+        })
+
+        const codeResult = result?.codeResult
+        if (!codeResult?.code || codeResult.format !== "ean_13") {
+          setMessage("No ISBN barcode found. Try a clearer photo of the back of the book.")
+          setStatus("error")
+          return
+        }
+
+        const validated = validateScannedIsbn(codeResult.code)
+        if ("error" in validated) {
+          setMessage(validated.error)
+          setStatus("error")
+          return
+        }
+
+        finishScan(validated.normalized)
+      } catch {
+        setMessage("Photo scan failed. Try a clearer image, or type the ISBN below.")
+        setStatus("error")
+      } finally {
+        URL.revokeObjectURL(url)
+      }
     },
-    [onScan, onOpenChange],
+    [finishScan],
   )
+
+  const handleManualSubmit = useCallback(() => {
+    const validated = validateScannedIsbn(manualIsbn)
+    if ("error" in validated) {
+      setManualError(validated.error)
+      return
+    }
+
+    setManualError(null)
+    finishScan(validated.normalized)
+  }, [finishScan, manualIsbn])
+
+  useEffect(() => {
+    if (!open) {
+      setManualIsbn("")
+      setManualError(null)
+    }
+  }, [open])
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -285,7 +411,7 @@ export function IsbnScannerDialog({
         </DialogHeader>
 
         <div className="flex min-w-0 flex-col gap-4">
-          {/* Live scanner viewport — Quagga attaches here; keep mounted for error so user can retry */}
+          {/* Keep the viewport mounted so retries reuse the same target cleanly. */}
           {status !== "no-camera" && (
             <div
               ref={scannerRef}
@@ -298,6 +424,10 @@ export function IsbnScannerDialog({
                   <span className="text-sm">Opening camera…</span>
                 </div>
               )}
+              <div className="pointer-events-none absolute inset-0">
+                <div className="absolute inset-x-[8%] top-[22%] bottom-[22%] rounded-2xl border-2 border-white/90 shadow-[0_0_0_9999px_rgba(15,23,42,0.28)]" />
+                <div className="absolute inset-x-[14%] top-1/2 h-px -translate-y-1/2 bg-white/75" />
+              </div>
             </div>
           )}
 
@@ -313,6 +443,33 @@ export function IsbnScannerDialog({
             </p>
           )}
 
+          <div className="rounded-lg border border-border bg-muted/30 p-3">
+            <Label htmlFor="manual-isbn" className="text-sm font-medium text-foreground">
+              Or type the ISBN manually
+            </Label>
+            <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+              <Input
+                id="manual-isbn"
+                inputMode="text"
+                placeholder="9780199678112"
+                value={manualIsbn}
+                onChange={(e) => {
+                  setManualIsbn(e.target.value)
+                  if (manualError) setManualError(null)
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                className="shrink-0"
+                onClick={handleManualSubmit}
+              >
+                Use ISBN
+              </Button>
+            </div>
+            {manualError && <p className="mt-2 text-xs text-destructive">{manualError}</p>}
+          </div>
+
           <div className="flex flex-wrap gap-2">
             <Button
               type="button"
@@ -325,14 +482,16 @@ export function IsbnScannerDialog({
               <Camera className="h-4 w-4" />
               Take photo
             </Button>
-            {status === "error" && (
+            {(status === "error" || status === "no-camera") && (
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  setStatus("live")
-                  setMessage("Point your camera at the barcode on the back of the book.")
+                  setManualError(null)
+                  setStatus("idle")
+                  setMessage(null)
+                  setRestartNonce((value) => value + 1)
                 }}
               >
                 Try again

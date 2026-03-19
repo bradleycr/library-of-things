@@ -4,8 +4,7 @@ import { useState, useCallback, useEffect, useRef } from "react"
 import Link from "next/link"
 import { IsbnScannerDialog } from "@/components/isbn-scanner-dialog"
 import { IsbnCopyPickerDialog } from "@/components/isbn-copy-picker-dialog"
-import { findBooksByIsbn } from "@/lib/isbn-checkout"
-import { useBootstrapData } from "@/hooks/use-bootstrap-data"
+import type { BooksByIsbnResponse } from "@/lib/isbn-lookup"
 import type { Book } from "@/lib/types"
 import {
   Dialog,
@@ -28,12 +27,10 @@ export function IsbnCheckoutReturnDialog({
   open,
   onOpenChange,
 }: IsbnCheckoutReturnDialogProps) {
-  const { data, loading } = useBootstrapData()
-  const books = data?.books ?? []
-
-  const [phase, setPhase] = useState<"scanner" | "no-book" | "picker" | "catalog-loading">("scanner")
+  const [phase, setPhase] = useState<"scanner" | "looking-up" | "no-book" | "picker" | "lookup-error">("scanner")
   const [booksForPicker, setBooksForPicker] = useState<Book[]>([])
   const [lastScannedIsbn, setLastScannedIsbn] = useState<string | null>(null)
+  const [lookupError, setLookupError] = useState<string | null>(null)
   /** When true, scanner closed due to a scan (not cancel); don't close parent or we'd lose no-book/picker. */
   const handlingScanRef = useRef(false)
 
@@ -54,15 +51,32 @@ export function IsbnCheckoutReturnDialog({
   )
 
   const handleScan = useCallback(
-    (normalizedIsbn: string) => {
+    async (normalizedIsbn: string) => {
       handlingScanRef.current = true
       setLastScannedIsbn(normalizedIsbn)
-      const matches = findBooksByIsbn(books, normalizedIsbn)
-      if (matches.length === 0) {
-        if (loading) {
-          setPhase("catalog-loading")
-          return
+      setLookupError(null)
+      setPhase("looking-up")
+
+      let matches: Book[] = []
+      try {
+        const response = await fetch(`/api/books/by-isbn?isbn=${encodeURIComponent(normalizedIsbn)}`, {
+          cache: "no-store",
+        })
+        if (!response.ok) {
+          const errorBody = (await response.json().catch(() => ({}))) as { error?: string }
+          throw new Error(errorBody.error || "Could not look up this ISBN right now.")
         }
+        const payload = (await response.json()) as BooksByIsbnResponse
+        matches = payload.books
+      } catch (error) {
+        setLookupError(
+          error instanceof Error ? error.message : "Could not look up this ISBN right now.",
+        )
+        setPhase("lookup-error")
+        return
+      }
+
+      if (matches.length === 0) {
         setPhase("no-book")
         return
       }
@@ -73,13 +87,14 @@ export function IsbnCheckoutReturnDialog({
       setBooksForPicker(matches)
       setPhase("picker")
     },
-    [books, loading, redirectToCheckout],
+    [redirectToCheckout],
   )
 
   const handleClose = useCallback(() => {
     setPhase("scanner")
     setBooksForPicker([])
     setLastScannedIsbn(null)
+    setLookupError(null)
     onOpenChange(false)
   }, [onOpenChange])
 
@@ -95,20 +110,34 @@ export function IsbnCheckoutReturnDialog({
       setPhase("scanner")
       setBooksForPicker([])
       setLastScannedIsbn(null)
+      setLookupError(null)
       handlingScanRef.current = false
     }
   }, [open])
 
   return (
     <>
-      {phase === "catalog-loading" && (
+      {phase === "looking-up" && (
         <Dialog open={open} onOpenChange={handleClose}>
           <DialogContent className="max-w-[calc(100vw-2rem)]">
             <DialogHeader>
-              <DialogTitle>Loading library catalog</DialogTitle>
+              <DialogTitle>Looking up this book</DialogTitle>
             </DialogHeader>
             <p className="text-muted-foreground">
-              The catalog is still loading. Please wait a moment and try scanning again.
+              Checking the library catalog for this ISBN…
+            </p>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {phase === "lookup-error" && (
+        <Dialog open={open} onOpenChange={handleClose}>
+          <DialogContent className="max-w-[calc(100vw-2rem)]">
+            <DialogHeader>
+              <DialogTitle>Lookup failed</DialogTitle>
+            </DialogHeader>
+            <p className="text-muted-foreground">
+              {lookupError ?? "Could not look up this ISBN right now."}
             </p>
             <Button className="mt-4" onClick={() => setPhase("scanner")}>
               Back to scanner

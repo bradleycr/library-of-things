@@ -62,9 +62,9 @@ function pause(ms: number) {
 
 /* ─── Singleton pool (one per serverless cold-start) ───
  *
- * max: 1 — each Vercel serverless instance holds at most one connection;
- *          with ~1100 users the real concurrency is low, and the Supabase
- *          Transaction Pooler (port 6543) multiplexes them server-side.
+ * max: 4 — enough headroom for bootstrap reads and a mutation request to avoid
+ *          self-inflicted queueing/timeouts within one server instance, while
+ *          still staying conservative for the Supabase transaction pooler.
  *
  * idleTimeoutMillis: 20s — keep the connection alive long enough to serve
  *          a cluster of requests (page + bootstrap + actions) without
@@ -90,7 +90,7 @@ function getPool(): Pool {
   const pool = new Pool({
     connectionString: connStr,
     ssl: sslConfig(connStr),
-    max: 1,
+    max: 4,
     idleTimeoutMillis: 20_000,
     connectionTimeoutMillis: 3_000,
   })

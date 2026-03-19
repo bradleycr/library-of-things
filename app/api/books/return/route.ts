@@ -3,8 +3,8 @@ import { returnBook } from "@/lib/server/repositories"
 import { getSessionUserId } from "@/lib/server/session"
 import { parseJsonBody, isUuid, LIMITS, clampString } from "@/lib/server/validate"
 
-/** Server-side cap so we never hang indefinitely; client uses a slightly longer timeout. */
-const RETURN_HANDLER_TIMEOUT_MS = 10_000
+/** Server-side cap so we fail eventually, but not before normal DB queueing can clear. */
+const RETURN_HANDLER_TIMEOUT_MS = 15_000
 
 function timeoutPromise(ms: number): Promise<never> {
   return new Promise((_, reject) =>

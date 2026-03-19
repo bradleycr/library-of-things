@@ -775,6 +775,26 @@ export async function getPublicDisplayName(userId: string): Promise<string> {
   return row.profile_public ? row.display_name : "Anonymous"
 }
 
+/**
+ * Same as getPublicDisplayName but uses the given client (for use inside a transaction
+ * to avoid grabbing a second connection when pool max is 1).
+ */
+function getPublicDisplayNameWithClient(
+  client: import("pg").PoolClient,
+  userId: string
+): Promise<string> {
+  return client
+    .query<{ display_name: string; profile_public: boolean }>(
+      "select display_name, coalesce(profile_public, true) as profile_public from users where id = $1",
+      [userId]
+    )
+    .then(({ rows }) => {
+      const row = rows[0]
+      if (!row) return "Unknown"
+      return row.profile_public ? row.display_name : "Anonymous"
+    })
+}
+
 export async function checkoutBook(params: { bookId: string; userId: string }) {
   const config = await getAppConfig()
   const client = await resilientConnect()
@@ -806,7 +826,7 @@ export async function checkoutBook(params: { bookId: string; userId: string }) {
       throw new Error("Book is not available")
     }
 
-    const displayNameForPublic = await getPublicDisplayName(params.userId)
+    const displayNameForPublic = await getPublicDisplayNameWithClient(client, params.userId)
 
     const loanDays = Number(book.lending_terms?.loan_period_days) || config.default_loan_period_days
     const expectedReturn = new Date(Date.now() + loanDays * 24 * 60 * 60 * 1000).toISOString()
@@ -893,7 +913,8 @@ export async function returnBook(params: {
       [params.bookId, params.returnNodeId ?? null, nodeName, locationText]
     )
 
-    const returnDisplayName = await getPublicDisplayName(params.userId)
+    // Use the transaction client so the return and trust update commit atomically.
+    const returnDisplayName = await getPublicDisplayNameWithClient(client, params.userId)
 
     await client.query(
       `insert into loan_events
@@ -985,7 +1006,7 @@ export async function createBook(input: {
     }
 
     const addedByDisplayNameValue = addedByUserId
-      ? await getPublicDisplayName(addedByUserId)
+      ? await getPublicDisplayNameWithClient(client, addedByUserId)
       : (input.addedByDisplayName ?? null)
 
     await client.query(

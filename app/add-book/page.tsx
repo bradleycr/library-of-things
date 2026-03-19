@@ -47,6 +47,7 @@ import { AddBookSuccessCard } from "@/components/add-book-success-card"
 import { IsbnScannerDialog } from "@/components/isbn-scanner-dialog"
 import { generateBookCoverSvg } from "@/lib/book-cover-generator"
 import { DEFAULT_LOAN_PERIOD_DAYS, formatDefaultLoanPeriod } from "@/lib/loan-period"
+import type { IsbnMetadataLookupResponse } from "@/lib/isbn-lookup"
 
 function AddBookContent() {
   const searchParams = useSearchParams()
@@ -120,66 +121,21 @@ function AddBookContent() {
     setLookupError(null)
     setLookupInProgress(true)
     try {
-      const response = await fetch(
-        `https://openlibrary.org/isbn/${encodeURIComponent(value)}.json`,
-        { signal }
-      )
+      const response = await fetch(`/api/isbn/lookup?isbn=${encodeURIComponent(value)}`, {
+        signal,
+        cache: "no-store",
+      })
       if (!response.ok) {
-        throw new Error("No book metadata found for this ISBN")
+        const errorBody = (await response.json().catch(() => ({}))) as { error?: string }
+        throw new Error(errorBody.error || "No book metadata found for this ISBN")
       }
-      const payload = (await response.json()) as {
-        title?: string
-        by_statement?: string
-        edition_name?: string
-        publish_date?: string
-        authors?: { key: string }[]
-        works?: { key: string }[]
-      }
-      setTitle(payload.title ?? title)
-      if (payload.by_statement) {
-        setAuthor(payload.by_statement)
-      } else if (payload.authors?.[0]?.key) {
-        try {
-          const authorRes = await fetch(
-            `https://openlibrary.org${payload.authors[0].key}.json`,
-            { signal }
-          )
-          if (authorRes.ok) {
-            const authorData = (await authorRes.json()) as { name?: string }
-            if (authorData.name) setAuthor(authorData.name)
-          }
-        } catch {
-          // keep existing author if fetch fails
-        }
-      }
-      if (payload.edition_name) {
-        setEdition(payload.edition_name)
-      } else if (payload.publish_date) {
-        setEdition(payload.publish_date)
-      }
-      setCoverImageUrl(
-        `https://covers.openlibrary.org/b/isbn/${encodeURIComponent(value)}-L.jpg`
-      )
-      const workKey = payload.works?.[0]?.key
-      if (workKey) {
-        try {
-          const workRes = await fetch(`https://openlibrary.org${workKey}.json`, { signal })
-          if (workRes.ok) {
-            const work = (await workRes.json()) as {
-              description?: string | { type?: string; value?: string }
-            }
-            const raw =
-              typeof work.description === "string"
-                ? work.description
-                : work.description?.value
-            if (raw && typeof raw === "string") {
-              setDescription(raw.trim().slice(0, 3000))
-            }
-          }
-        } catch {
-          // ignore
-        }
-      }
+      const payload = (await response.json()) as IsbnMetadataLookupResponse
+      const metadata = payload.metadata
+      setTitle(metadata.title || title)
+      setAuthor(metadata.author ?? author)
+      setEdition(metadata.edition ?? edition)
+      setCoverImageUrl(metadata.coverImageUrl ?? coverImageUrl)
+      setDescription(metadata.description ?? description)
       setIsbnLookedUp(true)
     } catch (error) {
       if ((error as Error).name === "AbortError") return
@@ -190,7 +146,7 @@ function AddBookContent() {
     } finally {
       if (!signal.aborted) setLookupInProgress(false)
     }
-  }, [isbn, title])
+  }, [isbn, title, author, edition, coverImageUrl, description])
 
   // Debounced auto-lookup when ISBN looks complete (10 or 13 digits). Only depends on isbn so we don't re-trigger after title/author update from a previous lookup.
   useEffect(() => {

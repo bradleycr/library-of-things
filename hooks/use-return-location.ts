@@ -9,9 +9,12 @@ import {
 } from "@/lib/geofence"
 
 /**
- * Optional geolocation for "return at a node" geofencing.
- * Never blocks the flow: if location is denied or fails, nearby is empty but return is still allowed.
- * Exposes refreshLocation so the user can re-request position (e.g. after moving or a bad first fix).
+ * Optional geofencing hook — not used in the production UI.
+ * Available for future use (e.g. re-enabling "return only when nearby").
+ *
+ * When used: geolocation for "return at a node" geofencing; never blocks the flow —
+ * if location is denied or fails, nearby is empty but return is still allowed.
+ * Exposes refreshLocation so the user can re-request position.
  */
 export function useReturnLocation(nodes: Node[]) {
   const [position, setPosition] = useState<Coords | null>(null)

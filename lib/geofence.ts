@@ -1,6 +1,9 @@
 /**
  * Lightweight geofencing for "return at a node" flows.
  * Uses haversine distance; no external APIs. Graceful when location is unavailable.
+ *
+ * Optional: Not used in the current UI. Kept for potential future use (e.g. re-enabling
+ * "return only when nearby"). No location is requested anywhere in the app today when this is unused.
  */
 
 const EARTH_RADIUS_M = 6_371_000

@@ -63,6 +63,7 @@ import {
 } from "recharts"
 import { useBootstrapData } from "@/hooks/use-bootstrap-data"
 import { compressBookCoverPhoto } from "@/lib/image-utils"
+import type { IsbnMetadataLookupResponse } from "@/lib/isbn-lookup"
 import { DEFAULT_LOAN_PERIOD_DAYS, clampLoanPeriodDays } from "@/lib/loan-period"
 import type { Book, Node as NodeType, User } from "@/lib/types"
 
@@ -97,7 +98,9 @@ export default function StewardDashboardPage() {
   // Bulk URL generator state
   const [selectedBookIds, setSelectedBookIds] = useState<Set<string>>(new Set())
   const [urlsCopied, setUrlsCopied] = useState(false)
-  
+  const [showOverdueDialog, setShowOverdueDialog] = useState(false)
+  const [copiedContactId, setCopiedContactId] = useState<string | null>(null)
+
   // Edit book state
   const [editingBook, setEditingBook] = useState<Book | null>(null)
   const [editSaving, setEditSaving] = useState(false)
@@ -226,10 +229,11 @@ export default function StewardDashboardPage() {
   const checkedOut = books.filter(
     (b) => b.availability_status === "checked_out"
   ).length
-  const overdueBooks = books.filter((b) => {
+  const overdueBooksList = books.filter((b) => {
     if (!b.expected_return_date) return false
     return new Date(b.expected_return_date) < new Date()
-  }).length
+  })
+  const overdueBooks = overdueBooksList.length
   const bookEventCounts = loanEvents.reduce(
     (acc, e) => {
       if (e.event_type === "checkout") {
@@ -384,68 +388,26 @@ export default function StewardDashboardPage() {
       const isbn = isbns[i]
       setBulkProgress({ current: i + 1, total })
       try {
-        const editionRes = await fetch(
-          `https://openlibrary.org/isbn/${encodeURIComponent(isbn)}.json`
-        )
-        if (!editionRes.ok) {
+        const lookupRes = await fetch(`/api/isbn/lookup?isbn=${encodeURIComponent(isbn)}`, {
+          cache: "no-store",
+        })
+        if (!lookupRes.ok) {
           failed.push(isbn)
           continue
         }
-        const edition = (await editionRes.json()) as {
-          title?: string
-          by_statement?: string
-          edition_name?: string
-          publish_date?: string
-          authors?: { key: string }[]
-          works?: { key: string }[]
-        }
-        let author: string | undefined = edition.by_statement
-        if (!author && edition.authors?.[0]?.key) {
-          try {
-            const authorRes = await fetch(
-              `https://openlibrary.org${edition.authors[0].key}.json`
-            )
-            if (authorRes.ok) {
-              const authorData = (await authorRes.json()) as { name?: string }
-              author = authorData.name
-            }
-          } catch {
-            // keep author undefined
-          }
-        }
-        let description: string | undefined
-        const workKey = edition.works?.[0]?.key
-        if (workKey) {
-          try {
-            const workRes = await fetch(`https://openlibrary.org${workKey}.json`)
-            if (workRes.ok) {
-              const work = (await workRes.json()) as {
-                description?: string | { type?: string; value?: string }
-              }
-              const raw =
-                typeof work.description === "string"
-                  ? work.description
-                  : work.description?.value
-              if (raw && typeof raw === "string") description = raw.trim().slice(0, 3000)
-            }
-          } catch {
-            // ignore
-          }
-        }
-        const coverImageUrl = `https://covers.openlibrary.org/b/isbn/${encodeURIComponent(isbn)}-L.jpg`
-        const editionText = edition.edition_name ?? edition.publish_date ?? undefined
+        const { metadata } = (await lookupRes.json()) as IsbnMetadataLookupResponse
         const createRes = await fetch("/api/books/create", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
           body: JSON.stringify({
             isbn,
-            title: edition.title ?? "Unknown",
-            author: author ?? undefined,
-            edition: editionText,
-            description: description ?? undefined,
+            title: metadata.title ?? "Unknown",
+            author: metadata.author ?? undefined,
+            edition: metadata.edition ?? undefined,
+            description: metadata.description ?? undefined,
             node_id: bulkNodeId,
-            cover_image_url: coverImageUrl,
+            cover_image_url: metadata.coverImageUrl ?? undefined,
             lending_terms: defaultTerms,
           }),
         })
@@ -851,7 +813,14 @@ export default function StewardDashboardPage() {
               <span className="text-xs text-muted-foreground">Checked Out</span>
             </CardContent>
           </Card>
-          <Card className="border-border">
+          <Card
+            className="border-border cursor-pointer transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring"
+            role="button"
+            tabIndex={0}
+            onClick={() => overdueBooks > 0 && setShowOverdueDialog(true)}
+            onKeyDown={(e) => e.key === "Enter" && overdueBooks > 0 && setShowOverdueDialog(true)}
+            aria-label={overdueBooks > 0 ? `${overdueBooks} overdue — click to view` : "Overdue"}
+          >
             <CardContent className="flex flex-col items-center p-4">
               <AlertTriangle className="h-5 w-5 text-destructive" />
               <span className="mt-2 text-2xl font-bold text-foreground">
@@ -870,6 +839,130 @@ export default function StewardDashboardPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Overdue books dialog — who has them, contact, copy to clipboard */}
+        <Dialog open={showOverdueDialog} onOpenChange={setShowOverdueDialog}>
+          <DialogContent className="max-h-[85vh] overflow-y-auto" aria-label="Overdue books">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-card-foreground">
+                <AlertTriangle className="h-5 w-5 text-destructive" />
+                Overdue books ({overdueBooksList.length})
+              </DialogTitle>
+              <DialogDescription>
+                Books past their suggested return date. Contact the holder if you have their details.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="mt-4 space-y-4">
+              {overdueBooksList.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No overdue books.</p>
+              ) : (
+                <ul className="space-y-4">
+                  {overdueBooksList.map((book) => {
+                    const holder = book.current_holder_id
+                      ? users.find((u) => u.id === book.current_holder_id)
+                      : null
+                    const expectedReturn = book.expected_return_date
+                      ? new Date(book.expected_return_date).toLocaleDateString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })
+                      : "—"
+                    const copyId = (kind: "email" | "phone") =>
+                      `${kind}-${book.current_holder_id ?? ""}`
+                    const handleCopy = async (text: string, id: string) => {
+                      try {
+                        await navigator.clipboard.writeText(text)
+                        setCopiedContactId(id)
+                        setTimeout(() => setCopiedContactId(null), 2000)
+                      } catch {
+                        // ignore
+                      }
+                    }
+                    return (
+                      <li
+                        key={book.id}
+                        className="rounded-lg border border-border bg-muted/20 p-4 space-y-2"
+                      >
+                        <p className="font-medium text-foreground">{book.title}</p>
+                        <p className="text-sm text-muted-foreground">
+                          Suggested return was {expectedReturn}
+                        </p>
+                        {holder ? (
+                          <div className="flex flex-wrap items-center gap-2 text-sm">
+                            <span className="text-muted-foreground">Holder:</span>
+                            <Link
+                              href={`/profile/${holder.id}`}
+                              className="font-medium text-primary hover:underline"
+                            >
+                              {holder.display_name}
+                            </Link>
+                            {(holder.contact_email || holder.phone) && (
+                              <span className="text-muted-foreground">·</span>
+                            )}
+                            {holder.contact_email && (
+                              <span className="inline-flex items-center gap-1">
+                                <a
+                                  href={`mailto:${holder.contact_email}`}
+                                  className="text-primary hover:underline truncate max-w-[180px]"
+                                >
+                                  {holder.contact_email}
+                                </a>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 shrink-0"
+                                  aria-label="Copy email"
+                                  onClick={() => handleCopy(holder.contact_email!, copyId("email"))}
+                                >
+                                  {copiedContactId === copyId("email") ? (
+                                    <Check className="h-4 w-4 text-green-600" />
+                                  ) : (
+                                    <Copy className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </span>
+                            )}
+                            {holder.phone && (
+                              <span className="inline-flex items-center gap-1">
+                                <a
+                                  href={`tel:${holder.phone}`}
+                                  className="text-primary hover:underline"
+                                >
+                                  {holder.phone}
+                                </a>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 shrink-0"
+                                  aria-label="Copy phone"
+                                  onClick={() => handleCopy(holder.phone!, copyId("phone"))}
+                                >
+                                  {copiedContactId === copyId("phone") ? (
+                                    <Check className="h-4 w-4 text-green-600" />
+                                  ) : (
+                                    <Copy className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </span>
+                            )}
+                            {!holder.contact_email && !holder.phone && (
+                              <span className="text-muted-foreground italic">No contact on file</span>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">Holder unknown</p>
+                        )}
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Library settings — app-wide default loan period */}
         <Card className="mb-8 border-border">
