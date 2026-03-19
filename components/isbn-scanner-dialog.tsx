@@ -22,9 +22,13 @@ export interface IsbnScannerDialogProps {
 }
 
 /** Brief delay so the first frames aren’t garbage; keep short to avoid “stuck” feeling. */
-const CAMERA_WARMUP_MS = 450
+// iOS autofocus can take a moment (especially on multi-camera devices).
+// A slightly longer warmup improves reliability without noticeably slowing the UX.
+const CAMERA_WARMUP_MS = 900
 /** Two identical valid reads within this window = accept (standard double-decode pattern). */
-const STABLE_READ_MS = 2500
+// When focus is hunting / the image is slightly out of focus, identical decodes can
+// arrive less frequently. Give the camera more time before we "give up".
+const STABLE_READ_MS = 5000
 const STABLE_READ_COUNT = 2
 const MAX_SCANNER_REF_RETRIES = 60
 
@@ -32,6 +36,8 @@ const PREFERRED_CAMERA_CONSTRAINTS: MediaTrackConstraints = {
   width: { ideal: 1280 },
   height: { ideal: 720 },
   facingMode: { ideal: "environment" },
+  // Best-effort continuous autofocus. Some browsers may reject this; we already have a fallback camera path.
+  advanced: [{ focusMode: "continuous" }] as any,
 }
 
 const FALLBACK_CAMERA_CONSTRAINTS: MediaTrackConstraints = {

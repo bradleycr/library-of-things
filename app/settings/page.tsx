@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useRef } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useRouter } from "next/navigation"
 import { Trash2, Save, Loader2, CreditCard, LogIn, LogOut } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -39,14 +39,23 @@ import { getAvatarUrl, getInitials, getAvatarSeed } from "@/lib/avatar"
 
 export default function SettingsPage() {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const { toast } = useToast()
   const { data, refetch, loading } = useBootstrapData()
   const { card, updatePseudonym, clearCard, sessionError } = useLibraryCard()
 
-  const landingMode = searchParams.get("mode")
+  const [landingMode, setLandingMode] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null
+    return new URLSearchParams(window.location.search).get("mode")
+  })
+
   const landingIsGenerate = landingMode === "generate"
   const landingIsLogin = landingMode === "login"
+
+  // Keep this in an effect (not during render) to avoid SSR/prerender constraints.
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    setLandingMode(new URLSearchParams(window.location.search).get("mode"))
+  }, [])
 
   const users = data?.users ?? []
   const currentUser = card?.user_id ? users.find((u) => u.id === card.user_id) ?? null : null
