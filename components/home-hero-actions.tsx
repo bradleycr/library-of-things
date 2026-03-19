@@ -22,7 +22,7 @@ export function HomeHeroActions() {
         </Button>
       </Link>
       {showGetCard && (
-        <Link href="/settings">
+        <Link href="/settings?mode=generate">
           <Button
             variant="secondary"
             size="default"

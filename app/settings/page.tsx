@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useRef } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Trash2, Save, Loader2, CreditCard, LogIn, LogOut } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -39,9 +39,14 @@ import { getAvatarUrl, getInitials, getAvatarSeed } from "@/lib/avatar"
 
 export default function SettingsPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { toast } = useToast()
   const { data, refetch, loading } = useBootstrapData()
   const { card, updatePseudonym, clearCard, sessionError } = useLibraryCard()
+
+  const landingMode = searchParams.get("mode")
+  const landingIsGenerate = landingMode === "generate"
+  const landingIsLogin = landingMode === "login"
 
   const users = data?.users ?? []
   const currentUser = card?.user_id ? users.find((u) => u.id === card.user_id) ?? null : null
@@ -56,6 +61,13 @@ export default function SettingsPage() {
   /* ── Modal toggles ── */
   const [getCardModalOpen, setGetCardModalOpen] = useState(false)
   const [loginModalOpen, setLoginModalOpen] = useState(false)
+
+  // If we land here from the home page without a card, open the right modal immediately.
+  useEffect(() => {
+    if (card) return
+    if (landingIsGenerate) setGetCardModalOpen(true)
+    if (landingIsLogin) setLoginModalOpen(true)
+  }, [card, landingIsGenerate, landingIsLogin])
 
   /* ── Profile fields ── */
   const [displayName, setDisplayName] = useState("")
@@ -344,28 +356,37 @@ export default function SettingsPage() {
       <div className="py-6 sm:py-8"><div className="page-container">
         <div className="mx-auto max-w-md rounded-xl border border-border bg-card p-8 text-center shadow-sm">
           <h2 className="font-serif text-xl font-semibold text-foreground">
-            Sign in to manage settings
+            {landingIsGenerate ? "Get your library card" : "Sign in to manage settings"}
           </h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            Get a new library card or log in with your card number and PIN to access your profile and settings.
+            {landingIsGenerate
+              ? "Create a pseudonymous library card (card number + PIN)."
+              : "Get a new library card or log in with your card number and PIN to access your profile and settings."}
           </p>
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
-            <Button
-              variant="default"
-              className="gap-2"
-              onClick={() => setLoginModalOpen(true)}
-            >
-              <LogIn className="h-4 w-4" />
-              Log in with card
-            </Button>
-            <Button
-              variant="outline"
-              className="gap-2"
-              onClick={() => setGetCardModalOpen(true)}
-            >
-              <CreditCard className="h-4 w-4" />
-              Get library card
-            </Button>
+            {landingIsGenerate ? (
+              <>
+                <Button variant="default" className="gap-2" onClick={() => setGetCardModalOpen(true)}>
+                  <CreditCard className="h-4 w-4" />
+                  Get library card
+                </Button>
+                <Button variant="outline" className="gap-2" onClick={() => setLoginModalOpen(true)}>
+                  <LogIn className="h-4 w-4" />
+                  Log in with card
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="default" className="gap-2" onClick={() => setLoginModalOpen(true)}>
+                  <LogIn className="h-4 w-4" />
+                  Log in with card
+                </Button>
+                <Button variant="outline" className="gap-2" onClick={() => setGetCardModalOpen(true)}>
+                  <CreditCard className="h-4 w-4" />
+                  Get library card
+                </Button>
+              </>
+            )}
           </div>
         </div>
         <GetLibraryCardModal

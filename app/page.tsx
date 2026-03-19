@@ -37,7 +37,9 @@ async function loadHomeData() {
 export default async function HomePage() {
   const { books, loanEvents, nodes, ok } = await loadHomeData()
   const availableBooks = books.filter((b) => b.availability_status === "available")
-  const featuredBooks = availableBooks.slice(0, 4)
+  const featuredBooks = [...availableBooks]
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, 4)
   const totalBooks = books.length
   const totalLoans = loanEvents.length
   const totalNodes = nodes.length
@@ -82,7 +84,7 @@ export default async function HomePage() {
         <div className="page-container">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-baseline sm:justify-between">
             <h2 className="text-lg font-semibold text-foreground">
-              Available now
+              Recently Added
             </h2>
             <Link
               href="/explore"
