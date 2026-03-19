@@ -21,9 +21,11 @@ export interface IsbnScannerDialogProps {
   onScan: (isbn: string) => void
 }
 
-const CAMERA_WARMUP_MS = 1200
-const STABLE_READ_MS = 1500
-const STABLE_READ_COUNT = 4
+/** Brief delay so the first frames aren’t garbage; keep short to avoid “stuck” feeling. */
+const CAMERA_WARMUP_MS = 450
+/** Two identical valid reads within this window = accept (standard double-decode pattern). */
+const STABLE_READ_MS = 2500
+const STABLE_READ_COUNT = 2
 const MAX_SCANNER_REF_RETRIES = 60
 
 const PREFERRED_CAMERA_CONSTRAINTS: MediaTrackConstraints = {
@@ -65,8 +67,9 @@ function validateScannedIsbn(raw: string): { normalized: string } | { error: str
 /**
  * Dialog that scans an ISBN via live camera or a photo.
  * Uses a tightened Quagga2 configuration for ISBN-only scanning:
- * warm up the camera, read only EAN-13, require stable repeated matches,
- * and keep a manual ISBN fallback inside the same production flow.
+ * EAN-13 only, short warmup, **two** matching valid reads (check digit + Bookland),
+ * plus manual / photo fallbacks. Parent `onScan` / `onOpenChange` are read from refs
+ * so inline handlers don’t restart the camera on every React render.
  */
 export function IsbnScannerDialog({
   open,
@@ -84,10 +87,17 @@ export function IsbnScannerDialog({
   const detectedHandlerRef = useRef<((data: QuaggaJSResultObject) => void) | null>(null)
   const detectedRef = useRef(false)
   const liveReadyAtRef = useRef(0)
-  /** Require several identical valid reads after autofocus settles. */
   const lastCodeRef = useRef<string | null>(null)
   const lastCodeAtRef = useRef<number>(0)
   const sameCodeCountRef = useRef<number>(0)
+
+  /** Stable across renders — prevents Quagga `useEffect` from tearing down the stream. */
+  const onScanRef = useRef(onScan)
+  const onOpenChangeRef = useRef(onOpenChange)
+  useEffect(() => {
+    onScanRef.current = onScan
+    onOpenChangeRef.current = onOpenChange
+  }, [onScan, onOpenChange])
 
   const stopScanner = useCallback(async () => {
     const Quagga = quaggaRef.current
@@ -109,58 +119,56 @@ export function IsbnScannerDialog({
     quaggaRef.current = null
   }, [])
 
-  const finishScan = useCallback(
-    (normalized: string) => {
-      detectedRef.current = true
-      setStatus("loading")
-      setMessage(`ISBN confirmed: ${normalized}. Opening…`)
-      void stopScanner().then(() => {
-        onScan(normalized)
-        onOpenChange(false)
-      })
-    },
-    [onOpenChange, onScan, stopScanner],
-  )
+  const finishScan = useCallback((normalized: string) => {
+    if (detectedRef.current) return
+    detectedRef.current = true
+    setStatus("loading")
+    setMessage(`ISBN confirmed: ${normalized}. Opening…`)
+    void stopScanner().then(() => {
+      onScanRef.current(normalized)
+      onOpenChangeRef.current(false)
+    })
+  }, [stopScanner])
 
-  const handleDetected = useCallback(
-    (result: QuaggaJSResultObject) => {
-      if (detectedRef.current) return
-      if (Date.now() < liveReadyAtRef.current) return
+  /** Assigned each render; effect only calls this ref so deps stay minimal. */
+  const handleDetectedRef = useRef<(result: QuaggaJSResultObject) => void>(() => {})
+  handleDetectedRef.current = (result: QuaggaJSResultObject) => {
+    if (detectedRef.current) return
+    if (Date.now() < liveReadyAtRef.current) return
 
-      const codeResult = result?.codeResult
-      const code = codeResult?.code ?? null
-      if (!code || codeResult?.format !== "ean_13") {
-        return
-      }
+    const codeResult = result?.codeResult
+    const code = codeResult?.code ?? null
+    if (!code || codeResult?.format !== "ean_13") {
+      return
+    }
 
-      const validated = validateScannedIsbn(code)
-      if ("error" in validated) {
-        setMessage("Center the 13-digit ISBN barcode inside the guide and hold steady.")
-        sameCodeCountRef.current = 0
-        lastCodeRef.current = null
-        return
-      }
+    const validated = validateScannedIsbn(code)
+    if ("error" in validated) {
+      setMessage("Center the ISBN barcode in the frame.")
+      sameCodeCountRef.current = 0
+      lastCodeRef.current = null
+      return
+    }
 
-      const normalized = validated.normalized
-      const now = Date.now()
-      const lastCode = lastCodeRef.current
-      const lastAt = lastCodeAtRef.current
-      if (normalized === lastCode && now - lastAt <= STABLE_READ_MS) {
-        sameCodeCountRef.current += 1
-      } else {
-        sameCodeCountRef.current = 1
-      }
-      lastCodeRef.current = normalized
-      lastCodeAtRef.current = now
-      if (sameCodeCountRef.current < STABLE_READ_COUNT) {
-        setMessage(`Possible ISBN: ${normalized}. Hold steady to confirm.`)
-        return
-      }
+    const normalized = validated.normalized
+    const now = Date.now()
+    const lastCode = lastCodeRef.current
+    const lastAt = lastCodeAtRef.current
+    if (normalized === lastCode && now - lastAt <= STABLE_READ_MS) {
+      sameCodeCountRef.current += 1
+    } else {
+      sameCodeCountRef.current = 1
+    }
+    lastCodeRef.current = normalized
+    lastCodeAtRef.current = now
 
-      finishScan(normalized)
-    },
-    [finishScan],
-  )
+    if (sameCodeCountRef.current < STABLE_READ_COUNT) {
+      setMessage("Got it — hold steady…")
+      return
+    }
+
+    finishScan(normalized)
+  }
 
   useEffect(() => {
     if (!open) return
@@ -200,7 +208,8 @@ export function IsbnScannerDialog({
                 readers: ["ean_reader"],
               },
               locate: true,
-              frequency: 10,
+              /** Slightly lower rate = less CPU / less AF thrash on some phones. */
+              frequency: 6,
               numOfWorkers:
                 typeof navigator !== "undefined"
                   ? Math.max(1, Math.min(2, navigator.hardwareConcurrency || 1))
@@ -245,7 +254,7 @@ export function IsbnScannerDialog({
 
       const detectedHandler = (data: QuaggaJSResultObject) => {
         if (cancelled || detectedRef.current) return
-        handleDetected(data)
+        handleDetectedRef.current(data)
       }
       detectedHandlerRef.current = detectedHandler
       Quagga.onDetected(detectedHandler)
@@ -270,7 +279,7 @@ export function IsbnScannerDialog({
 
       liveReadyAtRef.current = Date.now() + CAMERA_WARMUP_MS
       setStatus("live")
-      setMessage("Center the 13-digit ISBN barcode inside the guide and hold steady.")
+      setMessage("Point the camera at the barcode on the back of the book.")
     }
 
     const tryStart = () => {
@@ -310,6 +319,8 @@ export function IsbnScannerDialog({
 
     rafId = requestAnimationFrame(tryStart)
 
+    /* Cleanup only. Deps omit onScan/onOpenChange so parent re-renders don’t
+       restart Quagga and refocus the camera. */
     return () => {
       cancelled = true
       cancelAnimationFrame(rafId)
@@ -317,7 +328,7 @@ export function IsbnScannerDialog({
       setStatus("idle")
       setMessage(null)
     }
-  }, [open, restartNonce, handleDetected, stopScanner])
+  }, [open, restartNonce, stopScanner])
 
   const handleClose = useCallback(() => {
     void stopScanner()
