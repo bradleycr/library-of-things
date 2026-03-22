@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { Copy, Check, PlusCircle, UserCog, ShieldCheck } from "lucide-react"
+import { Copy, Check, PlusCircle, UserCog, ShieldCheck, BookOpen } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -137,8 +137,14 @@ export function GetLibraryCardModal({ open, onOpenChange, mode }: GetLibraryCard
 
             {/* Next-step navigation */}
             <div className="flex flex-col gap-2 pt-1">
-              <Link href="/add-book" onClick={() => onOpenChange(false)}>
+              <Link href="/explore" onClick={() => onOpenChange(false)}>
                 <Button variant="default" className="w-full gap-2">
+                  <BookOpen className="h-4 w-4" />
+                  Find a book
+                </Button>
+              </Link>
+              <Link href="/add-book" onClick={() => onOpenChange(false)}>
+                <Button variant="outline" className="w-full gap-2">
                   <PlusCircle className="h-4 w-4" />
                   Add a book
                 </Button>

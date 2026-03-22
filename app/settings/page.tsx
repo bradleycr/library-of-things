@@ -365,12 +365,18 @@ export default function SettingsPage() {
       <div className="py-6 sm:py-8"><div className="page-container">
         <div className="mx-auto max-w-md rounded-xl border border-border bg-card p-8 text-center shadow-sm">
           <h2 className="font-serif text-xl font-semibold text-foreground">
-            {landingIsGenerate ? "Get your library card" : "Sign in to manage settings"}
+            {landingIsGenerate
+              ? "Get your library card"
+              : landingIsLogin
+                ? "Log in with your library card"
+                : "Library card"}
           </h2>
           <p className="mt-2 text-sm text-muted-foreground">
             {landingIsGenerate
               ? "Create a pseudonymous library card (card number + PIN)."
-              : "Get a new library card or log in with your card number and PIN to access your profile and settings."}
+              : landingIsLogin
+                ? "Enter the card number and PIN you already have to use this device."
+                : "Get a new card or log in with your card number and PIN to manage your profile and borrowing."}
           </p>
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
             {landingIsGenerate ? (
@@ -382,6 +388,17 @@ export default function SettingsPage() {
                 <Button variant="outline" className="gap-2" onClick={() => setLoginModalOpen(true)}>
                   <LogIn className="h-4 w-4" />
                   Log in with card
+                </Button>
+              </>
+            ) : landingIsLogin ? (
+              <>
+                <Button variant="default" className="gap-2" onClick={() => setLoginModalOpen(true)}>
+                  <LogIn className="h-4 w-4" />
+                  Log in with card
+                </Button>
+                <Button variant="outline" className="gap-2" onClick={() => setGetCardModalOpen(true)}>
+                  <CreditCard className="h-4 w-4" />
+                  Get library card
                 </Button>
               </>
             ) : (
@@ -542,7 +559,7 @@ export default function SettingsPage() {
           </Card>
 
           {/* ─── Contact ─── */}
-          <Card className="border-border">
+          <Card id="contact" className="scroll-mt-24 border-border">
             <CardHeader>
               <CardTitle className="text-card-foreground">Contact</CardTitle>
               <CardDescription>

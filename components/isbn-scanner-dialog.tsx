@@ -422,12 +422,39 @@ export function IsbnScannerDialog({
         <DialogHeader>
           <DialogTitle>Scan ISBN</DialogTitle>
           <DialogDescription id="isbn-scanner-description">
-            Hold the barcode on the back of the book in front of the camera, or
-            take a photo. We&apos;ll fill in the ISBN and look up the book.
+            Type the ISBN if you already know it — otherwise use the camera. On some phones,{" "}
+            <strong>Take photo</strong> is easier than live scan.
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex min-w-0 flex-col gap-4">
+          <div className="rounded-lg border border-border bg-muted/30 p-3">
+            <Label htmlFor="manual-isbn" className="text-sm font-medium text-foreground">
+              Type ISBN (often on the copyright page too)
+            </Label>
+            <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+              <Input
+                id="manual-isbn"
+                inputMode="text"
+                placeholder="9780199678112"
+                value={manualIsbn}
+                onChange={(e) => {
+                  setManualIsbn(e.target.value)
+                  if (manualError) setManualError(null)
+                }}
+              />
+              <Button
+                type="button"
+                variant="default"
+                className="shrink-0"
+                onClick={handleManualSubmit}
+              >
+                Use ISBN
+              </Button>
+            </div>
+            {manualError && <p className="mt-2 text-xs text-destructive">{manualError}</p>}
+          </div>
+
           {/* Keep the viewport mounted so retries reuse the same target cleanly. */}
           {status !== "no-camera" && (
             <div
@@ -450,6 +477,8 @@ export function IsbnScannerDialog({
 
           {message && (
             <p
+              role="status"
+              aria-live="polite"
               className={
                 status === "error"
                   ? "text-sm text-destructive"
@@ -459,33 +488,6 @@ export function IsbnScannerDialog({
               {message}
             </p>
           )}
-
-          <div className="rounded-lg border border-border bg-muted/30 p-3">
-            <Label htmlFor="manual-isbn" className="text-sm font-medium text-foreground">
-              Or type the ISBN manually
-            </Label>
-            <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-              <Input
-                id="manual-isbn"
-                inputMode="text"
-                placeholder="9780199678112"
-                value={manualIsbn}
-                onChange={(e) => {
-                  setManualIsbn(e.target.value)
-                  if (manualError) setManualError(null)
-                }}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                className="shrink-0"
-                onClick={handleManualSubmit}
-              >
-                Use ISBN
-              </Button>
-            </div>
-            {manualError && <p className="mt-2 text-xs text-destructive">{manualError}</p>}
-          </div>
 
           <div className="flex flex-wrap gap-2">
             <Button
@@ -511,7 +513,7 @@ export function IsbnScannerDialog({
                   setRestartNonce((value) => value + 1)
                 }}
               >
-                Try again
+                Try camera again
               </Button>
             )}
             <Button type="button" variant="ghost" size="sm" onClick={handleClose}>

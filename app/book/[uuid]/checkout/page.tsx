@@ -116,12 +116,29 @@ export default function CheckoutPage({
     return (
       <MinimalScreen
         icon={<AlertCircle className="h-12 w-12 text-destructive" />}
-        title="Invalid link"
-        message="Use the full link from the book’s QR or NFC tag."
+        title="Open this from the book’s tag"
+        message={
+          <>
+            <p>
+              Checkout starts from the <strong>QR code or NFC tag</strong> on the physical book. Scan the sticker on the cover or spine with your phone.
+            </p>
+            <p className="mt-3 text-sm">
+              If you opened this page from a shared link or search, open the book in the catalog instead.
+            </p>
+          </>
+        }
         action={
-          <Link href={`/book/${uuid}`}>
-            <Button variant="outline">View book</Button>
-          </Link>
+          <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
+            <Link href={`/book/${uuid}`}>
+              <Button className="w-full sm:w-auto">View book in catalog</Button>
+            </Link>
+            <Link href="/explore">
+              <Button variant="outline" className="w-full gap-2 sm:w-auto">
+                <ArrowLeft className="h-4 w-4" />
+                Browse books
+              </Button>
+            </Link>
+          </div>
         }
       />
     )
@@ -204,12 +221,28 @@ export default function CheckoutPage({
     return (
       <MinimalScreen
         icon={<CheckCircle2 className="h-14 w-14 text-primary" />}
-        title="Book returned"
-        message="Thanks — it’s back in the library for the next reader."
+        title="Return recorded"
+        message={
+          <>
+            <p>Thanks — the catalog now shows this copy as available for the next reader.</p>
+            <p className="mt-3 text-sm">
+              {book.is_pocket_library
+                ? "If you haven’t already, complete the handoff the way you agreed with the lender."
+                : "If you haven’t already, leave the book on the shelf at the node."}
+            </p>
+          </>
+        }
         action={
-          <Link href="/explore">
-            <Button>Browse books</Button>
-          </Link>
+          <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
+            <Link href="/explore">
+              <Button className="w-full sm:w-auto">Browse books</Button>
+            </Link>
+            <Link href="/my-books">
+              <Button variant="outline" className="w-full sm:w-auto">
+                My books
+              </Button>
+            </Link>
+          </div>
         }
       />
     )
@@ -221,12 +254,19 @@ export default function CheckoutPage({
       <MinimalScreen
         book={book}
         icon={<AlertCircle className="h-12 w-12 text-muted-foreground/60" />}
-        title="Library card required"
-        message="Get a free library card or log in to check out this book."
+        title="You need a library card to borrow"
+        message="It’s free and pseudonymous — a card number and PIN on this device. Already have one? Log in with it."
         action={
-          <Link href="/settings">
-            <Button className="gap-2">Get Library Card or Log In</Button>
-          </Link>
+          <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
+            <Link href="/settings?mode=generate">
+              <Button className="w-full gap-2 sm:w-auto">Get a library card</Button>
+            </Link>
+            <Link href="/settings?mode=login">
+              <Button variant="outline" className="w-full sm:w-auto">
+                Log in with card
+              </Button>
+            </Link>
+          </div>
         }
       />
     )
@@ -251,11 +291,15 @@ export default function CheckoutPage({
         book={book}
         icon={<AlertCircle className="h-12 w-12 text-amber-500" />}
         title="Contact info required"
-        message="This book can only be borrowed by people who have added contact info to their profile. Add yours in Settings, then return here."
+        message="This title can only go to readers who’ve added a way to reach them (email, phone, or a profile link). Add at least one in Settings, then come back here."
         action={
           <div className="flex flex-col gap-3 sm:flex-row">
-            <Link href="/settings"><Button>Settings</Button></Link>
-            <Link href={`/book/${uuid}`}><Button variant="outline">Book details</Button></Link>
+            <Link href="/settings#contact">
+              <Button>Add contact info</Button>
+            </Link>
+            <Link href={`/book/${uuid}`}>
+              <Button variant="outline">Book details</Button>
+            </Link>
           </div>
         }
       />
@@ -277,7 +321,7 @@ export default function CheckoutPage({
         book={book}
         icon={<AlertCircle className="h-12 w-12 text-amber-500" />}
         title="Borrowing limit reached"
-        message={`You can have at most ${MAX_BOOKS_CHECKED_OUT} books checked out at once. Return one to check out another.`}
+        message={`You can have up to ${MAX_BOOKS_CHECKED_OUT} books out at a time. Return one on My books, then tap this book’s tag again to borrow.`}
         action={
           <div className="flex flex-col gap-3 sm:flex-row">
             <Link href="/my-books">
@@ -719,12 +763,17 @@ function ReturnFlow({
             <BookCover {...getBookCoverSrcs(book)} title={book.title} />
           </div>
         </div>
-        <h1 className="text-center text-xl font-semibold text-foreground">{book.title}</h1>
+        <h1 className="text-center text-xl font-semibold text-foreground">Return: {book.title}</h1>
         <p className="mt-2 text-center text-muted-foreground">
-          This book is checked out. Suggested return: {suggestedReturn ?? "—"}
+          Suggested return date: {suggestedReturn ?? "—"}
         </p>
-        <p className="mt-6 text-center text-sm font-medium text-foreground">
-          Return this book at a location
+        <p className="mt-6 text-center text-sm text-muted-foreground">
+          {book.is_pocket_library
+            ? "When you’ve physically returned it to the owner or agreed drop-off, confirm below so the catalog stays accurate."
+            : "When you’ve left it on the shelf at a node, confirm below so the next person can find it."}
+        </p>
+        <p className="mt-3 text-center text-sm font-medium text-foreground">
+          Choose return location
         </p>
         <div className="mt-4 flex items-start gap-2">
           <Checkbox

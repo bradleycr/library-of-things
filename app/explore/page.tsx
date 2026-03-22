@@ -123,6 +123,11 @@ function ExplorePageContent() {
     setLendingType([])
   }
 
+  const filteredNode =
+    selectedNode !== "all" ? nodes.find((n) => n.id === selectedNode) : null
+
+  const filteredCount = filteredBooks.length
+
   return (
     <div className="py-6 sm:py-8">
       <div className="page-container">
@@ -134,9 +139,27 @@ function ExplorePageContent() {
           <p className="mt-2 text-muted-foreground">
             {loading
               ? "Loading…"
-              : `Search and browse ${books.length} books across ${nodes.length} community nodes`}
+              : filteredNode
+                ? `${filteredCount} book${filteredCount !== 1 ? "s" : ""} at ${filteredNode.name} match your search and filters`
+                : `Search and browse ${books.length} books across ${nodes.length} community nodes`}
           </p>
         </div>
+
+        {filteredNode && !loading && (
+          <div className="mb-6 flex flex-col gap-3 rounded-lg border border-primary/25 bg-primary/5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="text-sm text-foreground">
+              <p>
+                <span className="font-medium">Viewing one library:</span> {filteredNode.name}
+              </p>
+              {filteredNode.location_address ? (
+                <p className="mt-1 text-muted-foreground">{filteredNode.location_address}</p>
+              ) : null}
+            </div>
+            <Button variant="outline" size="sm" className="shrink-0" onClick={() => setNodeFilter("all")}>
+              See all libraries
+            </Button>
+          </div>
+        )}
 
         {/* Search & Filter Bar */}
         <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center">
@@ -226,7 +249,7 @@ function ExplorePageContent() {
                     htmlFor="available-only"
                     className="text-sm text-card-foreground"
                   >
-                    Available now
+                    Available to borrow
                   </Label>
                 </div>
               </div>

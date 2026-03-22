@@ -226,8 +226,18 @@ function MyBooksContent() {
   if (!card && !viewingOtherUser) {
     return (
       <div className="py-6 sm:py-8">
-        <div className="page-container">
-          <p className="text-muted-foreground">Get a library card or log in with your card to see your books.</p>
+        <div className="page-container max-w-lg">
+          <p className="text-muted-foreground">
+            Get a free library card (or log in with your existing card) to see what you’re borrowing and your history.
+          </p>
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+            <Link href="/settings?mode=generate">
+              <Button>Get a library card</Button>
+            </Link>
+            <Link href="/settings?mode=login">
+              <Button variant="outline">Log in with card</Button>
+            </Link>
+          </div>
         </div>
       </div>
     )
@@ -661,11 +671,14 @@ function MyBooksContent() {
         <Dialog open={returnGateOpen} onOpenChange={(open) => !open && closeReturnGate()}>
           <DialogContent className="max-h-[85vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Return: {returnBook?.title ?? ""}</DialogTitle>
+              <DialogTitle>Confirm you have this copy</DialogTitle>
               <DialogDescription>
-                To return this book we need to verify you have it. Use the ISBN scanner to scan the barcode on the book, or open the return page by scanning the QR or NFC tag on the physical book.
+                Quick check so returns stay accurate — scan the ISBN on the back of the book, or open the return screen using the same QR/NFC tag you used to borrow.
               </DialogDescription>
             </DialogHeader>
+            {returnBook?.title ? (
+              <p className="text-sm font-medium text-foreground">{returnBook.title}</p>
+            ) : null}
             <div className="mt-4 flex flex-col gap-3">
               {ISBN_CHECKOUT_RETURN_ENABLED && (
                 <Button
@@ -674,7 +687,7 @@ function MyBooksContent() {
                   onClick={() => setIsbnScannerOpenForReturn(true)}
                 >
                   <Camera className="h-4 w-4" />
-                  Use ISBN scanner
+                  Scan ISBN barcode
                 </Button>
               )}
               <Button
@@ -683,7 +696,7 @@ function MyBooksContent() {
                 onClick={handleOpenReturnPage}
               >
                 <QrCode className="h-4 w-4" />
-                Open return page (scan QR or NFC on book)
+                Use QR or NFC on the book
               </Button>
               <Button variant="ghost" size="sm" onClick={closeReturnGate}>
                 Cancel
@@ -710,7 +723,7 @@ function MyBooksContent() {
                 Return: {returnBook?.title ?? ""}
               </DialogTitle>
               <DialogDescription>
-                Select a return location. You can leave a short note about the condition of the book, how you enjoyed it, or anything else — it will appear in the sharing history.
+                Pick where you’re leaving the book (or the closest node). Optional note goes on the public sharing history.
               </DialogDescription>
             </DialogHeader>
             <div className="mt-4 flex flex-col gap-4">
