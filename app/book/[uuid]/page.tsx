@@ -37,7 +37,7 @@ import { useBootstrapData } from "@/hooks/use-bootstrap-data"
 import { useLibraryCard } from "@/hooks/use-library-card"
 import { useToast } from "@/hooks/use-toast"
 import { IsbnScannerDialog } from "@/components/isbn-scanner-dialog"
-import { normalizeIsbn } from "@/lib/isbn-utils"
+import { isbn10To13, normalizeIsbn } from "@/lib/isbn-utils"
 import { ISBN_CHECKOUT_RETURN_ENABLED } from "@/lib/feature-flags"
 import { DEFAULT_LOAN_PERIOD_DAYS, resolveLoanPeriodDays } from "@/lib/loan-period"
 
@@ -93,13 +93,23 @@ export default function BookDetailPage({
     (scannedIsbn: string) => {
       if (!book?.checkout_url) return
       const bookNorm = book.isbn ? normalizeIsbn(book.isbn) : null
-      if (bookNorm !== null && bookNorm !== scannedIsbn) {
-        toast({
-          variant: "destructive",
-          title: "Wrong book",
-          description: "This barcode doesn’t match the book on this page.",
-        })
-        return
+      if (bookNorm !== null) {
+        const bookAs13 = bookNorm.length === 10 ? isbn10To13(bookNorm) : bookNorm
+        const scanAs13 = scannedIsbn.length === 10 ? isbn10To13(scannedIsbn) : scannedIsbn
+        const matches =
+          bookNorm === scannedIsbn ||
+          (bookAs13 != null && bookAs13 === scannedIsbn) ||
+          (scanAs13 != null && scanAs13 === bookNorm) ||
+          (bookAs13 != null && scanAs13 != null && bookAs13 === scanAs13)
+
+        if (!matches) {
+          toast({
+            variant: "destructive",
+            title: "Wrong book",
+            description: "This barcode doesn’t match the book on this page.",
+          })
+          return
+        }
       }
       setIsbnScannerOpen(false)
       const path = book.checkout_url.startsWith("/") ? book.checkout_url : `/${book.checkout_url}`

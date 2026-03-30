@@ -71,6 +71,47 @@ function validateScannedIsbn(raw: string): { normalized: string } | { error: str
 }
 
 /**
+ * Multi-pass photo decode — tries several locator/resolution combos so a
+ * single bad config doesn't reject an otherwise-readable barcode image.
+ * Validates through `validateScannedIsbn` (check digit + Bookland) rather
+ * than relying on Quagga's format label, which can differ between versions.
+ */
+async function decodePhotoIsbn(imageUrl: string): Promise<string | null> {
+  const passes: Array<{
+    size: number
+    locator?: { halfSample: boolean; patchSize: string }
+  }> = [
+    { size: 1280, locator: { halfSample: false, patchSize: "medium" } },
+    { size: 800, locator: { halfSample: true, patchSize: "large" } },
+    { size: 1280 },
+  ]
+
+  for (const pass of passes) {
+    try {
+      const result = await Quagga.decodeSingle({
+        decoder: { readers: ["ean_reader"] },
+        inputStream: { size: pass.size },
+        locate: true,
+        ...(pass.locator ? { locator: pass.locator } : {}),
+        src: imageUrl,
+      })
+
+      const code = result?.codeResult?.code
+      if (!code) continue
+
+      const validated = validateScannedIsbn(code)
+      if ("error" in validated) continue
+
+      return validated.normalized
+    } catch {
+      continue
+    }
+  }
+
+  return null
+}
+
+/**
  * Dialog that scans an ISBN via live camera or a photo.
  * Uses a tightened Quagga2 configuration for ISBN-only scanning:
  * EAN-13 only, short warmup, **two** matching valid reads (check digit + Bookland),
@@ -106,23 +147,25 @@ export function IsbnScannerDialog({
   }, [onScan, onOpenChange])
 
   const stopScanner = useCallback(async () => {
-    const Quagga = quaggaRef.current
-    if (!Quagga) return
+    const Q = quaggaRef.current
+    if (!Q) return
+    // Null out synchronously BEFORE async work so concurrent calls (e.g.
+    // finishScan + useEffect cleanup racing) see null and bail out.
+    quaggaRef.current = null
     try {
       if (detectedHandlerRef.current) {
-        Quagga.offDetected(detectedHandlerRef.current)
+        Q.offDetected(detectedHandlerRef.current)
         detectedHandlerRef.current = null
       } else {
-        Quagga.offDetected()
+        Q.offDetected()
       }
-      await Quagga.stop()
-      if (typeof Quagga.CameraAccess?.release === "function") {
-        await Quagga.CameraAccess.release()
+      await Q.stop()
+      if (typeof Q.CameraAccess?.release === "function") {
+        await Q.CameraAccess.release()
       }
     } catch {
-      // ignore
+      // ignore — already cleaned up or never fully started
     }
-    quaggaRef.current = null
   }, [])
 
   const finishScan = useCallback((normalized: string) => {
@@ -150,9 +193,12 @@ export function IsbnScannerDialog({
 
     const validated = validateScannedIsbn(code)
     if ("error" in validated) {
-      setMessage("Center the ISBN barcode in the frame.")
-      sameCodeCountRef.current = 0
-      lastCodeRef.current = null
+      // Don't reset the stable-read counter — invalid frames between valid
+      // reads are common during autofocus hunting and shouldn't force us to
+      // start the double-read confirmation from scratch.
+      if (lastCodeRef.current === null) {
+        setMessage("Center the ISBN barcode in the frame.")
+      }
       return
     }
 
@@ -361,30 +407,15 @@ export function IsbnScannerDialog({
       const url = URL.createObjectURL(file)
 
       try {
-        const result = await Quagga.decodeSingle({
-          decoder: { readers: ["ean_reader"] },
-          inputStream: {
-            size: 1280,
-          },
-          locate: true,
-          src: url,
-        })
-
-        const codeResult = result?.codeResult
-        if (!codeResult?.code || codeResult.format !== "ean_13") {
-          setMessage("No ISBN barcode found. Try a clearer photo of the back of the book.")
+        const decoded = await decodePhotoIsbn(url)
+        if (decoded) {
+          finishScan(decoded)
+        } else {
+          setMessage(
+            "No ISBN barcode found. Try a clearer photo of the back of the book, or type the ISBN below.",
+          )
           setStatus("error")
-          return
         }
-
-        const validated = validateScannedIsbn(codeResult.code)
-        if ("error" in validated) {
-          setMessage(validated.error)
-          setStatus("error")
-          return
-        }
-
-        finishScan(validated.normalized)
       } catch {
         setMessage("Photo scan failed. Try a clearer image, or type the ISBN below.")
         setStatus("error")
