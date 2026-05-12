@@ -33,8 +33,8 @@ Just a pseudonymous library card generated in the browser.
 ```
 
 Built for [Foresight Institute](https://foresight.org)'s office libraries in
-Berlin and San Francisco, but designed so any community can run its own nodes
-and curate its own collections.
+Berlin and San Francisco, but designed so any community can fork it, run its
+own database, create its own nodes, and curate its own collections.
 
 ## Quickstart
 
@@ -49,6 +49,9 @@ pnpm dev
 ```
 
 Open [localhost:3000](http://localhost:3000). The app is also currently hosted at [libraryofthings.vercel.app](https://libraryofthings.vercel.app).
+
+Want to run a separate community library from your own fork? Start with
+**[docs/FORKING.md](./docs/FORKING.md)**.
 
 ### Database
 
@@ -97,6 +100,8 @@ Copy `env.example` → `.env.local`:
 |---------|-------------|
 | `pnpm dev` | Start dev server (Turbopack) |
 | `pnpm build` | Production build + type-check |
+| `pnpm check` | Supported repo gate; currently aliases `pnpm build` |
+| `pnpm lint` | Compatibility alias that explains Next.js 16 lint removal, then runs `pnpm check` |
 | `pnpm db:ensure-schema` | Create / update all tables |
 | `pnpm db:provision` | Reset + seed demo data (dev only) |
 
@@ -128,6 +133,9 @@ Next.js 16 · React 19 · TypeScript · Tailwind CSS · PostgreSQL (via `pg`, no
 | Doc | What it covers |
 |-----|---------------|
 | [CONTRIBUTING.md](./CONTRIBUTING.md) | Project values, architecture, how to submit changes |
+| [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md) | Collaboration expectations |
+| [SECURITY.md](./SECURITY.md) | Vulnerability reporting and sensitive data guidance |
+| [docs/FORKING.md](./docs/FORKING.md) | Run an independent community library from your fork |
 | [docs/DEPLOY.md](./docs/DEPLOY.md) | Deploy your own instance (Vercel + Supabase) |
 | [docs/DATABASE.md](./docs/DATABASE.md) | Supabase connection setup, local Postgres |
 | [docs/POCKET_LIBRARY.md](./docs/POCKET_LIBRARY.md) | How the floating-book feature works |

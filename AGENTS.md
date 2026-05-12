@@ -22,11 +22,11 @@ Library of Things is a single Next.js 16 full-stack app (App Router, React 19, T
 ### Non-obvious caveats
 
 - **Unset `DATABASE_URL` before local dev/scripts**: The VM may inject a remote Supabase `DATABASE_URL` via secrets. Node's `--env-file` does **not** override existing env vars, so all `pnpm db:*` and `pnpm dev` commands will silently use the remote DB. Run `unset DATABASE_URL` first, or prefix commands with `env -u DATABASE_URL`.
-- **Lint script is broken**: `pnpm lint` calls `next lint`, which was removed in Next.js 16. This is a pre-existing issue. Use `pnpm build` (which includes TypeScript checking) as the primary correctness check.
+- **Repo check**: Next.js 16 removed `next lint`. Use `pnpm check` (currently aliases `pnpm build`) as the primary correctness check; `pnpm lint` is a compatibility alias that explains this and then runs `pnpm check`.
 - **Checkout requires a token**: The `/book/[uuid]/checkout` route requires a `?token=` query param generated from QR/NFC tags. Direct navigation without a token shows "Invalid link". The steward dashboard shows full checkout URLs under "Bulk NFC Tag URLs".
 - **DB scripts use `--env-file`**: All `pnpm db:*` scripts load env from `.env.local` via Node's `--env-file` flag. The `.env.local` file must exist for these to work.
 - **Schema before first run**: Run `pnpm db:ensure-schema` before the first `pnpm dev` to create tables. Re-run after pulling if the codebase adds new columns. Optionally `pnpm db:provision` to seed demo data (destructive).
-- **API smoke test**: With `pnpm dev` running, `pnpm test:api-smoke` hits `/api/bootstrap`, card **generate**, **checkout**, **tap**, **return**, then re-checks bootstrap and (when `DATABASE_URL` is loaded) verifies `loan_events` and `books` in Postgres. Not a full test suite; use `pnpm build` as the primary compile check.
+- **API smoke test**: With `pnpm dev` running, `pnpm test:api-smoke` hits `/api/bootstrap`, card **generate**, **checkout**, **tap**, **return**, then re-checks bootstrap and (when `DATABASE_URL` is loaded) verifies `loan_events` and `books` in Postgres. Not a full test suite; use `pnpm check` as the primary compile check.
 - **Location not used**: The app does not request geolocation or use location tracking. Optional geofencing code exists in `lib/geofence.ts` and `hooks/use-return-location.ts` but is not wired into the UI; return flows use a required checkbox acknowledgment instead.
 
 ### Authentication model

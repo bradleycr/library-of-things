@@ -4,6 +4,9 @@ Deploy your own instance using **Vercel** (app hosting) and **Supabase** (Postgr
 
 The reference deployment for this repo is **[libraryofthings.vercel.app](https://libraryofthings.vercel.app)**.
 
+If you are running an independent community library, fork the repo first and see
+[FORKING.md](./FORKING.md) for setup and operating notes.
+
 ## 1. Supabase database
 
 1. Create a project at [supabase.com](https://supabase.com) (free tier works).
@@ -27,7 +30,8 @@ Optionally seed demo data with `pnpm db:provision` (destructive).
 | Variable | Value | Environments |
 |----------|-------|-------------|
 | `DATABASE_URL` | Supabase Session Pooler URI (port 6543) | Production, Preview |
-| `STEWARD_PASSWORD` | A strong password for the steward dashboard | Production |
+| `STEWARD_PASSWORD` | A strong password for the steward dashboard | Production, Preview |
+| `DB_SSL` | Usually unset for Supabase; `strict` for self-hosted TLS | Production, Preview |
 
 4. Push to `main` — Vercel builds and deploys automatically.
 
@@ -40,12 +44,16 @@ node --env-file=.env.local scripts/set-vercel-env.mjs
 ```
 
 This pushes `DATABASE_URL` and `STEWARD_PASSWORD` to the Vercel project via the API.
+Set `VERCEL_PROJECT_ID` and `VERCEL_TEAM_SLUG` in `.env.local` if your Vercel
+project is not named `library-of-things` or lives under a team.
 
 ## 3. After deploy
 
 - **Steward dashboard** — `/steward/login` (password = your `STEWARD_PASSWORD`).
   From here you can manage books, bulk-add by ISBN, manage members, and copy
   NFC tag URLs.
+- **First node** — add at least one node from the steward dashboard, then add
+  books to that node or as Pocket Library books.
 - **Schema updates** — when you pull new code that adds columns, run
   `pnpm db:ensure-schema` against your production `DATABASE_URL` once. Otherwise features like profile image regeneration may return "Database needs an update".
 

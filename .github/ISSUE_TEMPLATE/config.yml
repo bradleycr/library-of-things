@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Deployment guide
+    url: https://github.com/bradleycr/library-of-things/blob/main/docs/DEPLOY.md
+    about: Start here if you are setting up your own instance.
+  - name: Database setup
+    url: https://github.com/bradleycr/library-of-things/blob/main/docs/DATABASE.md
+    about: Supabase and local Postgres connection help.

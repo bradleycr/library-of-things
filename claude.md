@@ -50,6 +50,8 @@
 
 - **README.md** — Quickstart, scripts, project overview
 - **CONTRIBUTING.md** — Project values, architecture, how to contribute
+- **CODE_OF_CONDUCT.md / SECURITY.md** — Collaboration expectations and vulnerability reporting
+- **docs/FORKING.md** — How to fork and run an independent community library
 - **docs/DEPLOY.md** — Vercel + Supabase deploy
 - **docs/DATABASE.md** — DB connection setup (Supabase Session Pooler, local Postgres)
 - **docs/POCKET_LIBRARY.md** — Pocket Library (floating books) design
@@ -67,6 +69,7 @@
 ## Current state (as of last update)
 
 - App is deployable; main branch drives Vercel.
+- Open-source readiness: GitHub Actions CI runs `pnpm check` on pushes/PRs; issue templates, Code of Conduct, Security policy, and a fuller PR template exist; `docs/FORKING.md` documents running an independent community library from a fork. `pnpm check` is the supported repo gate; `pnpm lint` is a compatibility alias explaining Next.js 16 lint removal.
 - Steward dashboard: edit book metadata, set availability (available / checked out / unavailable / missing), assign or change holder, move location; optional note per change; all such changes append to the sharing history (ledger). Member management: edit display name and contact info, delete members (steward-only API).
 - Book edit API (`PATCH /api/books/[id]`) and member API (`PATCH|DELETE /api/steward/members/[id]`) require steward cookie auth.
 - Remove-card-from-device flow includes the “save your card and PIN” confirmation dialog.

@@ -2,6 +2,10 @@
 
 Library of Things uses PostgreSQL. No ORM — just the `pg` driver with direct SQL.
 
+Each fork or independent community library should use its own database. The
+database is the boundary between communities: users, library cards, nodes,
+books, ledger events, and settings all live there.
+
 ## Option A: Supabase (recommended)
 
 Supabase provides a free managed Postgres instance that works well with Vercel.
@@ -47,6 +51,10 @@ pnpm db:ensure-schema
 This creates all tables (`users`, `nodes`, `books`, `library_cards`, `loan_events`,
 `trust_events`, `app_config`) and adds any missing columns (e.g. `profile_public` on
 `users`). Safe to re-run — it never deletes data. Run again after pulling if the schema was updated.
+
+For production forks, run this once against the production `DATABASE_URL` after
+the first deploy, and again after pulling upstream changes that mention schema
+updates.
 
 ### Demo data (optional)
 

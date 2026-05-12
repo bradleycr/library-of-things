@@ -2,6 +2,7 @@
   "name": "library-of-things",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@10.23.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/bradleycr/library-of-things.git"
@@ -9,8 +10,9 @@
   "scripts": {
     "dev": "next dev --turbo",
     "build": "next build",
+    "check": "pnpm build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "echo \"Next.js 16 removed next lint; use pnpm check for the supported repo gate.\" && pnpm check",
     "db:provision": "node --env-file=.env.local scripts/provision-db.mjs",
     "db:ensure-schema": "node --env-file=.env.local scripts/ensure-schema.mjs",
     "db:backfill-added-events": "node --env-file=.env.local scripts/backfill-added-events.mjs",

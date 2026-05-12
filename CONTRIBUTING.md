@@ -71,8 +71,19 @@ API; the client and UI stay unchanged.
 
 1. **Open an issue first** for anything non-trivial so we can discuss scope.
 2. **Fork the repo**, branch off `main`.
-3. Make your changes. Run `pnpm build` before pushing — it type-checks.
-4. **Open a PR** against `main`. A short description of what and why is enough.
+3. Install and run the app locally:
+   ```bash
+   corepack enable
+   pnpm install
+   cp env.example .env.local
+   pnpm db:ensure-schema
+   pnpm dev
+   ```
+4. Make your changes. Run `pnpm check` before pushing — it builds and type-checks.
+5. **Open a PR** against `main`. Fill out the template with the change, why it
+   matters, and the test plan.
+
+For a full self-hosting setup, see [docs/FORKING.md](./docs/FORKING.md).
 
 ## What to avoid
 
@@ -90,7 +101,16 @@ No formal linter (Next.js 16 removed `next lint`). Match the existing patterns:
 - Tailwind for styling, no CSS modules
 - Server logic in `lib/server/`, client hooks in `hooks/`
 - API routes return JSON; input validation via `lib/server/validate.ts`
-- `pnpm build` is the gate — if it builds, it ships
+- `pnpm check` is the gate — if it builds, it ships
+
+## Pull request checklist
+
+Before requesting review:
+
+- Run `pnpm check`.
+- Update docs when behavior, routes, scripts, env vars, or setup steps change.
+- Include screenshots for visible UI changes, especially mobile states.
+- Keep changes scoped. Large refactors are easier to review when split up.
 
 ## Questions?
 
