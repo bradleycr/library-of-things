@@ -5,11 +5,11 @@
  * ────────────────────────────────────────────────────────────────────────────
  * Two-engine, single-UI scanner that resolves to a normalized, validated ISBN.
  *
- *   1. Native engine  — `BarcodeDetector` (iOS 17+ Safari, Chrome, Edge).
- *      Fast, accurate, hardware-accelerated. Used whenever available.
+ *   1. Native engine  — `BarcodeDetector` (Chrome/Edge and some Android
+ *      browsers). Fast, accurate, hardware-accelerated. Used whenever available.
  *
  *   2. Quagga2 engine — pure-JS EAN-13 decoder.
- *      Used on browsers without `BarcodeDetector` (older iOS, Firefox).
+ *      Normal path for iPhone Safari and Firefox.
  *      Conservative config (no advanced focus modes, modest resolution) so
  *      iPhones don't trigger macro-mode auto-switching between back cameras.
  *
@@ -17,7 +17,7 @@
  *   • EAN-13 only
  *   • Check-digit validation
  *   • Bookland prefix (978/979) — refuses non-book product barcodes
- *   • Double-read confirmation within a short window — refuses single misreads
+ *   • Three-read confirmation within a short window — refuses single misreads
  *
  * Parent `onScan` / `onOpenChange` are read through refs so re-renders never
  * tear down the live camera mid-scan.
@@ -57,9 +57,11 @@ export interface IsbnScannerDialogProps {
 
 /** Short delay so first frames (autofocus / exposure) don't burn confirmations. */
 const CAMERA_WARMUP_MS = 600
-/** Two identical valid reads within this window = accept. */
+/** Three identical valid reads within this window = accept. */
 const STABLE_READ_MS = 4000
-const STABLE_READ_COUNT = 2
+const STABLE_READ_COUNT = 3
+/** Quagga confidence gate. Lower is better; rejects plausible but fuzzy misreads. */
+const MAX_QUAGGA_AVERAGE_ERROR = 0.18
 /** Native engine polling cap. We don't need 60 Hz; this keeps phones cool. */
 const NATIVE_SCAN_INTERVAL_MS = 120
 /** Retry budget for waiting on the container ref to mount. */
@@ -306,6 +308,24 @@ function freshStableState(): StableReadState {
   return { lastCode: null, lastAt: 0, count: 0 }
 }
 
+function quaggaReadLooksSharp(result: QuaggaJSResultObject): boolean {
+  const decodedCodes = result.codeResult?.decodedCodes
+  if (!Array.isArray(decodedCodes) || decodedCodes.length === 0) return true
+
+  const errors = decodedCodes
+    .map((part) => {
+      const maybeError = (part as { error?: unknown }).error
+      return typeof maybeError === "number" ? maybeError : null
+    })
+    .filter((value): value is number => value !== null)
+
+  if (errors.length === 0) return true
+  const averageError =
+    errors.reduce((total, value) => total + value, 0) / errors.length
+
+  return averageError <= MAX_QUAGGA_AVERAGE_ERROR
+}
+
 /* ────────────────────────────────────────────────────────────────────────────
  * Component
  * ──────────────────────────────────────────────────────────────────────────── */
@@ -523,6 +543,7 @@ export function IsbnScannerDialog({
       const detectedHandler = (data: QuaggaJSResultObject) => {
         const code = data?.codeResult?.code ?? null
         if (!code || data.codeResult?.format !== "ean_13") return
+        if (!quaggaReadLooksSharp(data)) return
         handleCandidate(code)
       }
 
@@ -777,8 +798,8 @@ export function IsbnScannerDialog({
         <DialogHeader>
           <DialogTitle>Scan ISBN</DialogTitle>
           <DialogDescription id="isbn-scanner-description">
-            Type the ISBN if you already know it — otherwise use the camera.
-            On phones, <strong>Take photo</strong> is the most reliable.
+            Type the ISBN if you already know it, use the live camera, or take a
+            photo of the barcode.
           </DialogDescription>
         </DialogHeader>
 
@@ -849,11 +870,6 @@ export function IsbnScannerDialog({
               }
             >
               {message}
-              {engineMode === "quagga" && status === "live" && (
-                <span className="ml-1 opacity-70">
-                  (using fallback scanner — Take photo if it doesn't pick up)
-                </span>
-              )}
             </p>
           )}
 
