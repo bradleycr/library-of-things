@@ -1,0 +1,17 @@
+{
+  "formatVersion": 1,
+  "passTypeIdentifier": "pass.com.libraryofthings.placeholder",
+  "teamIdentifier": "XXXXXXXXXX",
+  "organizationName": "Library of Things",
+  "description": "Library card",
+  "foregroundColor": "rgb(26, 26, 26)",
+  "backgroundColor": "rgb(245, 245, 247)",
+  "labelColor": "rgb(80, 80, 90)",
+  "generic": {
+    "headerFields": [],
+    "primaryFields": [],
+    "secondaryFields": [],
+    "auxiliaryFields": [],
+    "backFields": []
+  }
+}

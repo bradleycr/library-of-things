@@ -33,6 +33,8 @@ Optionally seed demo data with `pnpm db:provision` (destructive).
 | `STEWARD_PASSWORD` | A strong password for the steward dashboard | Production, Preview |
 | `DB_SSL` | Usually unset for Supabase; `strict` for self-hosted TLS | Production, Preview |
 
+Optional **Apple Wallet** passes for library cards: set the `APPLE_WALLET_*` variables from [WALLET.md](./WALLET.md) if you want the in-app “Add to Apple Wallet” button.
+
 4. Push to `main` — Vercel builds and deploys automatically.
 
 ### Setting env vars via script (optional)

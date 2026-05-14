@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { LibraryCard } from "@/components/library-card"
+import { AddLibraryCardToWallet } from "@/components/add-library-card-to-wallet"
 import { useLibraryCard } from "@/hooks/use-library-card"
 import type { LibraryCard as LibraryCardType } from "@/lib/types"
 
@@ -135,6 +136,8 @@ export function GetLibraryCardModal({ open, onOpenChange, mode }: GetLibraryCard
               onCopy={copyToClipboard}
             />
 
+            <AddLibraryCardToWallet card={savedCard} />
+
             {/* Next-step navigation */}
             <div className="flex flex-col gap-2 pt-1">
               <Link href="/explore" onClick={() => onOpenChange(false)}>
@@ -177,6 +180,8 @@ export function GetLibraryCardModal({ open, onOpenChange, mode }: GetLibraryCard
               copied={copied}
               onCopy={copyToClipboard}
             />
+
+            <AddLibraryCardToWallet card={showExistingCard} />
 
             {/* Only show "Save to this device" for freshly generated cards */}
             {newCard && (

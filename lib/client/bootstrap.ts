@@ -3,6 +3,8 @@ import { DEFAULT_LOAN_PERIOD_DAYS } from "@/lib/loan-period"
 
 export type AppConfig = {
   default_loan_period_days: number
+  /** True when server has Apple Pass Type ID + signing certs (see docs/WALLET.md). */
+  apple_wallet_available?: boolean
 }
 
 export type BootstrapPayload = {
@@ -33,8 +35,20 @@ export async function fetchBootstrapData(): Promise<BootstrapPayload> {
   const rawConfig = body.config
   const config: AppConfig =
     rawConfig && typeof rawConfig.default_loan_period_days === "number" && rawConfig.default_loan_period_days >= 1 && rawConfig.default_loan_period_days <= 365
-      ? { default_loan_period_days: Math.round(rawConfig.default_loan_period_days) }
-      : { default_loan_period_days: DEFAULT_LOAN_PERIOD_DAYS }
+      ? {
+          default_loan_period_days: Math.round(rawConfig.default_loan_period_days),
+          apple_wallet_available:
+            typeof rawConfig.apple_wallet_available === "boolean"
+              ? rawConfig.apple_wallet_available
+              : undefined,
+        }
+      : {
+          default_loan_period_days: DEFAULT_LOAN_PERIOD_DAYS,
+          apple_wallet_available:
+            typeof rawConfig?.apple_wallet_available === "boolean"
+              ? rawConfig.apple_wallet_available
+              : undefined,
+        }
   return {
     books: Array.isArray(body.books) ? body.books : [],
     loanEvents: Array.isArray(body.loanEvents) ? body.loanEvents : [],
