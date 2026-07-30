@@ -25,7 +25,7 @@
 | `/add-book/print-qr` | Print-ready QR code page (?url= checkout URL); centered 2″ label with cut line; Print or Save as PDF |
 | `/book/[uuid]` | Book detail; checkout link/QR |
 | `/book/[uuid]/checkout` | Checkout flow (requires library card) |
-| `/thing/[uuid]/checkout` | NFC-first email-only guest checkout/return for keycards and operational items |
+| `/thing/[uuid]/checkout` | NFC-first email-only checkout/return for temporary keycards and operational items |
 | `/my-books` | User's borrowed books, added books, history; optional `?user=<id>` shows that member's books (read-only, with profile header) |
 | `/profile/[user_id]` | Public profile; own profile shows "My Books" → `/my-books`, other profiles show "[Name]'s Books" → `/my-books?user=<id>` |
 | `/settings` | Link card (PIN), get new card, log in with card |
@@ -38,7 +38,7 @@
 - **Bootstrap:** Client loads `/api/bootstrap`; hook `useBootstrapData()`. Supplies visible books/items, privacy-filtered users, nodes, loan events, and config. Hidden operational items remain available through token-gated NFC routes and steward bootstrap.
 - **Library card:** Stored in `localStorage`; hook `useLibraryCard()`. Card can have `user_id` (linked) or not (card-only). Login/link via PIN at `/api/library-card/login`.
 - **Remove card:** Settings page has "Remove card from this device" with the same confirmation; Profile menu no longer includes Settings or Remove card (Profile + View library card only). Settings is reached from Profile via "Manage contact info". (Previously in header.) “Remove card from this device” shows a confirmation: *“Make sure you save your card and PIN. Otherwise, you won’t have access to this account.”* Then clears local card.
-- **General items / guest loans:** `books.item_type` preserves existing URLs/FKs while supporting `keycard` and `other`. Private `guest_loans` stores email only during an active loan; email is erased on return. Guest session cookie is item-scoped by an opaque DB-hashed token.
+- **General items / guest loans:** `books.item_type` preserves existing URLs/FKs while supporting `keycard` and `other`. Private `guest_loans` stores email only during an active temporary-keycard loan; email is erased on return. Guest session cookie is item-scoped by an opaque DB-hashed token.
 
 ## Code layout
 
@@ -57,7 +57,7 @@
 - **docs/DEPLOY.md** — Vercel + Supabase deploy
 - **docs/DATABASE.md** — DB connection setup (Supabase Session Pooler, local Postgres)
 - **docs/WALLET.md** — Optional Apple Wallet (.pkpass) for library cards; Google Wallet notes
-- **docs/GUEST_KEYCARDS.md** — Numbered keycard provisioning, NFC, guest-email privacy, and return geofencing
+- **docs/TEMPORARY_KEYCARDS.md** — Numbered temporary keycard provisioning, NFC, email privacy, and return geofencing
 
 ## Security
 
@@ -72,9 +72,9 @@
 ## Current state (as of last update)
 
 - App is deployable; main branch drives Vercel.
-- **General library items** — Existing book circulation now supports typed `book`, `keycard`, and `other` records without changing deployed book URLs. Steward dashboard can transactionally create numbered guest keycards, copy NFC URLs, see status, and override a return.
-- **Guest keycard flow** — A physical tag opens `/thing/[uuid]/checkout`; email alone signs out a keycard without creating a member. The private email is never exposed in bootstrap/ledger and is erased at return. A second tap from the same browser opens return; a steward recovers lost sessions.
-- **Geofenced returns** — Book and keycard returns request one location sample on user action. Server recomputes distance with a configurable 3 km default. Keycards return to their immutable home node; books may move to a selected node. Missing/denied GPS permits explicit manual physical-return confirmation; a verified out-of-range position is blocked. Raw coordinates are not retained.
+- **General library items** — Existing book circulation now supports typed `book`, `keycard`, and `other` records without changing deployed book URLs. Steward dashboard can transactionally create numbered temporary keycards, copy NFC URLs, see status, and override a return.
+- **Temporary keycard flow** — A physical tag opens `/thing/[uuid]/checkout`; email alone signs out a temporary keycard without creating a member. The private email is never exposed in bootstrap/ledger and is erased at return. A second tap from the same browser opens return; a steward recovers lost sessions.
+- **Geofenced returns** — Book and temporary-keycard returns request one location sample on user action. Server recomputes distance with a configurable 3 km default. Temporary keycards return to their immutable home node; books may move to a selected node. Missing/denied GPS permits explicit manual physical-return confirmation; a verified out-of-range position is blocked. Raw coordinates are not retained.
 - **Email-required default** — `default_contact_required` is true and existing books are migrated to require email. Individual items can opt out with “Allow checkout without email.” Required borrower email is distinct from public `contact_opt_in`.
 - **Bootstrap privacy** — Auth/account email and real name are never public; contact fields are included only for the authenticated member, stewards, or profiles that explicitly opted into public contact.
 - Open-source readiness: GitHub Actions CI runs `pnpm check` on pushes/PRs; issue templates, Code of Conduct, Security policy, and a fuller PR template exist; `docs/FORKING.md` documents running an independent community library from a fork. `pnpm check` is the supported repo gate; `pnpm lint` is a compatibility alias explaining Next.js 16 lint removal.

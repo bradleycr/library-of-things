@@ -24,7 +24,7 @@ export interface LibraryItem {
   id: string
   item_type: ItemType
   asset_number?: number
-  /** Operational items such as keycards must return to this immutable node. */
+  /** Operational items such as temporary keycards must return to this immutable node. */
   home_node_id?: string
   /** Hidden operational items stay available by NFC without polluting Explore. */
   catalog_visible: boolean

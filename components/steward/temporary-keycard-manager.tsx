@@ -9,20 +9,20 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { Book, Node } from "@/lib/types"
 
-interface GuestKeycardManagerProps {
+interface TemporaryKeycardManagerProps {
   items: Book[]
   nodes: Node[]
   defaultLoanDays: number
   onChanged: () => Promise<unknown> | unknown
 }
 
-/** Steward provisioning and recovery for numbered physical guest keycards. */
-export function GuestKeycardManager({
+/** Steward provisioning and recovery for numbered physical temporary keycards. */
+export function TemporaryKeycardManager({
   items,
   nodes,
   defaultLoanDays,
   onChanged,
-}: GuestKeycardManagerProps) {
+}: TemporaryKeycardManagerProps) {
   const keycards = useMemo(
     () => items.filter((item) => item.item_type === "keycard").sort((a, b) => (a.asset_number ?? 0) - (b.asset_number ?? 0)),
     [items]
@@ -44,7 +44,7 @@ export function GuestKeycardManager({
         body: JSON.stringify({
           item_type: "keycard",
           node_id: nodeId,
-          title_prefix: "Guest Keycard",
+          title_prefix: "Temporary Keycard",
           start_number: startNumber,
           count,
           loan_period_days: defaultLoanDays,
@@ -53,10 +53,10 @@ export function GuestKeycardManager({
         }),
       })
       const body = await response.json()
-      if (!response.ok) throw new Error(body.error ?? "Could not create keycards")
+      if (!response.ok) throw new Error(body.error ?? "Could not create temporary keycards")
       await onChanged()
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Could not create keycards")
+      setError(reason instanceof Error ? reason.message : "Could not create temporary keycards")
     } finally {
       setBusy(false)
     }
@@ -75,10 +75,10 @@ export function GuestKeycardManager({
     try {
       const response = await fetch(`/api/steward/items/${item.id}/return`, { method: "POST" })
       const body = await response.json()
-      if (!response.ok) throw new Error(body.error ?? "Could not return keycard")
+      if (!response.ok) throw new Error(body.error ?? "Could not return temporary keycard")
       await onChanged()
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Could not return keycard")
+      setError(reason instanceof Error ? reason.message : "Could not return temporary keycard")
     } finally {
       setBusy(false)
     }
@@ -108,10 +108,10 @@ export function GuestKeycardManager({
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <CreditCard className="h-5 w-5" />
-          Guest keycards
+          Temporary keycards
         </CardTitle>
         <p className="text-sm text-muted-foreground">
-          Create numbered cards, copy their NFC URLs, and recover returns when a guest loses their browser session.
+          Create numbered cards, copy their NFC URLs, and recover returns when a borrower loses their browser session.
         </p>
       </CardHeader>
       <CardContent className="space-y-5">
@@ -136,7 +136,7 @@ export function GuestKeycardManager({
         </div>
         <Button onClick={create} disabled={busy || !nodeId}>
           {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Create numbered keycards
+          Create numbered temporary keycards
         </Button>
         {error && <p className="text-sm text-destructive">{error}</p>}
         {nodes.filter((node) => node.location_lat == null || node.location_lng == null).map((node) => (

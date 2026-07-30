@@ -27,7 +27,7 @@ Library of Things is a single Next.js 16 full-stack app (App Router, React 19, T
 - **DB scripts use `--env-file`**: All `pnpm db:*` scripts load env from `.env.local` via Node's `--env-file` flag. The `.env.local` file must exist for these to work.
 - **Schema before first run**: Run `pnpm db:ensure-schema` before the first `pnpm dev` to create tables. Re-run after pulling if the codebase adds new columns. Optionally `pnpm db:provision` to seed demo data (destructive).
 - **API smoke test**: With `pnpm dev` running, `pnpm test:api-smoke` hits `/api/bootstrap`, card **generate**, **checkout**, **tap**, **return**, then re-checks bootstrap and (when `DATABASE_URL` is loaded) verifies `loan_events` and `books` in Postgres. Not a full test suite; use `pnpm check` as the primary compile check.
-- **Return geofencing**: Node returns request one browser location sample only after the user confirms a return action. The server recomputes distance from trusted node coordinates; raw GPS is not retained. Missing/denied location falls back to an explicit physical-return acknowledgment. Keycards must return to their home node; books may return to a selected node.
+- **Return geofencing**: Node returns request one browser location sample only after the user confirms a return action. The server recomputes distance from trusted node coordinates; raw GPS is not retained. Missing/denied location falls back to an explicit physical-return acknowledgment. Temporary keycards must return to their home node; books may return to a selected node.
 
 ### Authentication model
 

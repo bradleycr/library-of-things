@@ -53,9 +53,9 @@ This creates all tables (`users`, `nodes`, `books`, `guest_loans`, `library_card
 `users`). Safe to re-run — it never deletes data. Run again after pulling if the schema was updated.
 
 The historic `books` table is also the compatible circulation table for other
-physical items. `item_type` distinguishes books, keycards, and future objects;
+physical items. `item_type` distinguishes books, temporary keycards, and future objects;
 this additive design keeps existing QR/NFC URLs and ledger foreign keys valid.
-`guest_loans` is private: it contains a borrower email only while a guest item
+`guest_loans` is private: it contains a borrower email only while a temporary keycard
 is active, then clears that email on return.
 
 For production forks, run this once against the production `DATABASE_URL` after

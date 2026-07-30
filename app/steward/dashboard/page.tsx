@@ -71,7 +71,7 @@ import {
   resolveLoanPeriodDays,
 } from "@/lib/loan-period"
 import type { Book, Node as NodeType, User } from "@/lib/types"
-import { GuestKeycardManager } from "@/components/steward/guest-keycard-manager"
+import { TemporaryKeycardManager } from "@/components/steward/temporary-keycard-manager"
 
 type StewardBookStatus = "available" | "checked_out" | "unavailable" | "missing"
 
@@ -983,7 +983,7 @@ export default function StewardDashboardPage() {
           </DialogContent>
         </Dialog>
 
-        <GuestKeycardManager
+        <TemporaryKeycardManager
           items={books}
           nodes={nodes}
           defaultLoanDays={defaultLoanPeriodDays}

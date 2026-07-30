@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     }
     if (book.item_type === "keycard") {
       return NextResponse.json(
-        { error: "Guest keycards are signed out from their physical NFC tag." },
+        { error: "Temporary keycards are signed out from their physical NFC tag." },
         { status: 400 }
       )
     }

@@ -1256,7 +1256,7 @@ export async function checkoutGuestItem(params: {
       [normalizedEmail]
     )
     if (activeLoans[0]?.present) {
-      throw new Error("This email already has a guest item signed out")
+      throw new Error("This email already has a temporary keycard signed out")
     }
     const { rows } = await client.query<DbBook>("select * from books where id = $1 for update", [
       params.itemId,

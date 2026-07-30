@@ -134,7 +134,7 @@ export default function ThingCheckoutPage({ params }: { params: Promise<{ uuid: 
             <div className="flex gap-3 rounded-lg border border-primary/30 bg-primary/10 p-3 text-sm">
               <CheckCircle2 className="h-5 w-5 shrink-0" />
               {complete === "checkout"
-                ? "Signed out. Tap this keycard again when you return it."
+                ? "Signed out. Tap this temporary keycard again when you return it."
                 : "Returned. Thank you for bringing it home."}
             </div>
           )}
@@ -157,13 +157,13 @@ export default function ThingCheckoutPage({ params }: { params: Promise<{ uuid: 
               </div>
               <Button className="w-full" disabled={busy || !email.trim()} onClick={checkout}>
                 {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Sign out keycard
+                Sign out temporary keycard
               </Button>
             </>
           ) : payload.guest_session_active ? (
             <>
               <p className="text-sm text-muted-foreground">
-                Return this keycard to {homeNode?.name ?? "its home node"}, then verify your location once.
+                Return this temporary keycard to {homeNode?.name ?? "its home node"}, then verify your location once.
                 Location is not tracked continuously or published.
               </p>
               {location?.status !== "success" && (
@@ -184,7 +184,7 @@ export default function ThingCheckoutPage({ params }: { params: Promise<{ uuid: 
                       onCheckedChange={(checked) => setManualConfirm(checked === true)}
                     />
                     <Label htmlFor="manual-return" className="text-sm leading-snug">
-                      I have physically returned this keycard to {homeNode?.name ?? "its home node"}.
+                      I have physically returned this temporary keycard to {homeNode?.name ?? "its home node"}.
                     </Label>
                   </div>
                 </div>
@@ -202,7 +202,7 @@ export default function ThingCheckoutPage({ params }: { params: Promise<{ uuid: 
             </>
           ) : (
             <p className="rounded-lg bg-muted p-4 text-sm text-muted-foreground">
-              This keycard is signed out. Return must be completed from the browser that signed it out,
+              This temporary keycard is signed out. Return must be completed from the browser that signed it out,
               or by a steward.
             </p>
           )}

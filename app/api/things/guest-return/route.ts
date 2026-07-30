@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
       if (distanceM > config.return_geofence_radius_m + accuracyBonus) {
         return NextResponse.json(
           {
-            error: `You appear to be ${Math.max(1, Math.round(distanceM / 1000))} km from ${homeNode.name}. Return this keycard at its home node.`,
+            error: `You appear to be ${Math.max(1, Math.round(distanceM / 1000))} km from ${homeNode.name}. Return this temporary keycard at its home node.`,
             code: "NOT_NEAR_HOME_NODE",
           },
           { status: 403 }
