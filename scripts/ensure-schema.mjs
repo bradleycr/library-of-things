@@ -141,7 +141,25 @@ async function main() {
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'books' AND column_name = 'is_pocket_library') THEN
           ALTER TABLE public.books ADD COLUMN is_pocket_library boolean NOT NULL DEFAULT false;
         END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'books' AND column_name = 'item_type') THEN
+          ALTER TABLE public.books ADD COLUMN item_type text NOT NULL DEFAULT 'book';
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'books' AND column_name = 'asset_number') THEN
+          ALTER TABLE public.books ADD COLUMN asset_number integer;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'books' AND column_name = 'home_node_id') THEN
+          ALTER TABLE public.books ADD COLUMN home_node_id text REFERENCES public.nodes(id) ON DELETE SET NULL;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'books' AND column_name = 'catalog_visible') THEN
+          ALTER TABLE public.books ADD COLUMN catalog_visible boolean NOT NULL DEFAULT true;
+        END IF;
       END $$;
+    `)
+    await client.query(`
+      alter table books drop constraint if exists books_item_type_check;
+      alter table books add constraint books_item_type_check
+        check (item_type in ('book', 'keycard', 'other'));
+      update books set home_node_id = current_node_id where home_node_id is null and current_node_id is not null;
     `)
 
     await client.query(`
@@ -232,6 +250,30 @@ async function main() {
       create index if not exists idx_books_availability_status on books(availability_status);
       create index if not exists idx_books_current_node_id on books(current_node_id);
       create index if not exists idx_books_current_holder_id on books(current_holder_id);
+      create index if not exists idx_books_item_type on books(item_type);
+      create index if not exists idx_books_home_node_id on books(home_node_id);
+    `)
+
+    // Guest loans deliberately keep borrower email out of public users and loan_events.
+    // A hashed, item-scoped browser token authorizes the second-tap return flow.
+    await client.query(`
+      create table if not exists guest_loans (
+        id text primary key,
+        book_id text not null references books(id) on delete cascade,
+        borrower_email text,
+        session_token_hash text not null,
+        checked_out_at timestamptz not null default now(),
+        returned_at timestamptz,
+        return_verification text,
+        return_distance_m integer
+      );
+      create unique index if not exists idx_guest_loans_one_active_per_item
+        on guest_loans(book_id) where returned_at is null;
+      create unique index if not exists idx_guest_loans_one_active_per_email
+        on guest_loans(lower(borrower_email)) where returned_at is null;
+      create index if not exists idx_guest_loans_token_hash
+        on guest_loans(session_token_hash) where returned_at is null;
+      alter table guest_loans alter column borrower_email drop not null;
     `)
 
     await client.query(`
@@ -267,10 +309,25 @@ async function main() {
       insert into app_config (key, value, updated_at)
       values ('default_loan_period_days', '60', now())
       on conflict (key) do nothing;
+      insert into app_config (key, value, updated_at)
+      values ('default_contact_required', 'true', now())
+      on conflict (key) do nothing;
+      insert into app_config (key, value, updated_at)
+      values ('return_geofence_radius_m', '3000', now())
+      on conflict (key) do nothing;
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM app_config WHERE key = 'contact_required_backfill_v1') THEN
+          update books
+             set lending_terms = jsonb_set(coalesce(lending_terms, '{}'::jsonb), '{contact_required}', 'true'::jsonb, true);
+          insert into app_config (key, value, updated_at)
+          values ('contact_required_backfill_v1', 'true', now());
+        END IF;
+      END $$;
     `)
 
     await client.query("commit")
-    console.log("Schema ensured. Tables: users, nodes, books, library_cards, loan_events, trust_events, app_config.")
+    console.log("Schema ensured. Tables: users, nodes, books, guest_loans, library_cards, loan_events, trust_events, app_config.")
   } catch (error) {
     await client.query("rollback")
     console.error("Schema ensure failed:", error.message)

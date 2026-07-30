@@ -22,7 +22,12 @@ async function loadHomeData() {
       listLoanEvents(),
       listNodes(),
     ]) as [Book[], LoanEvent[], Node[]]
-    return { books, loanEvents, nodes, ok: true as const }
+    return {
+      books: books.filter((item) => item.catalog_visible !== false),
+      loanEvents,
+      nodes,
+      ok: true as const,
+    }
   } catch (err) {
     console.error("[home] SSR data fetch failed, rendering with empty state:", (err as Error).message)
     return {

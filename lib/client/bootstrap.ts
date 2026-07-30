@@ -3,6 +3,8 @@ import { DEFAULT_LOAN_PERIOD_DAYS } from "@/lib/loan-period"
 
 export type AppConfig = {
   default_loan_period_days: number
+  default_contact_required: boolean
+  return_geofence_radius_m: number
   /** True when server has Apple Pass Type ID + signing certs (see docs/WALLET.md). */
   apple_wallet_available?: boolean
 }
@@ -37,6 +39,11 @@ export async function fetchBootstrapData(): Promise<BootstrapPayload> {
     rawConfig && typeof rawConfig.default_loan_period_days === "number" && rawConfig.default_loan_period_days >= 1 && rawConfig.default_loan_period_days <= 365
       ? {
           default_loan_period_days: Math.round(rawConfig.default_loan_period_days),
+          default_contact_required: rawConfig.default_contact_required !== false,
+          return_geofence_radius_m:
+            typeof rawConfig.return_geofence_radius_m === "number"
+              ? rawConfig.return_geofence_radius_m
+              : 3000,
           apple_wallet_available:
             typeof rawConfig.apple_wallet_available === "boolean"
               ? rawConfig.apple_wallet_available
@@ -44,6 +51,8 @@ export async function fetchBootstrapData(): Promise<BootstrapPayload> {
         }
       : {
           default_loan_period_days: DEFAULT_LOAN_PERIOD_DAYS,
+          default_contact_required: true,
+          return_geofence_radius_m: 3000,
           apple_wallet_available:
             typeof rawConfig?.apple_wallet_available === "boolean"
               ? rawConfig.apple_wallet_available

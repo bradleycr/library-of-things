@@ -77,6 +77,13 @@ export function useLibraryCard() {
   }, [])
 
   const clearCard = useCallback(() => {
+    // Expire the httpOnly server session as well as the local card. The local
+    // state clears immediately; logout is best-effort so offline removal still works.
+    void fetch("/api/library-card/logout", {
+      method: "POST",
+      credentials: "include",
+      keepalive: true,
+    })
     try {
       localStorage.removeItem(STORAGE_KEY)
       localStorage.removeItem(LEGACY_STORAGE_KEY)

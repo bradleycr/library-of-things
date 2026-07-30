@@ -6,7 +6,7 @@ export interface LendingTerms {
   // Identity requirements
   requires_id: boolean // Does checkout require identification?
   pseudonymous_allowed: boolean // Can be checked out pseudonymously?
-  /** When true, only borrowers who have added contact info (email, phone, or social) to their profile may check out. Still trust-based. */
+  /** When true, a borrower email is required. It remains private unless separately published on a profile. */
   contact_required: boolean
   loan_period_days: number
   shipping_allowed: boolean
@@ -14,8 +14,20 @@ export interface LendingTerms {
   contact_opt_in: boolean
 }
 
-export interface Book {
+export type ItemType = "book" | "keycard" | "other"
+
+/**
+ * Shared circulation record. The database table retains its historic `books`
+ * name so deployed QR/NFC tags and ledger foreign keys remain valid.
+ */
+export interface LibraryItem {
   id: string
+  item_type: ItemType
+  asset_number?: number
+  /** Operational items such as keycards must return to this immutable node. */
+  home_node_id?: string
+  /** Hidden operational items stay available by NFC without polluting Explore. */
+  catalog_visible: boolean
   isbn?: string
   title: string
   author?: string
@@ -54,6 +66,18 @@ export interface Book {
   lending_terms: LendingTerms
   created_at: string
   expected_return_date?: string
+}
+
+/** Backwards-compatible name used by book-specific ISBN and cover surfaces. */
+export type Book = LibraryItem
+
+export interface GuestLoan {
+  id: string
+  book_id: string
+  checked_out_at: string
+  returned_at?: string
+  return_verification?: "geofence" | "manual" | "steward"
+  return_distance_m?: number
 }
 
 /** Optional contact info shown on profile when contact_opt_in is true. */

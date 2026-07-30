@@ -15,9 +15,16 @@ After deploying, quickly confirm these flows:
 
 2. **Checkout (including contact-required)**
    - **Normal book:** Open a book’s checkout URL (with `?token=...`). With a valid card, you should be able to complete checkout.
-   - **Contact-required book:** If the book has “Require contact info to borrow”, user without contact info should see “Contact info required” and **not** be able to complete checkout until they add contact in Settings. After adding contact, checkout should succeed.
+   - **Email-required book:** A member without email should see an inline required email field. Checkout should save it privately and succeed. An item with “Allow checkout without email” enabled should not require it.
 
-3. **Cover upload (steward)**
+3. **Guest keycard + return location**
+   - Create two numbered keycards from the steward dashboard and copy an NFC URL.
+   - Open the URL in a private browser, enter an email, and sign it out. Confirm the public bootstrap/ledger does not contain the email.
+   - Open the same URL again. Allow location near the home node and return.
+   - Repeat with location denied and confirm the manual physical-return fallback works.
+   - A known location outside the configured radius must be blocked. A steward return must recover a lost guest browser session.
+
+4. **Cover upload (steward)**
    - **Steward dashboard** → Book Management → **Show more** if needed → Edit a book.
    - **Cover image:** Paste a URL (e.g. OpenLibrary) **or** click “Upload photo” and choose an image. Save.
    - Book detail and explore should show the new cover (and URL pastes should still work).

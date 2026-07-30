@@ -1,12 +1,13 @@
 # Library of Things
 
-Open-source, trust-based book sharing for physical communities.
+Open-source, trust-based sharing for books and useful physical things.
 
 **Live app:** [libraryofthings.vercel.app](https://libraryofthings.vercel.app)
 
-Books sit on real shelves at community nodes. Stick a QR code on the spine,
-and anyone can scan it to check out — no app install, no email, no late fees.
-Just a pseudonymous library card generated in the browser.
+Books and useful objects live at community nodes. A QR code or NFC tag opens
+the checkout and return flow in any browser—no app install and no late fees.
+Members use a pseudonymous library card; operational guest items can use an
+email-only sign-out.
 
 ```
                 ┌─────────────────────────────┐
@@ -89,7 +90,8 @@ Copy `env.example` → `.env.local`:
 
 - **Nodes** are physical locations — shelves, offices, reading rooms — where books live.
 - Each book gets a **QR code** (or NFC tag) linking to its checkout page.
-- Borrowers get a **pseudonymous library card** — no email or real name required.
+- Borrowers get a **pseudonymous library card**; email is private and required by default for return contact unless an item opts out.
+- **Guest keycards and other operational items** can use email-only sign-out without creating a member account.
 - All activity is recorded on a **public sharing ledger**.
 - A **steward dashboard** lets node managers edit books, manage members, and track activity.
 - **Pocket Library** lets owners list books they keep at home; borrowers contact them to arrange pickup.
@@ -138,6 +140,7 @@ Next.js 16 · React 19 · TypeScript · Tailwind CSS · PostgreSQL (via `pg`, no
 | [docs/FORKING.md](./docs/FORKING.md) | Run an independent community library from your fork |
 | [docs/DEPLOY.md](./docs/DEPLOY.md) | Deploy your own instance (Vercel + Supabase) |
 | [docs/DATABASE.md](./docs/DATABASE.md) | Supabase connection setup, local Postgres |
+| [docs/GUEST_KEYCARDS.md](./docs/GUEST_KEYCARDS.md) | Numbered keycards, NFC setup, guest privacy, and geofenced returns |
 | [docs/POCKET_LIBRARY.md](./docs/POCKET_LIBRARY.md) | How the floating-book feature works |
 | [docs/WALLET.md](./docs/WALLET.md) | Optional Apple Wallet pass signing; Google Wallet notes |
 

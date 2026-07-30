@@ -82,7 +82,7 @@ function AddBookContent() {
   const [ownerContactEmail, setOwnerContactEmail] = useState("")
 
   // Lending terms
-  const [contactRequired, setContactRequired] = useState(false)
+  const [contactRequired, setContactRequired] = useState(true)
   const [contactOptIn, setContactOptIn] = useState(true)
   const [addAnonymously, setAddAnonymously] = useState(false)
 
@@ -671,15 +671,15 @@ function AddBookContent() {
                   <div className="flex items-center gap-2">
                     <Checkbox
                       id="contact-required"
-                      checked={contactRequired}
-                      onCheckedChange={(c) => setContactRequired(c === true)}
+                      checked={!contactRequired}
+                      onCheckedChange={(c) => setContactRequired(c !== true)}
                     />
                     <Label htmlFor="contact-required" className="text-sm text-card-foreground">
-                      Require contact info to borrow
+                      Allow checkout without email
                     </Label>
                   </div>
                   <p className="ml-6 text-xs text-muted-foreground">
-                    Only borrowers who have added email, phone, or a social link to their profile can check out this book.
+                    By default, borrowers add an email so they can be contacted about the return.
                   </p>
 
                   <div className="flex items-center gap-2">

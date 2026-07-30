@@ -336,7 +336,7 @@ export default function ProfilePage({
           <Card className="mt-6 border-border">
             <CardContent className="flex flex-col gap-2 p-4">
               <p className="text-sm text-muted-foreground">
-                Some books require borrowers to have contact info (email, phone, or social) on file. Add yours in Settings to borrow those titles.
+                Borrowing normally requires an email address so a steward can contact you about a return. It stays private unless you choose to publish it.
               </p>
               <Link href="/settings">
                 <Button variant="outline" size="sm" className="gap-2 text-foreground bg-transparent">

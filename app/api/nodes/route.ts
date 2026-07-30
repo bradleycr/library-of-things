@@ -5,7 +5,7 @@ import {
   getStewardCookieName,
   verifyStewardToken,
 } from "@/lib/server/steward-auth"
-import { createNode } from "@/lib/server/repositories"
+import { createNode, listNodes, updateNodeCoordinates } from "@/lib/server/repositories"
 import { geocodeNodeAddress } from "@/lib/server/geocode-node-address"
 import type { Node } from "@/lib/types"
 
@@ -115,6 +115,33 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Failed to create node" },
       { status: 500 }
+    )
+  }
+}
+
+/** Re-run address geocoding when a node is missing or has stale coordinates. */
+export async function PATCH(request: NextRequest) {
+  const cookieStore = await cookies()
+  const token = cookieStore.get(getStewardCookieName())?.value
+  if (!token || !verifyStewardToken(token)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+  const body = await request.json().catch(() => null) as { id?: string } | null
+  if (!body?.id) return NextResponse.json({ error: "Node id required" }, { status: 400 })
+  try {
+    const node = (await listNodes()).find((candidate) => candidate.id === body.id)
+    if (!node?.location_address) {
+      return NextResponse.json({ error: "Add an address before geocoding this node." }, { status: 400 })
+    }
+    const coordinates = await geocodeNodeAddress(node.location_address)
+    if (!coordinates) {
+      return NextResponse.json({ error: "Address could not be geocoded." }, { status: 422 })
+    }
+    return NextResponse.json(await updateNodeCoordinates(node.id, coordinates))
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Could not update coordinates" },
+      { status: 400 }
     )
   }
 }

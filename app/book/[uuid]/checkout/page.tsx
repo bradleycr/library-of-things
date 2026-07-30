@@ -28,6 +28,7 @@ import { useToast } from "@/hooks/use-toast"
 import { MAX_BOOKS_CHECKED_OUT } from "@/lib/constants"
 import { DEFAULT_LOAN_PERIOD_DAYS, resolveLoanPeriodDays } from "@/lib/loan-period"
 import type { Book, Node } from "@/lib/types"
+import { getCurrentPositionResult } from "@/lib/geofence"
 
 // ---------------------------------------------------------------------------
 // Minimal "tap" experience: one question, one action. Load from tap API when
@@ -94,13 +95,7 @@ export default function CheckoutPage({
   const users = data?.users ?? []
   const currentUser = card?.user_id ? users.find((u) => u.id === card.user_id) : null
   const hasContactInfo = currentUser
-    ? !!(
-        (currentUser.contact_email ?? "").trim() ||
-        (currentUser.phone ?? "").trim() ||
-        (currentUser.twitter_url ?? "").trim() ||
-        (currentUser.linkedin_url ?? "").trim() ||
-        (currentUser.website_url ?? "").trim()
-      )
+    ? !!(currentUser.contact_email ?? "").trim()
     : false
   const contactRequired = book?.lending_terms?.contact_required ?? false
   // Only treat bootstrap as "loaded" when we have data (so we know the user list and can check contact)
@@ -284,28 +279,6 @@ export default function CheckoutPage({
     )
   }
 
-  // Available: contact info required
-  if (isAvailable && blockedByContactRequirement) {
-    return (
-      <MinimalScreen
-        book={book}
-        icon={<AlertCircle className="h-12 w-12 text-amber-500" />}
-        title="Contact info required"
-        message="This title can only go to readers who’ve added a way to reach them (email, phone, or a profile link). Add at least one in Settings, then come back here."
-        action={
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <Link href="/settings#contact">
-              <Button>Add contact info</Button>
-            </Link>
-            <Link href={`/book/${uuid}`}>
-              <Button variant="outline">Book details</Button>
-            </Link>
-          </div>
-        }
-      />
-    )
-  }
-
   // Available: borrowing limit reached (max 2 books at a time)
   const checkedOutCount =
     card?.user_id && data?.books
@@ -411,6 +384,7 @@ export default function CheckoutPage({
       setCheckoutComplete={setCheckoutComplete}
       refetchBootstrap={() => refetch()}
       isTapEntry={isTapEntry}
+      emailRequired={blockedByContactRequirement}
     />
   )
 }
@@ -475,6 +449,7 @@ function AvailableFlow({
   setCheckoutComplete,
   refetchBootstrap,
   isTapEntry,
+  emailRequired,
 }: {
   book: Book
   uuid: string
@@ -490,6 +465,7 @@ function AvailableFlow({
   setCheckoutComplete: (b: boolean) => void
   refetchBootstrap: () => Promise<BootstrapPayload | null>
   isTapEntry: boolean
+  emailRequired: boolean
 }) {
   const { toast } = useToast()
   const [step, setStep] = useState<"ask" | "confirm">("ask")
@@ -503,7 +479,7 @@ function AvailableFlow({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ book_id: uuid, user_id: cardUserId }),
+        body: JSON.stringify({ book_id: uuid, user_id: cardUserId, contact_email: email || undefined }),
       })
       if (res.ok) {
         // Refresh app data so My Books / profile show the new loan immediately.
@@ -528,7 +504,7 @@ function AvailableFlow({
           description: isBorrowingLimit
             ? `You can have at most 2 books checked out at once. Return one from My books, then try again.`
             : isContactRequired
-              ? "Add email, phone, or a profile link in Settings, then try again."
+              ? "Enter an email address to continue."
               : msg === "Unauthorized"
                 ? "Please reload and try again."
                 : msg,
@@ -600,7 +576,7 @@ function AvailableFlow({
             <CardContent className="p-6">
               <div className="space-y-4">
                 <div>
-                  <Label htmlFor="email">Email (optional)</Label>
+                  <Label htmlFor="email">Email{emailRequired ? "" : " (optional)"}</Label>
                   <Input
                     id="email"
                     type="email"
@@ -608,6 +584,7 @@ function AvailableFlow({
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="mt-1"
+                    required={emailRequired}
                   />
                 </div>
                 <div className="flex items-start gap-2">
@@ -623,7 +600,7 @@ function AvailableFlow({
                 <Button
                   size="lg"
                   className="w-full gap-2"
-                  disabled={!agreedToTerms || isProcessing}
+                  disabled={!agreedToTerms || isProcessing || (emailRequired && !email.trim())}
                   onClick={handleCheckout}
                 >
                   {isProcessing ? (
@@ -682,8 +659,21 @@ function ReturnFlow({
     setIsSubmitting(true)
     setReturningNodeId(nodeId)
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 12_000)
+    let timeoutId: ReturnType<typeof setTimeout> | undefined
     try {
+      const geo = book.is_pocket_library
+        ? null
+        : await getCurrentPositionResult({ maximumAge: 0 })
+      const location =
+        geo?.status === "success"
+          ? {
+              lat: geo.coords.lat,
+              lng: geo.coords.lng,
+              accuracy_m: geo.coords.accuracyMeters,
+              captured_at: geo.capturedAt,
+            }
+          : undefined
+      timeoutId = setTimeout(() => controller.abort(), 12_000)
       const res = await fetch("/api/books/return", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -694,9 +684,11 @@ function ReturnFlow({
           user_id: userId,
           return_node_id: nodeId,
           notes: returnNotes.trim() || undefined,
+          location,
+          manual_confirm: !location && returnAtLocationAcknowledged,
         }),
       })
-      clearTimeout(timeoutId)
+      if (timeoutId) clearTimeout(timeoutId)
       if (res.ok) {
         onReturnComplete()
         return
@@ -721,7 +713,7 @@ function ReturnFlow({
         description: (j?.error as string) ?? "Please try again.",
       })
     } catch (e) {
-      clearTimeout(timeoutId)
+      if (timeoutId) clearTimeout(timeoutId)
       const isTimeout = e instanceof Error && (e.name === "AbortError" || /timeout|abort/i.test(e.message))
       if (isTimeout) {
         const fresh = await refetchBootstrap()

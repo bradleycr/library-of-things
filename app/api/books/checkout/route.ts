@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
-import { checkoutBook, getBookById, getUserById } from "@/lib/server/repositories"
+import { checkoutBook, getBookById, getUserById, updateUserProfile } from "@/lib/server/repositories"
 import { getSessionUserId } from "@/lib/server/session"
 import { parseJsonBody, isUuid } from "@/lib/server/validate"
 
 export async function POST(request: NextRequest) {
-  const parsed = await parseJsonBody<{ book_id: string; user_id: string }>(request)
+  const parsed = await parseJsonBody<{ book_id: string; user_id: string; contact_email?: string }>(request)
   if (!parsed.ok) return parsed.response
 
   const { book_id, user_id } = parsed.data
+  const submittedEmail = parsed.data.contact_email?.trim().toLowerCase()
 
   if (!book_id || !user_id) {
     return NextResponse.json(
@@ -33,23 +34,26 @@ export async function POST(request: NextRequest) {
     if (!book) {
       return NextResponse.json({ error: "Book not found" }, { status: 404 })
     }
+    if (book.item_type === "keycard") {
+      return NextResponse.json(
+        { error: "Guest keycards are signed out from their physical NFC tag." },
+        { status: 400 }
+      )
+    }
     const terms = book.lending_terms
     const contactRequired =
       typeof terms === "object" && terms !== null && terms.contact_required === true
     if (contactRequired) {
       const user = await getUserById(user_id)
-      const hasContact = !!(
-        user?.contact_email?.trim() ||
-        user?.phone?.trim() ||
-        user?.twitter_url?.trim() ||
-        user?.linkedin_url?.trim() ||
-        user?.website_url?.trim()
-      )
-      if (!hasContact) {
+      const email = user?.contact_email?.trim() || submittedEmail
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 320) {
         return NextResponse.json(
-          { error: "This book requires contact info. Add yours in Settings before checking out." },
+          { error: "This item requires an email address before checkout." },
           { status: 403 }
         )
+      }
+      if (!user?.contact_email?.trim() && submittedEmail) {
+        await updateUserProfile(user_id, { contact_email: submittedEmail })
       }
     }
 

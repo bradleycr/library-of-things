@@ -69,15 +69,21 @@ async function main() {
   if (!nodeId) fail("No nodes in database — add a node before running this test")
 
   const available = books.find(
-    (b) =>
-      b.availability_status === "available" &&
-      !(b.lending_terms && b.lending_terms.contact_required === true),
+    (b) => b.availability_status === "available" && (b.item_type ?? "book") === "book",
   )
   if (!available) {
-    fail(
-      "No available book without contact_required — free one in the DB or use a book with contact_optional",
-    )
+    fail("No available book — return one before running this test")
   }
+
+  const leakedContact = (boot1.body.users ?? []).some(
+    (user) =>
+      user.email ||
+      user.real_name ||
+      (!user.contact_opt_in &&
+        (user.contact_email || user.phone || user.twitter_url || user.linkedin_url || user.website_url)),
+  )
+  if (leakedContact) fail("Public bootstrap exposed private member contact data")
+  ok("Public bootstrap redacts private member contact data")
 
   ok(`Using book "${available.title}" (${available.id}) and node ${nodeId}`)
 
@@ -103,7 +109,11 @@ async function main() {
   const co = await fetchJson(`${BASE}/api/books/checkout`, {
     method: "POST",
     headers: { ...cookieHeader, "Content-Type": "application/json" },
-    body: JSON.stringify({ book_id: available.id, user_id: userId }),
+    body: JSON.stringify({
+      book_id: available.id,
+      user_id: userId,
+      contact_email: `api-smoke-${Date.now()}@example.com`,
+    }),
   })
   if (!co.res.ok) {
     fail(`POST /api/books/checkout failed (${co.res.status}): ${JSON.stringify(co.body)}`)
@@ -138,6 +148,7 @@ async function main() {
       user_id: userId,
       return_node_id: nodeId,
       notes: note,
+      manual_confirm: true,
     }),
   })
   if (!ret.res.ok) {

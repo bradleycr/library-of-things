@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getBookById, listNodes } from "@/lib/server/repositories"
+import { getBookById, hasActiveGuestSession, listNodes } from "@/lib/server/repositories"
 import { isUuid } from "@/lib/server/validate"
+import { getGuestSessionToken } from "@/lib/server/guest-session"
+import { itemTokenMatches } from "@/lib/server/item-token"
 
 /**
  * GET /api/books/[id]/tap?token=xxx
@@ -33,19 +35,7 @@ export async function GET(
       return NextResponse.json({ error: "Book not found" }, { status: 404 })
     }
 
-    // Validate token against stored checkout_url (e.g. "/book/uuid/checkout?token=base64...")
-    const storedToken = (() => {
-      try {
-        const q = book.checkout_url?.split("?")[1]
-        if (!q) return null
-        const params = new URLSearchParams(q)
-        return params.get("token")
-      } catch {
-        return null
-      }
-    })()
-
-    if (storedToken !== token) {
+    if (!itemTokenMatches(book, token)) {
       return NextResponse.json(
         { error: "Invalid or expired link" },
         { status: 403 }
@@ -53,7 +43,11 @@ export async function GET(
     }
 
     const nodes = await listNodes()
-    return NextResponse.json({ book, nodes })
+    const guestSessionActive =
+      book.item_type !== "book"
+        ? await hasActiveGuestSession(book.id, await getGuestSessionToken())
+        : false
+    return NextResponse.json({ book, nodes, guest_session_active: guestSessionActive })
   } catch (error) {
     console.error("[api/books/[id]/tap]", error)
     return NextResponse.json(

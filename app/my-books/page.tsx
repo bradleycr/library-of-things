@@ -48,6 +48,7 @@ import { getAvatarUrl, getInitials, getAvatarSeed } from "@/lib/avatar"
 import { IsbnScannerDialog } from "@/components/isbn-scanner-dialog"
 import { normalizeIsbn, isbn10To13 } from "@/lib/isbn-utils"
 import { ISBN_CHECKOUT_RETURN_ENABLED } from "@/lib/feature-flags"
+import { getCurrentPositionResult } from "@/lib/geofence"
 import type { Book, User } from "@/lib/types"
 
 function daysRemaining(dateStr?: string) {
@@ -153,9 +154,23 @@ function MyBooksContent() {
     setReturning(true)
     const controller = new AbortController()
     const timeoutMs = 12_000
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+    let timeoutId: ReturnType<typeof setTimeout> | undefined
     const bookIdReturning = returnBook.id
     try {
+      const geo =
+        returnBook.is_pocket_library || !returnNodeId
+          ? null
+          : await getCurrentPositionResult({ maximumAge: 0 })
+      const location =
+        geo?.status === "success"
+          ? {
+              lat: geo.coords.lat,
+              lng: geo.coords.lng,
+              accuracy_m: geo.coords.accuracyMeters,
+              captured_at: geo.capturedAt,
+            }
+          : undefined
+      timeoutId = setTimeout(() => controller.abort(), timeoutMs)
       const res = await fetch("/api/books/return", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -166,9 +181,11 @@ function MyBooksContent() {
           user_id: currentUser.id,
           return_node_id: returnNodeId || undefined,
           notes: returnNotes.trim() || undefined,
+          location,
+          manual_confirm: !location && returnAtLocationAcknowledged,
         }),
       })
-      clearTimeout(timeoutId)
+      if (timeoutId) clearTimeout(timeoutId)
       const json = await res.json()
       if (!res.ok) {
         if (res.status === 503) {
@@ -194,7 +211,7 @@ function MyBooksContent() {
         description: `${returnBook.title} has been returned.`,
       })
     } catch (err) {
-      clearTimeout(timeoutId)
+      if (timeoutId) clearTimeout(timeoutId)
       const isTimeout = (err instanceof Error && err.name === "AbortError") ||
         (err instanceof Error && /timeout|abort/i.test(err.message))
       if (isTimeout) {

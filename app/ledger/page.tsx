@@ -117,9 +117,9 @@ export default function LedgerPage() {
               Sharing history
             </h1>
             <p className="mt-2 text-muted-foreground">
-              A transparent, append-only sharing history—when books are
+              A transparent, append-only sharing history—when library items are
               added, checked out, returned, or transferred. Total events, checkouts,
-              and returns help you see if books are circulating or may have gone
+              and returns help you see if things are circulating or may have gone
               missing (trust-based).
             </p>
           </div>
@@ -246,7 +246,7 @@ export default function LedgerPage() {
                   <TableRow>
                     <TableHead>Timestamp</TableHead>
                     <TableHead>Event</TableHead>
-                    <TableHead>Book</TableHead>
+                    <TableHead>Item</TableHead>
                     <TableHead>User</TableHead>
                     <TableHead>Location</TableHead>
                     <TableHead>Notes</TableHead>

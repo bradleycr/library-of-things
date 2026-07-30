@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { Copy, Check, PlusCircle, UserCog, ShieldCheck, BookOpen } from "lucide-react"
+import { Copy, Check, BookOpen } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -16,7 +16,7 @@ import { AddLibraryCardToWallet } from "@/components/add-library-card-to-wallet"
 import { useLibraryCard } from "@/hooks/use-library-card"
 import type { LibraryCard as LibraryCardType } from "@/lib/types"
 
-/** "view" = show current card; "generate" = show get-new-card flow even if user has a card */
+/** "view" = show current card; "generate" = show get-new-card flow even if a card exists. */
 export type GetLibraryCardModalMode = "view" | "generate"
 
 interface GetLibraryCardModalProps {
@@ -27,11 +27,14 @@ interface GetLibraryCardModalProps {
 }
 
 /**
- * Multi-step library card modal:
- *   1. Generate  → "Get Your Card" button
- *   2. Preview   → card + PIN shown, "Save to this device" button
- *   3. Saved     → confirmation with next-step navigation
- *   (or) View    → show existing card (no generation flow)
+ * Library card modal — three quiet steps.
+ *
+ *   1. Empty   → a single button to ask for a card
+ *   2. Preview → the card as an object, with credentials and optional wallet save
+ *   3. Saved   → the same object, now persisted to this device, plus one "find a book" CTA
+ *
+ * Tone is deliberately understated: this is not an account flow. The card is
+ * the artifact; the page is just where it lives for a moment.
  */
 export function GetLibraryCardModal({ open, onOpenChange, mode }: GetLibraryCardModalProps) {
   const { card, saveCard } = useLibraryCard()
@@ -40,9 +43,8 @@ export function GetLibraryCardModal({ open, onOpenChange, mode }: GetLibraryCard
   const [generateError, setGenerateError] = useState<string | null>(null)
   const [newCard, setNewCard] = useState<LibraryCardType | null>(null)
   const [savedCard, setSavedCard] = useState<LibraryCardType | null>(null)
-  const [copied, setCopied] = useState<"number" | "pin" | null>(null)
+  const [copied, setCopied] = useState(false)
 
-  /* ── Reset state each time the modal opens in generate mode ── */
   useEffect(() => {
     if (open && mode === "generate") {
       setNewCard(null)
@@ -51,7 +53,6 @@ export function GetLibraryCardModal({ open, onOpenChange, mode }: GetLibraryCard
     }
   }, [open, mode])
 
-  /* ── Step 1 → 2: Generate a card ── */
   const handleGetCard = async () => {
     setGenerateError(null)
     setLoading(true)
@@ -66,7 +67,7 @@ export function GetLibraryCardModal({ open, onOpenChange, mode }: GetLibraryCard
       if (data.success && data.card) {
         setNewCard(data.card)
       } else {
-        setGenerateError(data?.error ?? "Could not generate card. Please try again.")
+        setGenerateError(data?.error ?? "Could not generate a card. Please try again.")
       }
     } catch {
       setGenerateError("Something went wrong. Please try again.")
@@ -75,7 +76,6 @@ export function GetLibraryCardModal({ open, onOpenChange, mode }: GetLibraryCard
     }
   }
 
-  /* ── Step 2 → 3: Persist to device, show success screen ── */
   const handleSave = () => {
     if (!newCard) return
     saveCard(newCard)
@@ -83,79 +83,60 @@ export function GetLibraryCardModal({ open, onOpenChange, mode }: GetLibraryCard
     setNewCard(null)
   }
 
-  const copyToClipboard = async (text: string, type: "number" | "pin") => {
-    await navigator.clipboard.writeText(text)
-    setCopied(type)
-    setTimeout(() => setCopied(null), 2000)
+  const copyCredentials = async (card: LibraryCardType) => {
+    await navigator.clipboard.writeText(`${card.card_number} · PIN ${card.pin}`)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
   }
 
-  /* ── Determine which view to render ── */
   const isViewMode = mode !== "generate"
-  const showExistingCard = newCard ?? (isViewMode ? card : null)
+  const visibleCard = newCard ?? (isViewMode ? card : null)
 
-  /* ── Derived title / description ── */
+  /* Titles & descriptions — kept short, plain, and matter-of-fact. */
   const title = savedCard
-    ? "You're all set!"
+    ? "Saved to this device"
     : mode === "generate" && !newCard
       ? "Get a library card"
-      : "Your Library Card"
+      : "Your library card"
 
   const description = savedCard
-    ? "Your library card is saved to this device. Write down or screenshot your credentials — they're your only way back in."
-    : showExistingCard
-      ? "Save or screenshot this card and your PIN. You can use them to log in on another device. This device will remember your card until you clear it."
+    ? "Keep the number and PIN somewhere safe — that's how you sign in on another device."
+    : visibleCard
+      ? "Write these down or save a screenshot. They sign you in if you switch devices."
       : mode === "generate" && card
-        ? "Creating a new card will replace your current card on this device. Use this if you want a new pseudonym."
-        : "Get a pseudonymous library card to browse and borrow. No email or identity required."
+        ? "Creating a new card replaces the one on this device."
+        : "A pseudonymous card so you can borrow. No email, no account."
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
+          <DialogTitle className="font-lot text-xl font-normal tracking-tight">
+            {title}
+          </DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
 
-        {/* ───── Step 3: Card saved — confirmation + next steps ───── */}
+        {/* Saved — final state. Single primary action, nothing else trying to retain you. */}
         {savedCard ? (
           <div className="space-y-4">
-            <div className="flex items-center gap-3 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
-              <ShieldCheck className="h-6 w-6 shrink-0 text-primary" />
-              <p className="text-sm font-medium text-foreground">
-                Card saved to this device
-              </p>
-            </div>
-
             <div className="flex justify-center">
               <LibraryCard card={savedCard} />
             </div>
 
-            <CredentialStrip
+            <Credentials
               card={savedCard}
               copied={copied}
-              onCopy={copyToClipboard}
+              onCopy={() => copyCredentials(savedCard)}
             />
 
             <AddLibraryCardToWallet card={savedCard} />
 
-            {/* Next-step navigation */}
             <div className="flex flex-col gap-2 pt-1">
               <Link href="/explore" onClick={() => onOpenChange(false)}>
                 <Button variant="default" className="w-full gap-2">
                   <BookOpen className="h-4 w-4" />
                   Find a book
-                </Button>
-              </Link>
-              <Link href="/add-book" onClick={() => onOpenChange(false)}>
-                <Button variant="outline" className="w-full gap-2">
-                  <PlusCircle className="h-4 w-4" />
-                  Add a book
-                </Button>
-              </Link>
-              <Link href="/settings" onClick={() => onOpenChange(false)}>
-                <Button variant="outline" className="w-full gap-2">
-                  <UserCog className="h-4 w-4" />
-                  Set up your profile
                 </Button>
               </Link>
               <Button
@@ -168,22 +149,21 @@ export function GetLibraryCardModal({ open, onOpenChange, mode }: GetLibraryCard
             </div>
           </div>
 
-        /* ───── Step 2 / View: Show existing or just-generated card ───── */
-        ) : showExistingCard ? (
+        /* Preview — fresh or existing card. */
+        ) : visibleCard ? (
           <div className="space-y-4">
             <div className="flex justify-center">
-              <LibraryCard card={showExistingCard} />
+              <LibraryCard card={visibleCard} />
             </div>
 
-            <CredentialStrip
-              card={showExistingCard}
+            <Credentials
+              card={visibleCard}
               copied={copied}
-              onCopy={copyToClipboard}
+              onCopy={() => copyCredentials(visibleCard)}
             />
 
-            <AddLibraryCardToWallet card={showExistingCard} />
+            <AddLibraryCardToWallet card={visibleCard} />
 
-            {/* Only show "Save to this device" for freshly generated cards */}
             {newCard && (
               <Button className="w-full" onClick={handleSave}>
                 Save to this device
@@ -191,7 +171,7 @@ export function GetLibraryCardModal({ open, onOpenChange, mode }: GetLibraryCard
             )}
           </div>
 
-        /* ───── Step 1: Generate form ───── */
+        /* Empty — single button to ask for a card. */
         ) : (
           <div className="space-y-3">
             {mode === "generate" && card && (
@@ -207,7 +187,7 @@ export function GetLibraryCardModal({ open, onOpenChange, mode }: GetLibraryCard
               onClick={handleGetCard}
               disabled={loading}
             >
-              {loading ? "Generating…" : "Get Your Card"}
+              {loading ? "Generating…" : "Get a card"}
             </Button>
           </div>
         )}
@@ -216,42 +196,47 @@ export function GetLibraryCardModal({ open, onOpenChange, mode }: GetLibraryCard
   )
 }
 
-/* ─────────────────────────────────────────────
- * Credential strip — card number + PIN display
- * with a single copy-all button.
- * ───────────────────────────────────────────── */
-
-function CredentialStrip({
+/* ───────────────────────────────────────────────────────────────────────────
+ * Credentials — the card number and PIN as a quiet typographic block.
+ *
+ * A single copy action covers both fields so the user doesn't have to think
+ * about which to grab. No "save these credentials" framing, no shield icon,
+ * no celebratory chrome — just the values, legible and copyable.
+ * ─────────────────────────────────────────────────────────────────────── */
+function Credentials({
   card,
   copied,
   onCopy,
 }: {
   card: LibraryCardType
-  copied: "number" | "pin" | null
-  onCopy: (text: string, type: "number" | "pin") => void
+  copied: boolean
+  onCopy: () => void
 }) {
   return (
-    <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3 text-sm">
-      <p className="text-xs font-medium text-muted-foreground">
-        Save these credentials — you'll need them to log in on another device:
-      </p>
-      <div className="flex items-center justify-between gap-2">
-        <code className="flex-1 truncate font-mono text-xs">
-          {card.card_number} · PIN: {card.pin}
-        </code>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 shrink-0"
-          onClick={() => onCopy(`${card.card_number} PIN: ${card.pin}`, "number")}
-        >
-          {copied ? (
-            <Check className="h-4 w-4 text-primary" />
-          ) : (
-            <Copy className="h-4 w-4" />
-          )}
-        </Button>
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-muted/30 px-3 py-2.5">
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+          Card number &amp; PIN
+        </p>
+        <p className="mt-0.5 truncate font-mono text-sm tabular-nums text-foreground">
+          {card.card_number}
+          <span className="px-1.5 text-muted-foreground/60">·</span>
+          {card.pin}
+        </p>
       </div>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8 shrink-0"
+        onClick={onCopy}
+        aria-label={copied ? "Copied" : "Copy card number and PIN"}
+      >
+        {copied ? (
+          <Check className="h-4 w-4 text-primary" />
+        ) : (
+          <Copy className="h-4 w-4" />
+        )}
+      </Button>
     </div>
   )
 }

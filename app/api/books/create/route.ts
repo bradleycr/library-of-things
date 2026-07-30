@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
     is_free: true,
     requires_id: false,
     pseudonymous_allowed: true,
-    contact_required: false,
+    contact_required: config.default_contact_required,
     loan_period_days: config.default_loan_period_days,
     shipping_allowed: false,
     local_only: true,

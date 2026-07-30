@@ -1,12 +1,13 @@
 import "server-only"
 
+import { createHash, randomBytes } from "crypto"
 import { MAX_BOOKS_CHECKED_OUT } from "@/lib/constants"
 import {
   DEFAULT_LOAN_PERIOD_DAYS,
   normalizeLoanPeriodDays,
   resolveLoanPeriodDays,
 } from "@/lib/loan-period"
-import type { Book, LoanEvent, Node, TrustEvent, User } from "@/lib/types"
+import type { Book, GuestLoan, ItemType, LoanEvent, Node, TrustEvent, User } from "@/lib/types"
 import { resilientQuery, resilientConnect } from "@/lib/server/db"
 import {
   applyTrustChange,
@@ -23,6 +24,8 @@ type DbBook = Omit<Book, "created_at" | "expected_return_date"> & {
   expected_return_date?: string | Date | null
   owner_contact_email?: string | null
   is_pocket_library?: boolean
+  item_type?: ItemType
+  catalog_visible?: boolean
 }
 
 type DbLoanEvent = Omit<LoanEvent, "timestamp"> & {
@@ -53,6 +56,8 @@ function mapBook(row: DbBook): Book {
     expected_return_date: asIso(row.expected_return_date),
     owner_contact_email: row.owner_contact_email ?? undefined,
     is_pocket_library: row.is_pocket_library ?? false,
+    item_type: row.item_type ?? "book",
+    catalog_visible: row.catalog_visible ?? true,
   }
 }
 
@@ -142,6 +147,18 @@ export async function createNode(input: {
   }
 }
 
+export async function updateNodeCoordinates(
+  nodeId: string,
+  coordinates: { lat: number; lng: number }
+): Promise<Node> {
+  const { rows } = await resilientQuery<DbNode>(
+    `update nodes set location_lat = $2, location_lng = $3 where id = $1 returning *`,
+    [nodeId, coordinates.lat, coordinates.lng]
+  )
+  if (!rows[0]) throw new Error("Node not found")
+  return mapNode(rows[0])
+}
+
 /** Lists all users; throws if DB is unavailable. */
 export async function listUsers() {
   const { rows } = await resilientQuery<DbUser>(
@@ -170,27 +187,41 @@ export async function listTrustEventsByUserId(userId: string): Promise<TrustEven
 /** App-wide config (steward-editable). Falls back to defaults when DB has no row. */
 export type AppConfig = {
   default_loan_period_days: number
+  default_contact_required: boolean
+  return_geofence_radius_m: number
 }
 
 export async function getAppConfig(): Promise<AppConfig> {
+  const defaults: AppConfig = {
+    default_loan_period_days: DEFAULT_LOAN_PERIOD_DAYS,
+    default_contact_required: true,
+    return_geofence_radius_m: 3000,
+  }
   try {
     const { rows } = await resilientQuery<{ key: string; value: unknown }>(
-      "select key, value from app_config where key = 'default_loan_period_days'"
+      `select key, value from app_config
+        where key in ('default_loan_period_days', 'default_contact_required', 'return_geofence_radius_m')`
     )
-    const row = rows[0]
-    if (row && typeof row.value === "number" && row.value >= 1 && row.value <= 365) {
-      return { default_loan_period_days: normalizeLoanPeriodDays(row.value) }
-    }
-    if (row && typeof row.value === "string") {
-      const n = parseInt(row.value, 10)
-      if (!Number.isNaN(n) && n >= 1 && n <= 365) {
-        return { default_loan_period_days: normalizeLoanPeriodDays(n) }
-      }
+    const values = new Map(rows.map((row) => [row.key, row.value]))
+    const loanDays = Number(values.get("default_loan_period_days"))
+    const radius = Number(values.get("return_geofence_radius_m"))
+    const contact = values.get("default_contact_required")
+    return {
+      default_loan_period_days:
+        Number.isFinite(loanDays) && loanDays >= 1 && loanDays <= 365
+          ? normalizeLoanPeriodDays(loanDays)
+          : defaults.default_loan_period_days,
+      default_contact_required:
+        typeof contact === "boolean" ? contact : contact !== "false",
+      return_geofence_radius_m:
+        Number.isFinite(radius) && radius >= 250 && radius <= 50_000
+          ? Math.round(radius)
+          : defaults.return_geofence_radius_m,
     }
   } catch {
     // Table may not exist yet (e.g. before ensure-schema); use defaults.
   }
-  return { default_loan_period_days: DEFAULT_LOAN_PERIOD_DAYS }
+  return defaults
 }
 
 /** Update app config (steward-only). */
@@ -203,6 +234,21 @@ export async function setAppConfig(updates: Partial<AppConfig>): Promise<AppConf
         `insert into app_config (key, value, updated_at) values ('default_loan_period_days', $1::jsonb, now())
          on conflict (key) do update set value = $1::jsonb, updated_at = now()`,
         [JSON.stringify(days)]
+      )
+    }
+    if (typeof updates.default_contact_required === "boolean") {
+      await client.query(
+        `insert into app_config (key, value, updated_at) values ('default_contact_required', $1::jsonb, now())
+         on conflict (key) do update set value = $1::jsonb, updated_at = now()`,
+        [JSON.stringify(updates.default_contact_required)]
+      )
+    }
+    if (typeof updates.return_geofence_radius_m === "number") {
+      const radius = Math.max(250, Math.min(50_000, Math.round(updates.return_geofence_radius_m)))
+      await client.query(
+        `insert into app_config (key, value, updated_at) values ('return_geofence_radius_m', $1::jsonb, now())
+         on conflict (key) do update set value = $1::jsonb, updated_at = now()`,
+        [JSON.stringify(radius)]
       )
     }
     return getAppConfig()
@@ -735,7 +781,7 @@ export async function searchBooks(params: {
   lendingTerms?: string[]
   nodeId?: string
 }) {
-  const clauses: string[] = []
+  const clauses: string[] = ["coalesce(catalog_visible, true) = true"]
   const values: unknown[] = []
 
   if (params.query) {
@@ -814,7 +860,9 @@ export async function checkoutBook(params: { bookId: string; userId: string }) {
     // Enforce max books per user (e.g. 2 at a time)
     const { rows: countRows } = await client.query<{ count: string }>(
       `select count(*) as count from books
-       where current_holder_id = $1 and availability_status = 'checked_out'`,
+       where current_holder_id = $1
+         and availability_status = 'checked_out'
+         and coalesce(item_type, 'book') = 'book'`,
       [params.userId]
     )
     const checkedOutCount = parseInt(countRows[0]?.count ?? "0", 10)
@@ -882,6 +930,8 @@ export async function returnBook(params: {
   userId: string
   returnNodeId?: string
   notes?: string
+  locationVerification?: "geofence" | "manual"
+  returnDistanceM?: number
 }) {
   const client = await resilientConnect()
   try {
@@ -931,9 +981,9 @@ export async function returnBook(params: {
 
     await client.query(
       `insert into loan_events
-        (id, event_type, book_id, book_title, user_id, user_display_name, timestamp, location_text, notes)
+        (id, event_type, book_id, book_title, user_id, user_display_name, timestamp, location_text, notes, metadata)
        values
-        ($1, 'return', $2, $3, $4, $5, now(), $6, $7)`,
+        ($1, 'return', $2, $3, $4, $5, now(), $6, $7, $8::jsonb)`,
       [
         crypto.randomUUID(),
         params.bookId,
@@ -942,6 +992,11 @@ export async function returnBook(params: {
         returnDisplayName,
         locationText,
         params.notes ?? null,
+        JSON.stringify({
+          location_verification: params.locationVerification ?? "manual",
+          distance_m:
+            params.returnDistanceM == null ? undefined : Math.round(params.returnDistanceM),
+        }),
       ]
     )
 
@@ -985,11 +1040,19 @@ export async function createBook(input: {
   ownerContactEmail?: string
   /** Whether this is a Pocket Library (floating) book not tied to a specific node. */
   isPocketLibrary?: boolean
+  itemType?: ItemType
+  assetNumber?: number
+  homeNodeId?: string
+  catalogVisible?: boolean
 }) {
   const id = crypto.randomUUID()
-  const qrTagId = `qr-${Date.now()}`
-  const checkoutToken = Buffer.from(`${id}-${Date.now()}`, "utf8").toString("base64url")
-  const checkoutUrl = `/book/${id}/checkout?token=${checkoutToken}`
+  const itemType = input.itemType ?? "book"
+  const qrTagId = `qr-${id}`
+  const checkoutToken = randomBytes(24).toString("base64url")
+  const checkoutUrl =
+    itemType === "book"
+      ? `/book/${id}/checkout?token=${checkoutToken}`
+      : `/thing/${id}/checkout?token=${checkoutToken}`
 
   const client = await resilientConnect()
   try {
@@ -1027,9 +1090,11 @@ export async function createBook(input: {
         (id, isbn, title, author, edition, description, qr_tag_id, checkout_url, cover_image_url, 
          current_node_id, current_node_name, current_location_text, 
          availability_status, lending_terms, added_by_user_id, added_by_display_name, 
-         owner_contact_email, is_pocket_library, created_at)
+         owner_contact_email, is_pocket_library, item_type, asset_number, home_node_id,
+         catalog_visible, created_at)
        values
-        ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'available', $13::jsonb, $14, $15, $16, $17, now())`,
+        ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'available',
+         $13::jsonb, $14, $15, $16, $17, $18, $19, $20, $21, now())`,
       [
         id,
         input.isbn ?? null,
@@ -1048,6 +1113,10 @@ export async function createBook(input: {
         addedByDisplayNameValue ?? null,
         input.ownerContactEmail ?? null,
         input.isPocketLibrary ?? false,
+        itemType,
+        input.assetNumber ?? null,
+        input.homeNodeId ?? nodeId ?? null,
+        input.catalogVisible ?? itemType === "book",
       ]
     )
 
@@ -1066,7 +1135,7 @@ export async function createBook(input: {
       ]
     )
 
-    if (addedByUserId) {
+    if (addedByUserId && itemType === "book") {
       await applyTrustChange(client, {
         userId: addedByUserId,
         reason: "add_book",
@@ -1082,6 +1151,287 @@ export async function createBook(input: {
       qr_tag_id: qrTagId,
       checkout_url: checkoutUrl,
     }
+  } catch (error) {
+    await client.query("rollback")
+    throw error
+  } finally {
+    client.release()
+  }
+}
+
+/* ═══════════════════════════════════════════
+ *  General items and private guest circulation
+ * ═══════════════════════════════════════════ */
+
+export async function createNumberedItems(input: {
+  itemType: Exclude<ItemType, "book">
+  nodeId: string
+  titlePrefix: string
+  startNumber: number
+  count: number
+  lendingTerms: Book["lending_terms"]
+  catalogVisible?: boolean
+}): Promise<Array<Pick<Book, "id" | "title" | "asset_number" | "checkout_url">>> {
+  const client = await resilientConnect()
+  try {
+    await client.query("begin")
+    const { rows: nodes } = await client.query<DbNode>("select * from nodes where id = $1", [
+      input.nodeId,
+    ])
+    const node = nodes[0]
+    if (!node) throw new Error("Node not found")
+
+    const created: Array<Pick<Book, "id" | "title" | "asset_number" | "checkout_url">> = []
+    for (let offset = 0; offset < input.count; offset += 1) {
+      const assetNumber = input.startNumber + offset
+      const id = crypto.randomUUID()
+      const title = `${input.titlePrefix} #${assetNumber}`
+      const checkoutUrl = `/thing/${id}/checkout?token=${randomBytes(24).toString("base64url")}`
+      await client.query(
+        `insert into books
+          (id, title, qr_tag_id, checkout_url, current_node_id, current_node_name,
+           current_location_text, availability_status, lending_terms, added_by_user_id,
+           added_by_display_name, item_type, asset_number, home_node_id, catalog_visible, created_at)
+         values
+          ($1, $2, $3, $4, $5, $6, $7, 'available', $8::jsonb, $9, $10, $11, $12, $5, $13, now())`,
+        [
+          id,
+          title,
+          `qr-${id}`,
+          checkoutUrl,
+          node.id,
+          node.name,
+          node.location_address ?? node.name,
+          JSON.stringify(input.lendingTerms),
+          node.steward_id,
+          await getPublicDisplayNameWithClient(client, node.steward_id),
+          input.itemType,
+          assetNumber,
+          input.catalogVisible ?? false,
+        ]
+      )
+      await client.query(
+        `insert into loan_events
+          (id, event_type, book_id, book_title, user_id, user_display_name, timestamp, location_text, metadata)
+         values ($1, 'added', $2, $3, $4, $5, now(), $6, $7::jsonb)`,
+        [
+          crypto.randomUUID(),
+          id,
+          title,
+          node.steward_id,
+          "Steward",
+          node.location_address ?? node.name,
+          JSON.stringify({ item_type: input.itemType, asset_number: assetNumber }),
+        ]
+      )
+      created.push({ id, title, asset_number: assetNumber, checkout_url: checkoutUrl })
+    }
+    await client.query("commit")
+    return created
+  } catch (error) {
+    await client.query("rollback")
+    throw error
+  } finally {
+    client.release()
+  }
+}
+
+function hashGuestToken(token: string): string {
+  return createHash("sha256").update(token, "utf8").digest("hex")
+}
+
+export async function checkoutGuestItem(params: {
+  itemId: string
+  borrowerEmail: string
+}): Promise<{ token: string; loan: GuestLoan }> {
+  const client = await resilientConnect()
+  const token = randomBytes(32).toString("base64url")
+  try {
+    await client.query("begin")
+    const normalizedEmail = params.borrowerEmail.trim().toLowerCase()
+    const { rows: activeLoans } = await client.query<{ present: boolean }>(
+      `select exists(
+         select 1 from guest_loans where borrower_email = $1 and returned_at is null
+       ) as present`,
+      [normalizedEmail]
+    )
+    if (activeLoans[0]?.present) {
+      throw new Error("This email already has a guest item signed out")
+    }
+    const { rows } = await client.query<DbBook>("select * from books where id = $1 for update", [
+      params.itemId,
+    ])
+    const item = rows[0]
+    if (!item || (item.item_type ?? "book") === "book") throw new Error("Item not found")
+    if (item.availability_status !== "available") throw new Error("Item is not available")
+
+    const loanId = crypto.randomUUID()
+    await client.query(
+      `insert into guest_loans
+        (id, book_id, borrower_email, session_token_hash, checked_out_at)
+       values ($1, $2, $3, $4, now())`,
+      [loanId, params.itemId, normalizedEmail, hashGuestToken(token)]
+    )
+    await client.query(
+      `update books
+          set availability_status = 'checked_out',
+              current_holder_id = null,
+              current_holder_name = 'Guest',
+              expected_return_date = now() + (($2::int || ' days')::interval)
+        where id = $1`,
+      [params.itemId, resolveLoanPeriodDays(item.lending_terms?.loan_period_days, DEFAULT_LOAN_PERIOD_DAYS)]
+    )
+    await client.query(
+      `insert into loan_events
+        (id, event_type, book_id, book_title, user_display_name, timestamp, location_text, metadata)
+       values ($1, 'checkout', $2, $3, 'Guest', now(), $4, $5::jsonb)`,
+      [
+        crypto.randomUUID(),
+        params.itemId,
+        item.title,
+        item.current_location_text ?? null,
+        JSON.stringify({ item_type: item.item_type ?? "other", guest: true }),
+      ]
+    )
+    await client.query("commit")
+    return {
+      token,
+      loan: {
+        id: loanId,
+        book_id: params.itemId,
+        checked_out_at: new Date().toISOString(),
+      },
+    }
+  } catch (error) {
+    await client.query("rollback")
+    throw error
+  } finally {
+    client.release()
+  }
+}
+
+export async function hasActiveGuestSession(itemId: string, token: string | undefined): Promise<boolean> {
+  if (!token) return false
+  const { rows } = await resilientQuery<{ present: boolean }>(
+    `select exists(
+       select 1 from guest_loans
+        where book_id = $1 and session_token_hash = $2 and returned_at is null
+     ) as present`,
+    [itemId, hashGuestToken(token)]
+  )
+  return rows[0]?.present === true
+}
+
+export async function returnGuestItem(params: {
+  itemId: string
+  token: string
+  verification: "geofence" | "manual" | "steward"
+  distanceM?: number
+}): Promise<void> {
+  const client = await resilientConnect()
+  try {
+    await client.query("begin")
+    const { rows } = await client.query<DbBook>("select * from books where id = $1 for update", [
+      params.itemId,
+    ])
+    const item = rows[0]
+    if (!item || (item.item_type ?? "book") === "book") throw new Error("Item not found")
+    const { rows: loans } = await client.query<{ id: string }>(
+      `select id from guest_loans
+        where book_id = $1 and session_token_hash = $2 and returned_at is null
+        for update`,
+      [params.itemId, hashGuestToken(params.token)]
+    )
+    if (!loans[0]) throw new Error("This browser is not authorized to return the item")
+
+    const nodeId = item.home_node_id ?? item.current_node_id
+    const { rows: nodes } = nodeId
+      ? await client.query<DbNode>("select * from nodes where id = $1", [nodeId])
+      : { rows: [] as DbNode[] }
+    const node = nodes[0]
+
+    await client.query(
+      `update guest_loans
+          set returned_at = now(), borrower_email = null,
+              return_verification = $2, return_distance_m = $3
+        where id = $1`,
+      [loans[0].id, params.verification, params.distanceM == null ? null : Math.round(params.distanceM)]
+    )
+    await client.query(
+      `update books
+          set availability_status = 'available', current_holder_id = null,
+              current_holder_name = null, expected_return_date = null,
+              current_node_id = coalesce(home_node_id, current_node_id),
+              current_node_name = coalesce($2, current_node_name),
+              current_location_text = coalesce($3, current_location_text)
+        where id = $1`,
+      [params.itemId, node?.name ?? null, node?.location_address ?? node?.name ?? null]
+    )
+    await client.query(
+      `insert into loan_events
+        (id, event_type, book_id, book_title, user_display_name, timestamp, location_text, metadata)
+       values ($1, 'return', $2, $3, 'Guest', now(), $4, $5::jsonb)`,
+      [
+        crypto.randomUUID(),
+        params.itemId,
+        item.title,
+        node?.location_address ?? node?.name ?? item.current_location_text ?? null,
+        JSON.stringify({
+          item_type: item.item_type ?? "other",
+          guest: true,
+          location_verification: params.verification,
+          distance_m: params.distanceM == null ? undefined : Math.round(params.distanceM),
+        }),
+      ]
+    )
+    await client.query("commit")
+  } catch (error) {
+    await client.query("rollback")
+    throw error
+  } finally {
+    client.release()
+  }
+}
+
+/** Steward recovery path for lost browser sessions or unavailable location. */
+export async function stewardReturnGuestItem(itemId: string): Promise<void> {
+  const client = await resilientConnect()
+  try {
+    await client.query("begin")
+    const { rows } = await client.query<DbBook>("select * from books where id = $1 for update", [itemId])
+    const item = rows[0]
+    if (!item || (item.item_type ?? "book") === "book") throw new Error("Item not found")
+    const { rows: loans } = await client.query<{ id: string }>(
+      "select id from guest_loans where book_id = $1 and returned_at is null for update",
+      [itemId]
+    )
+    if (!loans[0]) throw new Error("No active guest loan")
+    await client.query(
+      `update guest_loans
+          set returned_at = now(), borrower_email = null, return_verification = 'steward'
+        where id = $1`,
+      [loans[0].id]
+    )
+    await client.query(
+      `update books
+          set availability_status = 'available', current_holder_name = null,
+              expected_return_date = null, current_node_id = coalesce(home_node_id, current_node_id)
+        where id = $1`,
+      [itemId]
+    )
+    await client.query(
+      `insert into loan_events
+        (id, event_type, book_id, book_title, user_display_name, timestamp, location_text, metadata)
+       values ($1, 'return', $2, $3, 'Steward', now(), $4, $5::jsonb)`,
+      [
+        crypto.randomUUID(),
+        itemId,
+        item.title,
+        item.current_location_text ?? null,
+        JSON.stringify({ item_type: item.item_type ?? "other", location_verification: "steward" }),
+      ]
+    )
+    await client.query("commit")
   } catch (error) {
     await client.query("rollback")
     throw error

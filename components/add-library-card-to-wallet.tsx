@@ -8,9 +8,14 @@ import { useToast } from "@/hooks/use-toast"
 import type { LibraryCard as LibraryCardType } from "@/lib/types"
 
 /**
- * When the deployment has Apple Pass signing configured (`APPLE_WALLET_*` env),
- * offers a signed .pkpass so members can keep card number + PIN in Wallet.
- * Google Wallet is not generated here — see docs/WALLET.md.
+ * Optional Apple Wallet save.
+ *
+ * Only renders when the deployment has Apple Pass signing configured
+ * (`APPLE_WALLET_*` env). Designed to feel like a quiet, take-it-or-leave-it
+ * affordance — a small outline button with one line of context. This is a
+ * way to keep your card around between devices, not a promotional CTA.
+ *
+ * Google Wallet is not generated here (see docs/WALLET.md for the reasoning).
  */
 export function AddLibraryCardToWallet({ card }: { card: LibraryCardType }) {
   const { data } = useBootstrapData()
@@ -35,7 +40,7 @@ export function AddLibraryCardToWallet({ card }: { card: LibraryCardType }) {
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as { error?: string }
         toast({
-          title: "Could not build wallet pass",
+          title: "Could not build the pass",
           description: body.error ?? `Request failed (${res.status}).`,
           variant: "destructive",
         })
@@ -60,24 +65,24 @@ export function AddLibraryCardToWallet({ card }: { card: LibraryCardType }) {
   }
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-1.5">
       <Button
         type="button"
-        variant="secondary"
-        className="w-full gap-2"
+        variant="outline"
+        size="sm"
+        className="h-9 w-full justify-center gap-2 border-border/70 bg-transparent font-normal text-foreground/80 hover:bg-muted/50"
         onClick={handleClick}
         disabled={busy}
       >
         {busy ? (
-          <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
         ) : (
-          <Wallet className="h-4 w-4 shrink-0" />
+          <Wallet className="h-3.5 w-3.5 shrink-0 opacity-70" />
         )}
-        Add to Apple Wallet
+        Also save to Apple Wallet
       </Button>
-      <p className="text-center text-[11px] leading-snug text-muted-foreground">
-        Keeps your card number and PIN on the pass (like a backup). The QR opens the site&apos;s
-        log-in page; you still enter your PIN in the browser.
+      <p className="text-center text-[11px] leading-snug text-muted-foreground/80">
+        Optional. Keeps your number and PIN with you between devices.
       </p>
     </div>
   )

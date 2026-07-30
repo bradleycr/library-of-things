@@ -39,6 +39,22 @@ export async function PATCH(request: NextRequest) {
     }
     updates.default_loan_period_days = normalizeLoanPeriodDays(raw)
   }
+  if (body.default_contact_required !== undefined) {
+    if (typeof body.default_contact_required !== "boolean") {
+      return NextResponse.json({ error: "default_contact_required must be boolean" }, { status: 400 })
+    }
+    updates.default_contact_required = body.default_contact_required
+  }
+  if (body.return_geofence_radius_m !== undefined) {
+    const radius = Number(body.return_geofence_radius_m)
+    if (!Number.isFinite(radius) || radius < 250 || radius > 50_000) {
+      return NextResponse.json(
+        { error: "return_geofence_radius_m must be between 250 and 50000" },
+        { status: 400 }
+      )
+    }
+    updates.return_geofence_radius_m = Math.round(radius)
+  }
 
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: "No valid config fields provided" }, { status: 400 })

@@ -71,6 +71,7 @@ import {
   resolveLoanPeriodDays,
 } from "@/lib/loan-period"
 import type { Book, Node as NodeType, User } from "@/lib/types"
+import { GuestKeycardManager } from "@/components/steward/guest-keycard-manager"
 
 type StewardBookStatus = "available" | "checked_out" | "unavailable" | "missing"
 
@@ -119,12 +120,16 @@ export default function StewardDashboardPage() {
     availability_status: "available" as StewardBookStatus,
     current_holder_id: "",
     note: "",
-    contact_required: false,
+    contact_required: true,
     loan_period_days: DEFAULT_LOAN_PERIOD_DAYS,
   })
 
   // Library settings (app-wide default loan period) — synced from bootstrap, editable here.
-  const [configForm, setConfigForm] = useState({ default_loan_period_days: DEFAULT_LOAN_PERIOD_DAYS })
+  const [configForm, setConfigForm] = useState({
+    default_loan_period_days: DEFAULT_LOAN_PERIOD_DAYS,
+    default_contact_required: true,
+    return_geofence_radius_m: 3000,
+  })
   const [configSaving, setConfigSaving] = useState(false)
   const [configError, setConfigError] = useState<string | null>(null)
 
@@ -226,7 +231,11 @@ export default function StewardDashboardPage() {
 
   useEffect(() => {
     if (data?.config) {
-      setConfigForm({ default_loan_period_days: data.config.default_loan_period_days })
+      setConfigForm({
+        default_loan_period_days: data.config.default_loan_period_days,
+        default_contact_required: data.config.default_contact_required,
+        return_geofence_radius_m: data.config.return_geofence_radius_m,
+      })
     }
   }, [data?.config])
 
@@ -389,7 +398,7 @@ export default function StewardDashboardPage() {
       type: "borrow" as const,
       shipping_allowed: false,
       local_only: true,
-      contact_required: false,
+      contact_required: true,
       contact_opt_in: true,
     }
     for (let i = 0; i < isbns.length; i++) {
@@ -974,6 +983,13 @@ export default function StewardDashboardPage() {
           </DialogContent>
         </Dialog>
 
+        <GuestKeycardManager
+          items={books}
+          nodes={nodes}
+          defaultLoanDays={defaultLoanPeriodDays}
+          onChanged={refetch}
+        />
+
         {/* Library settings — app-wide default loan period */}
         <Card className="mb-8 border-border">
           <CardHeader>
@@ -1004,9 +1020,36 @@ export default function StewardDashboardPage() {
                 }
               />
             </div>
+            <div className="grid gap-2 max-w-[180px]">
+              <Label htmlFor="config-return-radius">Return radius (meters)</Label>
+              <Input
+                id="config-return-radius"
+                type="number"
+                min={250}
+                max={50000}
+                step={250}
+                value={configForm.return_geofence_radius_m}
+                onChange={(e) =>
+                  setConfigForm((form) => ({
+                    ...form,
+                    return_geofence_radius_m: Math.max(250, Math.min(50000, Number(e.target.value) || 3000)),
+                  }))
+                }
+              />
+            </div>
+            <div className="flex items-center gap-2 pb-2">
+              <Checkbox
+                id="config-contact-required"
+                checked={configForm.default_contact_required}
+                onCheckedChange={(checked) =>
+                  setConfigForm((form) => ({ ...form, default_contact_required: checked === true }))
+                }
+              />
+              <Label htmlFor="config-contact-required">Require email by default</Label>
+            </div>
             <Button
               type="button"
-              disabled={configSaving || configForm.default_loan_period_days === (data?.config?.default_loan_period_days ?? DEFAULT_LOAN_PERIOD_DAYS)}
+              disabled={configSaving}
               onClick={async () => {
                 setConfigSaving(true)
                 setConfigError(null)
@@ -1015,7 +1058,7 @@ export default function StewardDashboardPage() {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
                     credentials: "include",
-                    body: JSON.stringify({ default_loan_period_days: configForm.default_loan_period_days }),
+                    body: JSON.stringify(configForm),
                   })
                   const j = await res.json().catch(() => ({}))
                   if (!res.ok) throw new Error(j?.error ?? "Failed to save")
@@ -1356,14 +1399,14 @@ export default function StewardDashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Book Management Table */}
+        {/* Shared inventory management: books and operational items. */}
         <Card className="border-border">
           <CardHeader>
             <CardTitle className="text-card-foreground">
-              Book Management
+              Library items
             </CardTitle>
             <p className="text-sm text-muted-foreground">
-              {books.length} book{books.length !== 1 ? "s" : ""} total
+              {books.length} item{books.length !== 1 ? "s" : ""} total
             </p>
           </CardHeader>
           <CardContent className="p-0">
@@ -1372,7 +1415,7 @@ export default function StewardDashboardPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Title</TableHead>
-                    <TableHead>Author</TableHead>
+                    <TableHead>Type / author</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Node</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
@@ -1383,14 +1426,14 @@ export default function StewardDashboardPage() {
                     <TableRow key={book.id}>
                       <TableCell>
                         <Link
-                          href={`/book/${book.id}`}
+                          href={book.item_type === "book" ? `/book/${book.id}` : book.checkout_url}
                           className="text-sm font-medium text-primary hover:underline"
                         >
                           {book.title}
                         </Link>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {book.author || "—"}
+                        {book.item_type === "book" ? book.author || "—" : book.item_type}
                       </TableCell>
                       <TableCell>
                         <Badge
@@ -1784,11 +1827,11 @@ export default function StewardDashboardPage() {
               <div className="flex items-center gap-2">
                 <Checkbox
                   id="edit-contact"
-                  checked={editForm.contact_required}
-                  onCheckedChange={(c) => setEditForm((f) => ({ ...f, contact_required: c === true }))}
+                  checked={!editForm.contact_required}
+                  onCheckedChange={(c) => setEditForm((f) => ({ ...f, contact_required: c !== true }))}
                 />
                 <Label htmlFor="edit-contact" className="text-sm font-normal">
-                  Require contact info to borrow
+                  Allow checkout without email
                 </Label>
               </div>
             </div>

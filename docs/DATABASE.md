@@ -48,9 +48,15 @@ After setting `DATABASE_URL`, run once:
 pnpm db:ensure-schema
 ```
 
-This creates all tables (`users`, `nodes`, `books`, `library_cards`, `loan_events`,
-`trust_events`, `app_config`) and adds any missing columns (e.g. `profile_public` on
+This creates all tables (`users`, `nodes`, `books`, `guest_loans`, `library_cards`,
+`loan_events`, `trust_events`, `app_config`) and adds any missing columns (e.g. `profile_public` on
 `users`). Safe to re-run — it never deletes data. Run again after pulling if the schema was updated.
+
+The historic `books` table is also the compatible circulation table for other
+physical items. `item_type` distinguishes books, keycards, and future objects;
+this additive design keeps existing QR/NFC URLs and ledger foreign keys valid.
+`guest_loans` is private: it contains a borrower email only while a guest item
+is active, then clears that email on return.
 
 For production forks, run this once against the production `DATABASE_URL` after
 the first deploy, and again after pulling upstream changes that mention schema

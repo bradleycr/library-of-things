@@ -8,7 +8,7 @@
 
 const EARTH_RADIUS_M = 6_371_000
 /** Default radius for "return at node" geofencing. Slightly generous to allow for GPS drift and node pin placement. */
-export const DEFAULT_RETURN_RADIUS_M = 1500
+export const DEFAULT_RETURN_RADIUS_M = 3000
 
 /** Max extra meters we add to radius when device reports position accuracy (avoids over‑lenient when accuracy is huge). */
 const MAX_ACCURACY_BONUS_M = 500
@@ -38,6 +38,10 @@ export interface Coords {
   /** Device-reported accuracy in meters (e.g. from Geolocation API). Used to avoid false "not nearby" when at location. */
   accuracyMeters?: number
 }
+
+export type GeolocationResult =
+  | { status: "success"; coords: Coords; capturedAt: string }
+  | { status: "permission-denied" | "timeout" | "unavailable" }
 
 export interface NodeWithCoords {
   id: string
@@ -84,21 +88,49 @@ export function isWithinRadius(
  * Includes device-reported accuracy when available; use for optional geofencing.
  */
 export function getCurrentPosition(options?: PositionOptions): Promise<Coords | null> {
+  return getCurrentPositionResult(options).then((result) =>
+    result.status === "success" ? result.coords : null
+  )
+}
+
+/**
+ * One-shot, user-initiated location lookup with enough error detail to offer
+ * an honest fallback. Call this from a button handler, never page mount.
+ */
+export function getCurrentPositionResult(options?: PositionOptions): Promise<GeolocationResult> {
   if (typeof navigator === "undefined" || !navigator.geolocation) {
-    return Promise.resolve(null)
+    return Promise.resolve({ status: "unavailable" })
   }
   return new Promise((resolve) => {
     navigator.geolocation.getCurrentPosition(
-      (pos) =>
+      (pos) => {
+        const accuracy =
+          typeof pos.coords.accuracy === "number" && pos.coords.accuracy >= 0
+            ? pos.coords.accuracy
+            : undefined
+        if (accuracy != null && accuracy > 1000) {
+          resolve({ status: "unavailable" })
+          return
+        }
         resolve({
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-          accuracyMeters:
-            typeof pos.coords.accuracy === "number" && pos.coords.accuracy >= 0
-              ? pos.coords.accuracy
-              : undefined,
+          status: "success",
+          capturedAt: new Date(pos.timestamp || Date.now()).toISOString(),
+          coords: {
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            accuracyMeters: accuracy,
+          },
+        })
+      },
+      (error) =>
+        resolve({
+          status:
+            error.code === error.PERMISSION_DENIED
+              ? "permission-denied"
+              : error.code === error.TIMEOUT
+                ? "timeout"
+                : "unavailable",
         }),
-      () => resolve(null),
       {
         enableHighAccuracy: true,
         timeout: 15_000,

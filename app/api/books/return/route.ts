@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
-import { returnBook } from "@/lib/server/repositories"
+import { getAppConfig, listNodes, returnBook } from "@/lib/server/repositories"
 import { getSessionUserId } from "@/lib/server/session"
 import { parseJsonBody, isUuid, LIMITS, clampString } from "@/lib/server/validate"
+import { haversineDistanceMeters } from "@/lib/geofence"
 
 /** Server-side cap so we fail eventually, but not before normal DB queueing can clear. */
 const RETURN_HANDLER_TIMEOUT_MS = 15_000
@@ -14,7 +15,14 @@ function timeoutPromise(ms: number): Promise<never> {
 
 export async function POST(request: NextRequest) {
   try {
-    const parsed = await parseJsonBody<{ book_id: string; user_id: string; return_node_id?: string; notes?: string }>(request)
+    const parsed = await parseJsonBody<{
+      book_id: string
+      user_id: string
+      return_node_id?: string
+      notes?: string
+      manual_confirm?: boolean
+      location?: { lat?: number; lng?: number; accuracy_m?: number; captured_at?: string }
+    }>(request)
     if (!parsed.ok) return parsed.response
 
     const { book_id, user_id, return_node_id, notes } = parsed.data
@@ -44,12 +52,58 @@ export async function POST(request: NextRequest) {
     }
 
     try {
+      let locationVerification: "geofence" | "manual" = "manual"
+      let returnDistanceM: number | undefined
+      if (return_node_id) {
+        const [nodes, config] = await Promise.all([listNodes(), getAppConfig()])
+        const node = nodes.find((candidate) => candidate.id === return_node_id)
+        if (!node) return NextResponse.json({ error: "Return node not found" }, { status: 404 })
+        const sample = parsed.data.location
+        const fresh =
+          !!sample?.captured_at &&
+          Number.isFinite(Date.parse(sample.captured_at)) &&
+          Math.abs(Date.now() - Date.parse(sample.captured_at)) <= 2 * 60_000
+        const usable =
+          typeof sample?.lat === "number" &&
+          sample.lat >= -90 &&
+          sample.lat <= 90 &&
+          typeof sample.lng === "number" &&
+          sample.lng >= -180 &&
+          sample.lng <= 180 &&
+          (sample.accuracy_m == null || (sample.accuracy_m >= 0 && sample.accuracy_m <= 1000)) &&
+          fresh &&
+          node.location_lat != null &&
+          node.location_lng != null
+        if (usable && sample && node.location_lat != null && node.location_lng != null) {
+          returnDistanceM = haversineDistanceMeters(
+            sample.lat!,
+            sample.lng!,
+            node.location_lat,
+            node.location_lng
+          )
+          const accuracyBonus = Math.min(Math.max(sample.accuracy_m ?? 0, 0), 500)
+          if (returnDistanceM > config.return_geofence_radius_m + accuracyBonus) {
+            return NextResponse.json(
+              { error: `You appear to be outside the return area for ${node.name}.`, code: "NOT_NEAR_NODE" },
+              { status: 403 }
+            )
+          }
+          locationVerification = "geofence"
+        } else if (!parsed.data.manual_confirm) {
+          return NextResponse.json(
+            { error: "Verify your location or confirm the physical return manually.", code: "MANUAL_CONFIRM_REQUIRED" },
+            { status: 422 }
+          )
+        }
+      }
       await Promise.race([
         returnBook({
           bookId: book_id,
           userId: user_id,
           returnNodeId: return_node_id,
           notes: clampString(notes, LIMITS.ledgerNote) ?? undefined,
+          locationVerification,
+          returnDistanceM,
         }),
         timeoutPromise(RETURN_HANDLER_TIMEOUT_MS),
       ])
