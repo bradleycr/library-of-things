@@ -62,7 +62,7 @@ export interface LibraryItem {
    * When true, the book is kept by the owner and borrowers contact them directly.
    */
   is_pocket_library?: boolean
-  availability_status: "available" | "checked_out" | "in_transit" | "retired"
+  availability_status: "available" | "checked_out" | "in_transit" | "retired" | "unavailable" | "missing"
   lending_terms: LendingTerms
   created_at: string
   expected_return_date?: string

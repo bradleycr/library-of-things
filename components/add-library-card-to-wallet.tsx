@@ -22,7 +22,7 @@ export function AddLibraryCardToWallet({ card }: { card: LibraryCardType }) {
   const { toast } = useToast()
   const [busy, setBusy] = useState(false)
 
-  if (!data?.config.apple_wallet_available) return null
+  if (!data?.config?.apple_wallet_available) return null
   if (typeof card.pin !== "string" || card.pin.length === 0) return null
 
   const handleClick = async () => {

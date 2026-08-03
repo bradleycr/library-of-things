@@ -76,9 +76,10 @@ import { TemporaryKeycardManager } from "@/components/steward/temporary-keycard-
 type StewardBookStatus = "available" | "checked_out" | "unavailable" | "missing"
 
 function toStewardStatus(status: Book["availability_status"]): StewardBookStatus {
-  if (status === "retired") return "missing"
-  if (status === "in_transit") return "unavailable"
-  return status
+  if (status === "retired" || status === "missing") return "missing"
+  if (status === "in_transit" || status === "unavailable") return "unavailable"
+  if (status === "checked_out") return "checked_out"
+  return "available"
 }
 
 function fromStewardStatus(status: StewardBookStatus): Book["availability_status"] | "missing" {
@@ -1445,7 +1446,8 @@ export default function StewardDashboardPage() {
                           className={
                             book.availability_status === "available"
                               ? "bg-accent text-accent-foreground"
-                              : book.availability_status === "retired"
+                              : book.availability_status === "retired" ||
+                                  book.availability_status === "missing"
                                 ? "bg-destructive/10 text-destructive"
                                 : ""
                           }

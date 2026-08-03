@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Check, Copy, CreditCard, Loader2, RotateCcw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -16,6 +16,14 @@ interface TemporaryKeycardManagerProps {
   onChanged: () => Promise<unknown> | unknown
 }
 
+/** Human label for steward list — DB may store `missing` or API-normalized `retired`. */
+function keycardStatusLabel(status: Book["availability_status"]) {
+  if (status === "checked_out") return "Signed out"
+  if (status === "missing" || status === "retired") return "Missing"
+  if (status === "in_transit" || status === "unavailable") return "Unavailable"
+  return "Available"
+}
+
 /** Steward provisioning and recovery for numbered physical temporary keycards. */
 export function TemporaryKeycardManager({
   items,
@@ -27,12 +35,17 @@ export function TemporaryKeycardManager({
     () => items.filter((item) => item.item_type === "keycard").sort((a, b) => (a.asset_number ?? 0) - (b.asset_number ?? 0)),
     [items]
   )
-  const [nodeId, setNodeId] = useState(nodes[0]?.id ?? "")
+  // Bootstrap loads after first paint — seed from nodes[0] only once they arrive.
+  const [nodeId, setNodeId] = useState("")
   const [count, setCount] = useState(10)
   const [startNumber, setStartNumber] = useState(1)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (nodes.length > 0 && !nodeId) setNodeId(nodes[0].id)
+  }, [nodes, nodeId])
 
   const create = async () => {
     setBusy(true)
@@ -118,12 +131,18 @@ export function TemporaryKeycardManager({
         <div className="grid gap-3 sm:grid-cols-4 sm:items-end">
           <div className="space-y-2 sm:col-span-2">
             <Label>Home node</Label>
-            <Select value={nodeId} onValueChange={setNodeId}>
-              <SelectTrigger><SelectValue placeholder="Choose a node" /></SelectTrigger>
-              <SelectContent>
-                {nodes.map((node) => <SelectItem key={node.id} value={node.id}>{node.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            {nodes.length > 0 && nodeId ? (
+              <Select value={nodeId} onValueChange={setNodeId}>
+                <SelectTrigger><SelectValue placeholder="Choose a node" /></SelectTrigger>
+                <SelectContent>
+                  {nodes.map((node) => <SelectItem key={node.id} value={node.id}>{node.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="flex h-10 items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground">
+                Loading nodes…
+              </div>
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="keycard-start">Starts at</Label>
@@ -155,7 +174,7 @@ export function TemporaryKeycardManager({
                 <div className="min-w-0 flex-1">
                   <p className="font-medium">{item.title}</p>
                   <p className="text-xs text-muted-foreground">
-                    {item.current_node_name} · {item.availability_status === "checked_out" ? "Signed out" : "Available"}
+                    {item.current_node_name} · {keycardStatusLabel(item.availability_status)}
                   </p>
                 </div>
                 <Button variant="outline" size="sm" onClick={() => copyUrl(item)}>

@@ -1,6 +1,6 @@
 "use client"
 
-import { use, useEffect, useState } from "react"
+import { Suspense, use, useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { CheckCircle2, CreditCard, Loader2, MapPin } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -17,7 +17,16 @@ type TapPayload = {
   guest_session_active: boolean
 }
 
+/** Suspense boundary required by Next for `useSearchParams` on this route. */
 export default function ThingCheckoutPage({ params }: { params: Promise<{ uuid: string }> }) {
+  return (
+    <Suspense fallback={<Message title="Opening item…" loading />}>
+      <ThingCheckoutInner params={params} />
+    </Suspense>
+  )
+}
+
+function ThingCheckoutInner({ params }: { params: Promise<{ uuid: string }> }) {
   const { uuid } = use(params)
   const token = useSearchParams().get("token")
   const [payload, setPayload] = useState<TapPayload | null>(null)
@@ -113,6 +122,8 @@ export default function ThingCheckoutPage({ params }: { params: Promise<{ uuid: 
   const item = payload.book
   const homeNode = payload.nodes.find((node) => node.id === (item.home_node_id ?? item.current_node_id))
   const isAvailable = item.availability_status === "available"
+  const isMissing =
+    item.availability_status === "missing" || item.availability_status === "retired"
 
   return (
     <main className="page-container flex min-h-[70vh] items-center justify-center py-10">
@@ -139,7 +150,11 @@ export default function ThingCheckoutPage({ params }: { params: Promise<{ uuid: 
             </div>
           )}
 
-          {isAvailable ? (
+          {isMissing ? (
+            <p className="rounded-lg bg-muted p-4 text-sm text-muted-foreground">
+              This temporary keycard is marked missing. Please contact a steward.
+            </p>
+          ) : isAvailable ? (
             <>
               <div className="space-y-2">
                 <Label htmlFor="guest-email">Email address</Label>

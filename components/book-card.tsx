@@ -13,7 +13,9 @@ const statusConfig = {
   available: { label: "Available", variant: "default" as const, className: "bg-accent text-accent-foreground" },
   checked_out: { label: "Checked Out", variant: "secondary" as const, className: "bg-secondary text-secondary-foreground" },
   in_transit: { label: "Unavailable", variant: "outline" as const, className: "" },
+  unavailable: { label: "Unavailable", variant: "outline" as const, className: "" },
   retired: { label: "Missing", variant: "secondary" as const, className: "bg-destructive/10 text-destructive" },
+  missing: { label: "Missing", variant: "secondary" as const, className: "bg-destructive/10 text-destructive" },
 }
 
 export function BookCard({ book }: { book: Book }) {

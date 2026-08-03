@@ -47,7 +47,7 @@ export function SiteHeader() {
   const [libraryCardModalMode, setLibraryCardModalMode] = useState<GetLibraryCardModalMode>("view")
   const [loginModalOpen, setLoginModalOpen] = useState(false)
   const [scanCheckoutOpen, setScanCheckoutOpen] = useState(false)
-  const { card } = useLibraryCard()
+  const { card, mounted } = useLibraryCard()
 
   useEffect(() => {
     setMobileOpen(false)
@@ -58,6 +58,9 @@ export function SiteHeader() {
     setLibraryCardModalOpen(true)
   }
   const profileHref = card?.user_id ? `/profile/${card.user_id}` : "/settings"
+  // localStorage is only readable after mount — wait so SSR and first paint match.
+  const showAccountMenu = mounted && !card
+  const showCardActions = mounted && !!card
 
   return (
     <header className="sticky top-0 z-50 border-b border-border/50 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/90">
@@ -116,7 +119,7 @@ export function SiteHeader() {
           </DropdownMenu>
           {/* Account section: Only show for brand new users without a library card.
               Once a card is connected, the Profile button provides all necessary access. */}
-          {!card && (
+          {showAccountMenu && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="sm" className="gap-2 text-foreground">
@@ -149,7 +152,7 @@ export function SiteHeader() {
                   Profile
                 </Link>
               </DropdownMenuItem>
-              {card && (
+              {showCardActions && (
                 <DropdownMenuItem onClick={() => openLibraryCardModal("view")}>
                   <CreditCard className="h-4 w-4" />
                   View library card
@@ -191,7 +194,7 @@ export function SiteHeader() {
           <div className="flex flex-col gap-1">
             {/* Account section: Only show for brand new users without a library card.
                 Once a card is connected, the Profile section provides all necessary access. */}
-            {!card && (
+            {showAccountMenu && (
               <>
                 <Button
                   variant="ghost"
@@ -257,7 +260,7 @@ export function SiteHeader() {
                   Profile
                 </Button>
               </Link>
-              {card && (
+              {showCardActions && (
                 <Button
                   variant="ghost"
                   className="w-full justify-start gap-3 text-foreground"
