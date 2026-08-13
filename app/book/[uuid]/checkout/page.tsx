@@ -685,7 +685,7 @@ function ReturnFlow({
           return_node_id: nodeId,
           notes: returnNotes.trim() || undefined,
           location,
-          manual_confirm: !location && returnAtLocationAcknowledged,
+          manual_confirm: returnAtLocationAcknowledged,
         }),
       })
       if (timeoutId) clearTimeout(timeoutId)

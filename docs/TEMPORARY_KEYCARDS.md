@@ -37,7 +37,7 @@ default, editable under **Library settings**).
 Temporary keycards return only to their home node. Books may return to any
 selected node. If location permission, GPS, or node coordinates are unavailable,
 the borrower may use the explicit physical-return confirmation. A known location
-outside the radius is not treated as a GPS failure and remains blocked.
+outside the radius is blocked unless they also confirm the physical return.
 
 Raw coordinates are not retained. Ledger metadata records only the verification
 method and rounded distance. Browser location can be spoofed, so this is a

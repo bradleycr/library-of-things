@@ -17,7 +17,7 @@
  *   • EAN-13 only
  *   • Check-digit validation
  *   • Bookland prefix (978/979) — refuses non-book product barcodes
- *   • Three-read confirmation within a short window — refuses single misreads
+ *   • Two-read confirmation within a short window — refuses single misreads
  *
  * Parent `onScan` / `onOpenChange` are read through refs so re-renders never
  * tear down the live camera mid-scan.
@@ -57,11 +57,11 @@ export interface IsbnScannerDialogProps {
 
 /** Short delay so first frames (autofocus / exposure) don't burn confirmations. */
 const CAMERA_WARMUP_MS = 600
-/** Three identical valid reads within this window = accept. */
-const STABLE_READ_MS = 4000
-const STABLE_READ_COUNT = 3
+/** Two identical valid reads within this window = accept (3 was too slow on iPhone Quagga). */
+const STABLE_READ_MS = 3000
+const STABLE_READ_COUNT = 2
 /** Quagga confidence gate. Lower is better; rejects plausible but fuzzy misreads. */
-const MAX_QUAGGA_AVERAGE_ERROR = 0.18
+const MAX_QUAGGA_AVERAGE_ERROR = 0.22
 /** Native engine polling cap. We don't need 60 Hz; this keeps phones cool. */
 const NATIVE_SCAN_INTERVAL_MS = 120
 /** Retry budget for waiting on the container ref to mount. */
@@ -75,7 +75,12 @@ type ScannerStatus =
   | "error"
   | "no-camera"
 
-type EngineMode = "native" | "quagga" | null
+/** iPhone Safari has no BarcodeDetector; Quagga is the reliable live path there. */
+function prefersQuaggaLive(): boolean {
+  if (typeof navigator === "undefined") return true
+  const ua = navigator.userAgent
+  return /iPhone|iPad|iPod/i.test(ua) || (/Safari/i.test(ua) && !/Chrome|CriOS|FxiOS/i.test(ua))
+}
 
 /* ────────────────────────────────────────────────────────────────────────────
  * Validation
@@ -205,6 +210,37 @@ async function pickStableBackCameraId(): Promise<string | null> {
   } catch {
     return null
   }
+}
+
+/**
+ * Request camera permission once, pick a stable back camera id, then release.
+ * Quagga opens its own stream — this primes labels/deviceId on iOS.
+ */
+async function prepareBackCameraConstraints(
+  base: MediaTrackConstraints,
+): Promise<MediaTrackConstraints> {
+  if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+    return base
+  }
+  let stream: MediaStream | null = null
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: base, audio: false })
+  } catch {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: FALLBACK_CONSTRAINTS,
+        audio: false,
+      })
+    } catch {
+      return base
+    }
+  }
+  const stableId = await pickStableBackCameraId()
+  stream.getTracks().forEach((track) => track.stop())
+  if (stableId) {
+    return { ...base, deviceId: { exact: stableId } }
+  }
+  return base
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
@@ -343,7 +379,6 @@ export function IsbnScannerDialog({
 
   /* ---- UI state ---- */
   const [status, setStatus] = useState<ScannerStatus>("idle")
-  const [engineMode, setEngineMode] = useState<EngineMode>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [manualIsbn, setManualIsbn] = useState("")
   const [manualError, setManualError] = useState<string | null>(null)
@@ -547,6 +582,10 @@ export function IsbnScannerDialog({
         handleCandidate(code)
       }
 
+      const resolvedConstraints = allowFallback
+        ? await prepareBackCameraConstraints(constraints)
+        : constraints
+
       try {
         await new Promise<void>((resolve, reject) => {
           Q.init(
@@ -554,12 +593,12 @@ export function IsbnScannerDialog({
               inputStream: {
                 type: "LiveStream",
                 target: container,
-                constraints,
+                constraints: resolvedConstraints,
                 willReadFrequently: true,
               },
               decoder: { readers: ["ean_reader"] },
               locate: true,
-              frequency: 6,
+              frequency: 8,
               numOfWorkers:
                 typeof navigator !== "undefined"
                   ? Math.max(1, Math.min(4, navigator.hardwareConcurrency || 2))
@@ -647,30 +686,25 @@ export function IsbnScannerDialog({
 
       if (!hasGUM) {
         setStatus("no-camera")
-        setEngineMode(null)
         setMessage(
           "Camera not supported in this browser. Use Take photo or type the ISBN below.",
         )
         return
       }
 
-      // Try native first.
-      const canNative = await nativeDetectorSupportsEan13()
-      if (cancelled) return
-
       let stop: (() => Promise<void>) | null = null
-      let usedEngine: EngineMode = null
 
-      if (canNative) {
-        setEngineMode("native")
-        stop = await startNativeEngine(container)
-        if (stop) usedEngine = "native"
+      // iPhone Safari: skip native probe — go straight to Quagga with stable back camera.
+      if (!prefersQuaggaLive()) {
+        const canNative = await nativeDetectorSupportsEan13()
+        if (cancelled) return
+        if (canNative) {
+          stop = await startNativeEngine(container)
+        }
       }
 
       if (!stop && !cancelled) {
-        setEngineMode("quagga")
         stop = await startQuaggaEngine(container, QUAGGA_CONSTRAINTS, true)
-        if (stop) usedEngine = "quagga"
       }
 
       if (cancelled) {
@@ -680,7 +714,6 @@ export function IsbnScannerDialog({
 
       if (!stop) {
         setStatus("no-camera")
-        setEngineMode(null)
         setMessage(
           "Could not open the camera. Allow camera access and try again, or use Take photo / type the ISBN below.",
         )
@@ -690,7 +723,6 @@ export function IsbnScannerDialog({
       stopLiveRef.current = stop
       readyAtRef.current = Date.now() + CAMERA_WARMUP_MS
       setStatus("live")
-      setEngineMode(usedEngine)
       setMessage("Point the camera at the barcode on the back of the book.")
     }
 
@@ -718,7 +750,6 @@ export function IsbnScannerDialog({
       stopLiveRef.current = null
       void stop?.()
       setStatus("idle")
-      setEngineMode(null)
       setMessage(null)
     }
   }, [open, restartNonce, startNativeEngine, startQuaggaEngine])
@@ -731,14 +762,19 @@ export function IsbnScannerDialog({
     stopLiveRef.current = null
     void stop?.()
     setStatus("idle")
-    setEngineMode(null)
     setMessage(null)
     setManualError(null)
     onOpenChange(false)
   }, [onOpenChange])
 
+  const stopLiveScan = useCallback(async () => {
+    const stop = stopLiveRef.current
+    stopLiveRef.current = null
+    if (stop) await stop()
+  }, [])
+
   const handlePhotoClick = () => {
-    photoInputRef.current?.click()
+    void stopLiveScan().then(() => photoInputRef.current?.click())
   }
 
   const handlePhotoFile = useCallback(
@@ -790,7 +826,7 @@ export function IsbnScannerDialog({
    * Render
    * ----------------------------------------------------------------- */
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
+    <Dialog open={open} onOpenChange={(next) => { if (!next) handleClose() }}>
       <DialogContent
         className="max-h-[85vh] w-[min(100vw-2rem,28rem)] max-w-[calc(100vw-2rem)] overflow-y-auto"
         aria-describedby="isbn-scanner-description"
@@ -821,6 +857,12 @@ export function IsbnScannerDialog({
                 onChange={(e) => {
                   setManualIsbn(e.target.value)
                   if (manualError) setManualError(null)
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault()
+                    handleManualSubmit()
+                  }
                 }}
               />
               <Button
@@ -893,9 +935,8 @@ export function IsbnScannerDialog({
                 onClick={() => {
                   setManualError(null)
                   setStatus("idle")
-                  setEngineMode(null)
                   setMessage(null)
-                  setRestartNonce((v) => v + 1)
+                  void stopLiveScan().then(() => setRestartNonce((v) => v + 1))
                 }}
               >
                 Try camera again

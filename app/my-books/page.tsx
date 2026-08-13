@@ -46,7 +46,7 @@ import { useToast } from "@/hooks/use-toast"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { getAvatarUrl, getInitials, getAvatarSeed } from "@/lib/avatar"
 import { IsbnScannerDialog } from "@/components/isbn-scanner-dialog"
-import { normalizeIsbn, isbn10To13 } from "@/lib/isbn-utils"
+import { isbnMatches } from "@/lib/isbn-checkout"
 import { ISBN_CHECKOUT_RETURN_ENABLED } from "@/lib/feature-flags"
 import { getCurrentPositionResult } from "@/lib/geofence"
 import type { Book, User } from "@/lib/types"
@@ -116,13 +116,7 @@ function MyBooksContent() {
   const handleIsbnScannedForReturn = useCallback(
     (scannedIsbn: string) => {
       if (!returnBook) return
-      const bookNorm = returnBook.isbn ? normalizeIsbn(returnBook.isbn) : null
-      const bookIsbn13 = bookNorm && bookNorm.length === 10 ? isbn10To13(bookNorm) : bookNorm
-      const matchesScanned =
-        bookNorm !== null &&
-        (bookNorm === scannedIsbn || (bookIsbn13 != null && bookIsbn13 === scannedIsbn))
-
-      if (!matchesScanned) {
+      if (returnBook.isbn && !isbnMatches(returnBook.isbn, scannedIsbn)) {
         toast({
           variant: "destructive",
           title: "Wrong book",
@@ -182,7 +176,7 @@ function MyBooksContent() {
           return_node_id: returnNodeId || undefined,
           notes: returnNotes.trim() || undefined,
           location,
-          manual_confirm: !location && returnAtLocationAcknowledged,
+          manual_confirm: returnAtLocationAcknowledged,
         }),
       })
       if (timeoutId) clearTimeout(timeoutId)

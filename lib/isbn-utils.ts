@@ -80,3 +80,31 @@ export function isbn10To13(isbn10: string): string | null {
   const check = (10 - (sum % 10)) % 10
   return prefix + nine + String(check)
 }
+
+/**
+ * Normalize to ISBN-10 and/or ISBN-13 forms for comparison.
+ */
+function normalizedForms(isbn: string | null | undefined): { n10: string | null; n13: string | null } {
+  const n = isbn ? normalizeIsbn(isbn) : null
+  if (!n) return { n10: null, n13: null }
+  if (n.length === 13) return { n10: null, n13: n }
+  return { n10: n, n13: isbn10To13(n) }
+}
+
+/**
+ * True when a scanned normalized ISBN matches a stored ISBN (10↔13 cross-match).
+ */
+export function isbnMatches(
+  storedIsbn: string | null | undefined,
+  scannedNormalized: string,
+): boolean {
+  const stored = normalizedForms(storedIsbn)
+  const scanned = normalizedForms(scannedNormalized)
+  if ((!stored.n10 && !stored.n13) || (!scanned.n10 && !scanned.n13)) return false
+
+  const stored13 = stored.n13 ?? (stored.n10 ? isbn10To13(stored.n10) : null)
+  const scanned13 = scanned.n13 ?? (scanned.n10 ? isbn10To13(scanned.n10) : null)
+
+  if (stored.n10 && scanned.n10 && stored.n10 === scanned.n10) return true
+  return !!(stored13 && scanned13 && stored13 === scanned13)
+}

@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server"
 import { getAppConfig, listNodes, returnBook } from "@/lib/server/repositories"
 import { getSessionUserId } from "@/lib/server/session"
 import { parseJsonBody, isUuid, LIMITS, clampString } from "@/lib/server/validate"
-import { haversineDistanceMeters } from "@/lib/geofence"
+import {
+  haversineDistanceMeters,
+  isValidLocationSample,
+  MAX_ACCURACY_BONUS_M,
+} from "@/lib/geofence"
 
 /** Server-side cap so we fail eventually, but not before normal DB queueing can clear. */
 const RETURN_HANDLER_TIMEOUT_MS = 15_000
@@ -59,19 +63,8 @@ export async function POST(request: NextRequest) {
         const node = nodes.find((candidate) => candidate.id === return_node_id)
         if (!node) return NextResponse.json({ error: "Return node not found" }, { status: 404 })
         const sample = parsed.data.location
-        const fresh =
-          !!sample?.captured_at &&
-          Number.isFinite(Date.parse(sample.captured_at)) &&
-          Math.abs(Date.now() - Date.parse(sample.captured_at)) <= 2 * 60_000
         const usable =
-          typeof sample?.lat === "number" &&
-          sample.lat >= -90 &&
-          sample.lat <= 90 &&
-          typeof sample.lng === "number" &&
-          sample.lng >= -180 &&
-          sample.lng <= 180 &&
-          (sample.accuracy_m == null || (sample.accuracy_m >= 0 && sample.accuracy_m <= 1000)) &&
-          fresh &&
+          isValidLocationSample(sample) &&
           node.location_lat != null &&
           node.location_lng != null
         if (usable && sample && node.location_lat != null && node.location_lng != null) {
@@ -81,14 +74,20 @@ export async function POST(request: NextRequest) {
             node.location_lat,
             node.location_lng
           )
-          const accuracyBonus = Math.min(Math.max(sample.accuracy_m ?? 0, 0), 500)
+          const accuracyBonus = Math.min(Math.max(sample.accuracy_m ?? 0, 0), MAX_ACCURACY_BONUS_M)
           if (returnDistanceM > config.return_geofence_radius_m + accuracyBonus) {
-            return NextResponse.json(
-              { error: `You appear to be outside the return area for ${node.name}.`, code: "NOT_NEAR_NODE" },
-              { status: 403 }
-            )
+            if (!parsed.data.manual_confirm) {
+              return NextResponse.json(
+                {
+                  error: `You appear to be outside the return area for ${node.name}. If you are at the node, confirm the physical return manually.`,
+                  code: "NOT_NEAR_NODE",
+                },
+                { status: 403 }
+              )
+            }
+          } else {
+            locationVerification = "geofence"
           }
-          locationVerification = "geofence"
         } else if (!parsed.data.manual_confirm) {
           return NextResponse.json(
             { error: "Verify your location or confirm the physical return manually.", code: "MANUAL_CONFIRM_REQUIRED" },

@@ -1,6 +1,10 @@
 import { cookies } from "next/headers"
 import { NextRequest, NextResponse } from "next/server"
-import { haversineDistanceMeters } from "@/lib/geofence"
+import {
+  haversineDistanceMeters,
+  isValidLocationSample,
+  MAX_ACCURACY_BONUS_M,
+} from "@/lib/geofence"
 import {
   getAppConfig,
   getBookById,
@@ -45,19 +49,8 @@ export async function POST(request: NextRequest) {
     let verification: "geofence" | "manual" = "manual"
     let distanceM: number | undefined
 
-    const locationIsFresh =
-      !!sample?.captured_at &&
-      Number.isFinite(Date.parse(sample.captured_at)) &&
-      Math.abs(Date.now() - Date.parse(sample.captured_at)) <= 2 * 60_000
     const hasUsableLocation =
-      typeof sample?.lat === "number" &&
-      sample.lat >= -90 &&
-      sample.lat <= 90 &&
-      typeof sample.lng === "number" &&
-      sample.lng >= -180 &&
-      sample.lng <= 180 &&
-      (sample.accuracy_m == null || (sample.accuracy_m >= 0 && sample.accuracy_m <= 1000)) &&
-      locationIsFresh &&
+      isValidLocationSample(sample) &&
       homeNode?.location_lat != null &&
       homeNode.location_lng != null
 
@@ -68,21 +61,24 @@ export async function POST(request: NextRequest) {
         homeNode.location_lat,
         homeNode.location_lng
       )
-      const accuracyBonus = Math.min(Math.max(sample.accuracy_m ?? 0, 0), 500)
+      const accuracyBonus = Math.min(Math.max(sample.accuracy_m ?? 0, 0), MAX_ACCURACY_BONUS_M)
       if (distanceM > config.return_geofence_radius_m + accuracyBonus) {
-        return NextResponse.json(
-          {
-            error: `You appear to be ${Math.max(1, Math.round(distanceM / 1000))} km from ${homeNode.name}. Return this temporary keycard at its home node.`,
-            code: "NOT_NEAR_HOME_NODE",
-          },
-          { status: 403 }
-        )
+        if (!parsed.data.manual_confirm) {
+          return NextResponse.json(
+            {
+              error: `You appear to be about ${Math.max(1, Math.round(distanceM / 1000))} km from ${homeNode.name}. If you are at the node, GPS may be wrong — check the manual return confirmation and try again.`,
+              code: "NOT_NEAR_HOME_NODE",
+            },
+            { status: 403 }
+          )
+        }
+      } else {
+        verification = "geofence"
       }
-      verification = "geofence"
     } else if (!parsed.data.manual_confirm) {
       return NextResponse.json(
         {
-          error: "Location could not be verified. Confirm the manual return statement to continue.",
+          error: "Location could not be verified. Check the box to confirm you have physically returned this keycard.",
           code: "MANUAL_CONFIRM_REQUIRED",
         },
         { status: 422 }
