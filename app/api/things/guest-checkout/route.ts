@@ -17,12 +17,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Too many attempts. Try again shortly." }, { status: 429 })
   }
 
-  const parsed = await parseJsonBody<{ item_id?: string; email?: string; token?: string }>(request)
+  const parsed = await parseJsonBody<{
+    item_id?: string
+    email?: string
+    token?: string
+    email_confirmed?: boolean
+  }>(request)
   if (!parsed.ok) return parsed.response
   const itemId = parsed.data.item_id
   const email = parsed.data.email?.trim().toLowerCase()
   if (!itemId || !isUuid(itemId) || !email || email.length > 320 || !EMAIL_PATTERN.test(email)) {
     return NextResponse.json({ error: "A valid item and email address are required." }, { status: 400 })
+  }
+  if (parsed.data.email_confirmed !== true) {
+    return NextResponse.json(
+      { error: "Promise that this is a valid email you can be reached at." },
+      { status: 400 }
+    )
   }
 
   try {

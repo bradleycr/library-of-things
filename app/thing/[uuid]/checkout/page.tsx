@@ -2,7 +2,7 @@
 
 import { Suspense, use, useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "next/navigation"
-import { CheckCircle2, CreditCard, Loader2, MapPin } from "lucide-react"
+import { Check, CheckCircle2, CreditCard, Loader2, Mail, MapPin } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -15,7 +15,10 @@ import {
   type GeolocationResult,
 } from "@/lib/geofence"
 import { geolocationStatusMessage, previewReturnLocation } from "@/lib/return-location"
+import { cn } from "@/lib/utils"
 import type { Book, Node } from "@/lib/types"
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 type TapPayload = {
   book: Book
@@ -39,6 +42,7 @@ function ThingCheckoutInner({ params }: { params: Promise<{ uuid: string }> }) {
   const [payload, setPayload] = useState<TapPayload | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [email, setEmail] = useState("")
+  const [emailPromised, setEmailPromised] = useState(false)
   const [busy, setBusy] = useState(false)
   const [locating, setLocating] = useState(false)
   const [complete, setComplete] = useState<"checkout" | "return" | null>(null)
@@ -75,14 +79,24 @@ function ThingCheckoutInner({ params }: { params: Promise<{ uuid: string }> }) {
     [location, homeNode, geofenceRadiusM]
   )
 
+  const normalizedEmail = email.trim().toLowerCase()
+  const emailLooksValid = EMAIL_PATTERN.test(normalizedEmail)
+  const canCheckout = emailLooksValid && emailPromised && !busy
+
   const checkout = async () => {
+    if (!canCheckout) return
     setBusy(true)
     setError(null)
     try {
       const response = await fetch("/api/things/guest-checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ item_id: uuid, email, token }),
+        body: JSON.stringify({
+          item_id: uuid,
+          email: normalizedEmail,
+          token,
+          email_confirmed: true,
+        }),
       })
       const body = await response.json()
       if (!response.ok) throw new Error(body.error ?? "Checkout failed")
@@ -172,7 +186,7 @@ function ThingCheckoutInner({ params }: { params: Promise<{ uuid: string }> }) {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-primary/15">
-            <CreditCard className="h-6 w-6" />
+            {complete ? <CheckCircle2 className="h-6 w-6" /> : <CreditCard className="h-6 w-6" />}
           </div>
           <CardTitle className="font-lot text-2xl font-normal">{item.title}</CardTitle>
           {homeNode && (
@@ -183,36 +197,47 @@ function ThingCheckoutInner({ params }: { params: Promise<{ uuid: string }> }) {
           )}
         </CardHeader>
         <CardContent className="space-y-5">
-          {complete && (
-            <div className="flex gap-3 rounded-lg border border-primary/30 bg-primary/10 p-3 text-sm">
-              <CheckCircle2 className="h-5 w-5 shrink-0" />
-              {complete === "checkout"
-                ? "Signed out. Tap this temporary keycard again when you return it."
-                : "Returned. Thank you for bringing it home."}
-            </div>
-          )}
-
-          {isMissing ? (
+          {complete === "checkout" ? (
+            <CheckoutSuccess email={normalizedEmail} homeName={homeNode?.name} />
+          ) : complete === "return" ? (
+            <ReturnSuccess homeName={homeNode?.name} />
+          ) : isMissing ? (
             <p className="rounded-lg bg-muted p-4 text-sm text-muted-foreground">
               This temporary keycard is marked missing. Please contact a steward.
             </p>
           ) : isAvailable ? (
             <>
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                Signing out connects this temporary keycard to your email so a steward can reach you
+                if it isn’t returned.
+              </p>
               <div className="space-y-2">
                 <Label htmlFor="guest-email">Email address</Label>
                 <Input
                   id="guest-email"
                   type="email"
+                  inputMode="email"
                   autoComplete="email"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   placeholder="you@example.com"
                   value={email}
-                  onChange={(event) => setEmail(event.target.value)}
+                  onChange={(event) => {
+                    setEmail(event.target.value)
+                    if (emailPromised) setEmailPromised(false)
+                  }}
                 />
-                <p className="text-xs text-muted-foreground">
-                  Used only to contact you about this return. It is not shown in the public ledger.
-                </p>
+                {email.trim().length > 0 && !emailLooksValid && (
+                  <p className="text-xs text-destructive">Enter a full email, like name@example.com.</p>
+                )}
               </div>
-              <Button className="w-full" disabled={busy || !email.trim()} onClick={checkout}>
+              <EmailPromiseButton
+                pressed={emailPromised}
+                disabled={!emailLooksValid}
+                onToggle={() => setEmailPromised((current) => !current)}
+              />
+              <Button className="w-full min-h-11" disabled={!canCheckout} onClick={checkout}>
                 {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Sign out temporary keycard
               </Button>
@@ -271,7 +296,7 @@ function ThingCheckoutInner({ params }: { params: Promise<{ uuid: string }> }) {
                 </p>
               </div>
 
-              <Button className="w-full" disabled={locationBusy} onClick={returnItem}>
+              <Button className="w-full min-h-11" disabled={locationBusy} onClick={returnItem}>
                 {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Confirm return
               </Button>
@@ -282,10 +307,97 @@ function ThingCheckoutInner({ params }: { params: Promise<{ uuid: string }> }) {
               signed it out, or by a steward.
             </p>
           )}
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          {error && complete == null && <p className="text-sm text-destructive">{error}</p>}
         </CardContent>
       </Card>
     </main>
+  )
+}
+
+function EmailPromiseButton({
+  pressed,
+  disabled,
+  onToggle,
+}: {
+  pressed: boolean
+  disabled?: boolean
+  onToggle: () => void
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={pressed}
+      disabled={disabled}
+      onClick={onToggle}
+      className={cn(
+        "flex w-full min-h-11 items-start gap-3 rounded-lg border px-3 py-3 text-left text-sm leading-snug transition-colors",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        disabled && "cursor-not-allowed opacity-50",
+        pressed
+          ? "border-primary/40 bg-primary/15 text-foreground"
+          : "border-border bg-muted/40 text-foreground hover:bg-muted/70"
+      )}
+    >
+      <span
+        className={cn(
+          "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border",
+          pressed ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40"
+        )}
+        aria-hidden="true"
+      >
+        {pressed && <Check className="h-3 w-3" strokeWidth={3} />}
+      </span>
+      <span>
+        <span className="font-medium">I promise this is a valid email I can be reached at.</span>
+        <span className="mt-0.5 block text-xs text-muted-foreground">
+          Tap to confirm. The sign-out button unlocks after this.
+        </span>
+      </span>
+    </button>
+  )
+}
+
+function CheckoutSuccess({ email, homeName }: { email: string; homeName?: string }) {
+  return (
+    <div className="space-y-4 text-center" role="status">
+      <div className="rounded-xl border border-primary/30 bg-primary/10 px-4 py-5">
+        <p className="font-lot text-xl text-foreground">Checked out</p>
+        <p className="mt-1 text-sm text-muted-foreground">This temporary keycard is now signed out.</p>
+        <div className="mt-4 flex items-start gap-3 rounded-lg bg-background/80 px-3 py-3 text-left">
+          <Mail className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+          <div className="min-w-0">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Connected to your email
+            </p>
+            <p className="mt-0.5 break-all text-sm font-medium text-foreground">{email}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Private. Used only if we need to reach you about this card.
+            </p>
+          </div>
+        </div>
+      </div>
+      <p className="text-sm leading-relaxed text-muted-foreground">
+        Keep this phone. When you bring the card back to {homeName ?? "its home node"}, tap the same
+        NFC tag in this browser to return it.
+      </p>
+    </div>
+  )
+}
+
+function ReturnSuccess({ homeName }: { homeName?: string }) {
+  return (
+    <div className="space-y-4 text-center" role="status">
+      <div className="rounded-xl border border-primary/30 bg-primary/10 px-4 py-5">
+        <p className="font-lot text-xl text-foreground">Returned</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Thank you for bringing this temporary keycard home
+          {homeName ? ` to ${homeName}` : ""}.
+        </p>
+      </div>
+      <p className="text-sm leading-relaxed text-muted-foreground">
+        The email connected to this loan has been erased. The card is available for the next person.
+      </p>
+    </div>
   )
 }
 

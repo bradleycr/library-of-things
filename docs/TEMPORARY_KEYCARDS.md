@@ -18,10 +18,13 @@ two-book limit.
 
 ## Temporary keycard borrowing
 
-A tap opens a minimal page asking for an email address. No library account or
-email verification is required. The email is stored only in the private
-`guest_loans` row while the item is checked out; it is never written to the
-public ledger and is erased when the item is returned.
+A tap opens a minimal page asking for an email address. The borrower must
+confirm that it is a valid address they can be reached at. No library account
+or emailed verification link is required. After sign-out, the screen shows that
+the card is checked out and connected to that email. The address is stored only
+in the private `guest_loans` row while the item is checked out; it is never
+written to the public ledger and is erased when the item is returned. The
+return screen is a dedicated “Returned” confirmation.
 
 The browser receives an opaque, HTTP-only loan cookie. A second tap in that
 browser opens the return flow. If the browser session is lost, a steward can
