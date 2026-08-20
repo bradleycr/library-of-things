@@ -20,33 +20,25 @@ two-book limit.
 
 A tap opens a minimal page asking for an email address. The borrower must
 confirm that it is a valid address they can be reached at. No library account
-or emailed verification link is required. After sign-out, the screen shows that
-the card is checked out and connected to that email. The address is stored only
-in the private `guest_loans` row while the item is checked out; it is never
-written to the public ledger and is erased when the item is returned. The
-return screen is a dedicated “Returned” confirmation.
+or emailed verification link is required. After sign-out, a dedicated success
+screen shows the card as **Out** and connected to that email. The address is
+stored only in the private `guest_loans` row while the item is checked out; it
+is never written to the public ledger and is erased when the item is returned.
+The return screen is a dedicated **Home / Returned** confirmation.
 
-The browser receives an opaque, HTTP-only loan cookie **per keycard** (so several
-cards can be out at once). A second tap in that browser opens the return flow.
-If the browser session is lost, the borrower can return by entering the same
-email used at sign-out (still private, never shown in the ledger). A steward can
-also record the return from the dashboard.
+The browser may receive an optional loan cookie, but return never depends on it.
+To return: tap the NFC tag on any phone, enter the same private email used at
+sign-out, promise you are at the home node, and confirm. A steward can also
+record the return from the dashboard.
 
-## Return location
+## Return confirmation
 
-Location is requested once, only after the borrower chooses to return. It is
-not watched in the background. The server recomputes distance from the trusted
-node coordinates and accepts the return within the configured radius (3 km by
-default, editable under **Library settings**).
+Temporary keycards return only to their home node. There is no GPS/geofence
+check on this flow: the borrower must tap a promise that they are physically at
+the home node with the keycard, then confirm return.
 
-Temporary keycards return only to their home node. Books may return to any
-selected node. If location permission, GPS, or node coordinates are unavailable,
-the borrower may use the explicit physical-return confirmation. A known location
-outside the radius is blocked unless they also confirm the physical return.
-
-Raw coordinates are not retained. Ledger metadata records only the verification
-method and rounded distance. Browser location can be spoofed, so this is a
-practical guard against accidental remote returns—not proof of physical presence.
+Books may still use separate return geolocation on their own checkout pages.
+A steward can also record a temporary-keycard return from the dashboard.
 
 ## Contact policy
 

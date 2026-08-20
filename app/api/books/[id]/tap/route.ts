@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getAppConfig, getBookById, hasActiveGuestSession, listNodes } from "@/lib/server/repositories"
+import { getBookById, hasActiveGuestSession, listNodes } from "@/lib/server/repositories"
 import { isUuid } from "@/lib/server/validate"
 import { getGuestSessionToken } from "@/lib/server/guest-session"
 import { itemTokenMatches } from "@/lib/server/item-token"
@@ -42,7 +42,7 @@ export async function GET(
       )
     }
 
-    const [nodes, config] = await Promise.all([listNodes(), getAppConfig()])
+    const nodes = await listNodes()
     const guestSessionActive =
       book.item_type !== "book"
         ? await hasActiveGuestSession(book.id, await getGuestSessionToken(book.id))
@@ -51,7 +51,6 @@ export async function GET(
       book,
       nodes,
       guest_session_active: guestSessionActive,
-      return_geofence_radius_m: config.return_geofence_radius_m,
     })
   } catch (error) {
     console.error("[api/books/[id]/tap]", error)

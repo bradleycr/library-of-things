@@ -1323,8 +1323,7 @@ export async function hasActiveGuestSession(itemId: string, token: string | unde
 
 export async function returnGuestItem(params: {
   itemId: string
-  token?: string
-  borrowerEmail?: string
+  borrowerEmail: string
   verification: "geofence" | "manual" | "steward"
   distanceM?: number
 }): Promise<void> {
@@ -1337,28 +1336,16 @@ export async function returnGuestItem(params: {
     const item = rows[0]
     if (!item || (item.item_type ?? "book") === "book") throw new Error("Item not found")
 
-    let loanId: string | undefined
-    if (params.token) {
-      const { rows: byToken } = await client.query<{ id: string }>(
-        `select id from guest_loans
-          where book_id = $1 and session_token_hash = $2 and returned_at is null
-          for update`,
-        [params.itemId, hashGuestToken(params.token)]
-      )
-      loanId = byToken[0]?.id
-    }
-    if (!loanId && params.borrowerEmail) {
-      const normalizedEmail = params.borrowerEmail.trim().toLowerCase()
-      const { rows: byEmail } = await client.query<{ id: string }>(
-        `select id from guest_loans
-          where book_id = $1 and lower(borrower_email) = $2 and returned_at is null
-          for update`,
-        [params.itemId, normalizedEmail]
-      )
-      loanId = byEmail[0]?.id
-    }
+    const normalizedEmail = params.borrowerEmail.trim().toLowerCase()
+    const { rows: loanRows } = await client.query<{ id: string }>(
+      `select id from guest_loans
+        where book_id = $1 and lower(borrower_email) = $2 and returned_at is null
+        for update`,
+      [params.itemId, normalizedEmail]
+    )
+    const loanId = loanRows[0]?.id
     if (!loanId) {
-      throw new Error("Could not verify this return. Use the email from sign-out or ask a steward.")
+      throw new Error("That email does not match this keycard's active loan. Ask a steward if you need help.")
     }
 
     const holderLabel = item.current_holder_name ?? "Guest"
@@ -1413,7 +1400,7 @@ export async function returnGuestItem(params: {
   }
 }
 
-/** Steward recovery path for lost browser sessions or unavailable location. */
+/** Steward recovery path for lost browser sessions. */
 export async function stewardReturnGuestItem(itemId: string): Promise<void> {
   const client = await resilientConnect()
   try {

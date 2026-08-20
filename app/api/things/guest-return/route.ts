@@ -1,16 +1,6 @@
 import { cookies } from "next/headers"
 import { NextRequest, NextResponse } from "next/server"
-import {
-  haversineDistanceMeters,
-  isValidLocationSample,
-  MAX_ACCURACY_BONUS_M,
-} from "@/lib/geofence"
-import {
-  getAppConfig,
-  getBookById,
-  listNodes,
-  returnGuestItem,
-} from "@/lib/server/repositories"
+import { getBookById, returnGuestItem } from "@/lib/server/repositories"
 import {
   GUEST_SESSION_COOKIE_LEGACY,
   guestSessionCookieName,
@@ -26,15 +16,17 @@ type ReturnBody = {
   token?: string
   email?: string
   email_confirmed?: boolean
+  /** Borrower promise they are physically at the home node with the keycard. */
+  physical_confirm?: boolean
+  /** @deprecated Prefer physical_confirm; still accepted from older clients. */
   manual_confirm?: boolean
-  location?: {
-    lat?: number
-    lng?: number
-    accuracy_m?: number
-    captured_at?: string
-  }
 }
 
+/**
+ * Guest return is email-first: any browser can return by tapping the NFC tag and
+ * entering the same private email used at sign-out. Browser cookies are optional
+ * convenience only and are cleared when present.
+ */
 export async function POST(request: NextRequest) {
   const limited = checkRateLimit(`guest-return:${getClientIp(request)}`, 15, 60_000)
   if (!limited.allowed) {
@@ -49,7 +41,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const [item, nodes, config] = await Promise.all([getBookById(itemId), listNodes(), getAppConfig()])
+    const item = await getBookById(itemId)
     if (!item || item.item_type === "book") {
       return NextResponse.json({ error: "Item not found" }, { status: 404 })
     }
@@ -57,79 +49,39 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Open this page from the item's NFC tag." }, { status: 403 })
     }
 
-    const homeNode = nodes.find((node) => node.id === (item.home_node_id ?? item.current_node_id))
-    const sample = parsed.data.location
-    let verification: "geofence" | "manual" = "manual"
-    let distanceM: number | undefined
-
-    const hasUsableLocation =
-      isValidLocationSample(sample) &&
-      homeNode?.location_lat != null &&
-      homeNode.location_lng != null
-
-    if (hasUsableLocation && sample && homeNode?.location_lat != null && homeNode.location_lng != null) {
-      distanceM = haversineDistanceMeters(
-        sample.lat!,
-        sample.lng!,
-        homeNode.location_lat,
-        homeNode.location_lng
-      )
-      const accuracyBonus = Math.min(Math.max(sample.accuracy_m ?? 0, 0), MAX_ACCURACY_BONUS_M)
-      if (distanceM > config.return_geofence_radius_m + accuracyBonus) {
-        if (!parsed.data.manual_confirm) {
-          return NextResponse.json(
-            {
-              error: `You appear to be about ${Math.max(1, Math.round(distanceM / 1000))} km from ${homeNode.name}. If you are at the node, GPS may be wrong — check the manual return confirmation and try again.`,
-              code: "NOT_NEAR_HOME_NODE",
-            },
-            { status: 403 }
-          )
-        }
-      } else {
-        verification = "geofence"
-      }
-    } else if (!parsed.data.manual_confirm) {
+    const confirmed =
+      parsed.data.physical_confirm === true || parsed.data.manual_confirm === true
+    if (!confirmed) {
       return NextResponse.json(
         {
-          error: "Location could not be verified. Check the box to confirm you have physically returned this keycard.",
-          code: "MANUAL_CONFIRM_REQUIRED",
+          error: "Confirm you are physically at the home node with this keycard before returning.",
+          code: "PHYSICAL_CONFIRM_REQUIRED",
         },
         { status: 422 }
       )
     }
 
-    const cookieStore = await cookies()
-    const sessionToken =
-      cookieStore.get(guestSessionCookieName(itemId))?.value ??
-      cookieStore.get(GUEST_SESSION_COOKIE_LEGACY)?.value
-
     const returnEmail = parsed.data.email?.trim().toLowerCase()
-    if (!sessionToken && !returnEmail) {
+    if (!returnEmail || !EMAIL_PATTERN.test(returnEmail) || parsed.data.email_confirmed !== true) {
       return NextResponse.json(
         {
-          error: "Enter the same email you used when signing out, or return from the browser that signed out.",
+          error: "Enter the same email you used when signing out and confirm it.",
           code: "EMAIL_REQUIRED",
         },
-        { status: 401 }
-      )
-    }
-    if (returnEmail && (!EMAIL_PATTERN.test(returnEmail) || parsed.data.email_confirmed !== true)) {
-      return NextResponse.json(
-        { error: "Enter a valid email and confirm you can be reached at it." },
         { status: 400 }
       )
     }
 
     await returnGuestItem({
       itemId,
-      token: sessionToken,
       borrowerEmail: returnEmail,
-      verification,
-      distanceM,
+      verification: "manual",
     })
+
+    const cookieStore = await cookies()
     cookieStore.delete(guestSessionCookieName(itemId))
     cookieStore.delete(GUEST_SESSION_COOKIE_LEGACY)
-    return NextResponse.json({ success: true, verification })
+    return NextResponse.json({ success: true, verification: "manual" })
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Return failed" },

@@ -140,7 +140,7 @@ Next.js 16 · React 19 · TypeScript · Tailwind CSS · PostgreSQL (via `pg`, no
 | [docs/FORKING.md](./docs/FORKING.md) | Run an independent community library from your fork |
 | [docs/DEPLOY.md](./docs/DEPLOY.md) | Deploy your own instance (Vercel + Supabase) |
 | [docs/DATABASE.md](./docs/DATABASE.md) | Supabase connection setup, local Postgres |
-| [docs/TEMPORARY_KEYCARDS.md](./docs/TEMPORARY_KEYCARDS.md) | Numbered temporary keycards, NFC setup, privacy, and geofenced returns |
+| [docs/TEMPORARY_KEYCARDS.md](./docs/TEMPORARY_KEYCARDS.md) | Numbered temporary keycards, NFC setup, email privacy, email-first return |
 | [docs/POCKET_LIBRARY.md](./docs/POCKET_LIBRARY.md) | How the floating-book feature works |
 | [docs/WALLET.md](./docs/WALLET.md) | Optional Apple Wallet pass signing; Google Wallet notes |
 

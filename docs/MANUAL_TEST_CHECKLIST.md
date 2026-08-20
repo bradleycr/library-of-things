@@ -17,12 +17,12 @@ After deploying, quickly confirm these flows:
    - **Normal book:** Open a book’s checkout URL (with `?token=...`). With a valid card, you should be able to complete checkout.
    - **Email-required book:** A member without email should see an inline required email field. Checkout should save it privately and succeed. An item with “Allow checkout without email” enabled should not require it.
 
-3. **Temporary keycard + return location**
+3. **Temporary keycard (email-first return)**
    - Create two numbered temporary keycards from the steward dashboard and copy an NFC URL.
-   - Open the URL in a private browser, enter an email, and sign it out. Confirm the public bootstrap/ledger does not contain the email.
-   - Open the same URL again. Allow location near the home node and return.
-   - Repeat with location denied and confirm the manual physical-return fallback works.
-   - A known location outside the configured radius must be blocked. A steward return must recover a lost guest browser session.
+   - Open the URL in a private browser, enter an email + public name, promise the email, and sign it out. Confirm success shows **Out** and that the public bootstrap/ledger does not contain the email.
+   - Open the same URL in a **different** private browser (or clear cookies). Enter the same email, promise you are at the home node, and return. Confirm success shows **Home / Returned**.
+   - Sign out a second keycard with the **same** email — both should be allowed.
+   - A steward return must recover a forgotten email.
 
 4. **Cover upload (steward)**
    - **Steward dashboard** → Book Management → **Show more** if needed → Edit a book.
