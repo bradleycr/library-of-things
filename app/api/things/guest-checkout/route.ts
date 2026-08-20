@@ -2,12 +2,13 @@ import { cookies } from "next/headers"
 import { NextRequest, NextResponse } from "next/server"
 import { checkoutGuestItem, getBookById } from "@/lib/server/repositories"
 import {
-  GUEST_SESSION_COOKIE,
+  GUEST_SESSION_COOKIE_LEGACY,
   GUEST_SESSION_COOKIE_OPTIONS,
+  guestSessionCookieName,
 } from "@/lib/server/guest-session"
 import { itemTokenMatches } from "@/lib/server/item-token"
 import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
-import { isUuid, parseJsonBody } from "@/lib/server/validate"
+import { clampString, isUuid, LIMITS, parseJsonBody } from "@/lib/server/validate"
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -22,6 +23,7 @@ export async function POST(request: NextRequest) {
     email?: string
     token?: string
     email_confirmed?: boolean
+    borrower_label?: string
   }>(request)
   if (!parsed.ok) return parsed.response
   const itemId = parsed.data.item_id
@@ -45,10 +47,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Open this page from the item's NFC tag." }, { status: 403 })
     }
 
-    const result = await checkoutGuestItem({ itemId, borrowerEmail: email })
+    const borrowerLabel = clampString(parsed.data.borrower_label, LIMITS.displayName)
+    const result = await checkoutGuestItem({ itemId, borrowerEmail: email, borrowerLabel })
     const cookieStore = await cookies()
-    cookieStore.set(GUEST_SESSION_COOKIE, result.token, GUEST_SESSION_COOKIE_OPTIONS)
-    return NextResponse.json({ success: true })
+    cookieStore.set(guestSessionCookieName(itemId), result.token, GUEST_SESSION_COOKIE_OPTIONS)
+    cookieStore.delete(GUEST_SESSION_COOKIE_LEGACY)
+    return NextResponse.json({ success: true, borrower_label: borrowerLabel ?? "Guest" })
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Checkout failed" },

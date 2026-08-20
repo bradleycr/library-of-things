@@ -45,7 +45,7 @@ export async function GET(
     const [nodes, config] = await Promise.all([listNodes(), getAppConfig()])
     const guestSessionActive =
       book.item_type !== "book"
-        ? await hasActiveGuestSession(book.id, await getGuestSessionToken())
+        ? await hasActiveGuestSession(book.id, await getGuestSessionToken(book.id))
         : false
     return NextResponse.json({
       book,

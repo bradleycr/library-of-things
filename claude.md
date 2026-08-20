@@ -38,7 +38,7 @@
 - **Bootstrap:** Client loads `/api/bootstrap`; hook `useBootstrapData()`. Supplies visible books/items, privacy-filtered users, nodes, loan events, and config. Hidden operational items remain available through token-gated NFC routes and steward bootstrap.
 - **Library card:** Stored in `localStorage`; hook `useLibraryCard()`. Card can have `user_id` (linked) or not (card-only). Login/link via PIN at `/api/library-card/login`.
 - **Remove card:** Settings page has "Remove card from this device" with the same confirmation; Profile menu no longer includes Settings or Remove card (Profile + View library card only). Settings is reached from Profile via "Manage contact info". (Previously in header.) “Remove card from this device” shows a confirmation: *“Make sure you save your card and PIN. Otherwise, you won’t have access to this account.”* Then clears local card.
-- **General items / guest loans:** `books.item_type` preserves existing URLs/FKs while supporting `keycard` and `other`. Private `guest_loans` stores email only during an active temporary-keycard loan; email is erased on return. Guest session cookie is item-scoped by an opaque DB-hashed token.
+- **General items / guest loans:** `books.item_type` preserves existing URLs/FKs while supporting `keycard` and `other`. Private `guest_loans` stores email only during an active temporary-keycard loan; email is erased on return. Optional `borrower_label` at sign-out sets public `current_holder_name` (never the email). Same email may hold multiple keycards; per-item browser cookies; return also works by re-entering the sign-out email.
 
 ## Code layout
 

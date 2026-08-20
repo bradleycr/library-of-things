@@ -255,7 +255,7 @@ async function main() {
     `)
 
     // Guest loans deliberately keep borrower email out of public users and loan_events.
-    // A hashed, item-scoped browser token authorizes the second-tap return flow.
+    // A hashed browser token authorizes return; the same email may hold multiple cards.
     await client.query(`
       create table if not exists guest_loans (
         id text primary key,
@@ -269,12 +269,13 @@ async function main() {
       );
       create unique index if not exists idx_guest_loans_one_active_per_item
         on guest_loans(book_id) where returned_at is null;
-      create unique index if not exists idx_guest_loans_one_active_per_email
-        on guest_loans(lower(borrower_email)) where returned_at is null;
       create index if not exists idx_guest_loans_token_hash
         on guest_loans(session_token_hash) where returned_at is null;
+      create index if not exists idx_guest_loans_active_email
+        on guest_loans(lower(borrower_email)) where returned_at is null;
       alter table guest_loans alter column borrower_email drop not null;
     `)
+    await client.query(`drop index if exists idx_guest_loans_one_active_per_email`)
 
     await client.query(`
       create index if not exists idx_loan_events_book_timestamp on loan_events(book_id, timestamp desc);

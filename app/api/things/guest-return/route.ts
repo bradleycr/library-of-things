@@ -11,13 +11,21 @@ import {
   listNodes,
   returnGuestItem,
 } from "@/lib/server/repositories"
-import { GUEST_SESSION_COOKIE } from "@/lib/server/guest-session"
+import {
+  GUEST_SESSION_COOKIE_LEGACY,
+  guestSessionCookieName,
+} from "@/lib/server/guest-session"
 import { itemTokenMatches } from "@/lib/server/item-token"
+import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
 import { isUuid, parseJsonBody } from "@/lib/server/validate"
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 type ReturnBody = {
   item_id?: string
   token?: string
+  email?: string
+  email_confirmed?: boolean
   manual_confirm?: boolean
   location?: {
     lat?: number
@@ -28,6 +36,11 @@ type ReturnBody = {
 }
 
 export async function POST(request: NextRequest) {
+  const limited = checkRateLimit(`guest-return:${getClientIp(request)}`, 15, 60_000)
+  if (!limited.allowed) {
+    return NextResponse.json({ error: "Too many attempts. Try again shortly." }, { status: 429 })
+  }
+
   const parsed = await parseJsonBody<ReturnBody>(request)
   if (!parsed.ok) return parsed.response
   const itemId = parsed.data.item_id
@@ -85,12 +98,37 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const guestToken = (await cookies()).get(GUEST_SESSION_COOKIE)?.value
-    if (!guestToken) {
-      return NextResponse.json({ error: "Return session not found. Ask a steward for help." }, { status: 401 })
+    const cookieStore = await cookies()
+    const sessionToken =
+      cookieStore.get(guestSessionCookieName(itemId))?.value ??
+      cookieStore.get(GUEST_SESSION_COOKIE_LEGACY)?.value
+
+    const returnEmail = parsed.data.email?.trim().toLowerCase()
+    if (!sessionToken && !returnEmail) {
+      return NextResponse.json(
+        {
+          error: "Enter the same email you used when signing out, or return from the browser that signed out.",
+          code: "EMAIL_REQUIRED",
+        },
+        { status: 401 }
+      )
     }
-    await returnGuestItem({ itemId, token: guestToken, verification, distanceM })
-    ;(await cookies()).delete(GUEST_SESSION_COOKIE)
+    if (returnEmail && (!EMAIL_PATTERN.test(returnEmail) || parsed.data.email_confirmed !== true)) {
+      return NextResponse.json(
+        { error: "Enter a valid email and confirm you can be reached at it." },
+        { status: 400 }
+      )
+    }
+
+    await returnGuestItem({
+      itemId,
+      token: sessionToken,
+      borrowerEmail: returnEmail,
+      verification,
+      distanceM,
+    })
+    cookieStore.delete(guestSessionCookieName(itemId))
+    cookieStore.delete(GUEST_SESSION_COOKIE_LEGACY)
     return NextResponse.json({ success: true, verification })
   } catch (error) {
     return NextResponse.json(

@@ -9,6 +9,7 @@ import {
 } from "@/lib/loan-period"
 import type { Book, GuestLoan, ItemType, LoanEvent, Node, TrustEvent, User } from "@/lib/types"
 import { resilientQuery, resilientConnect } from "@/lib/server/db"
+import { LIMITS } from "@/lib/server/validate"
 import {
   applyTrustChange,
   classifyReturn,
@@ -1243,21 +1244,14 @@ function hashGuestToken(token: string): string {
 export async function checkoutGuestItem(params: {
   itemId: string
   borrowerEmail: string
+  borrowerLabel?: string
 }): Promise<{ token: string; loan: GuestLoan }> {
   const client = await resilientConnect()
   const token = randomBytes(32).toString("base64url")
+  const publicLabel = (params.borrowerLabel?.trim() || "Guest").slice(0, LIMITS.displayName)
   try {
     await client.query("begin")
     const normalizedEmail = params.borrowerEmail.trim().toLowerCase()
-    const { rows: activeLoans } = await client.query<{ present: boolean }>(
-      `select exists(
-         select 1 from guest_loans where borrower_email = $1 and returned_at is null
-       ) as present`,
-      [normalizedEmail]
-    )
-    if (activeLoans[0]?.present) {
-      throw new Error("This email already has a temporary keycard signed out")
-    }
     const { rows } = await client.query<DbBook>("select * from books where id = $1 for update", [
       params.itemId,
     ])
@@ -1276,19 +1270,24 @@ export async function checkoutGuestItem(params: {
       `update books
           set availability_status = 'checked_out',
               current_holder_id = null,
-              current_holder_name = 'Guest',
-              expected_return_date = now() + (($2::int || ' days')::interval)
+              current_holder_name = $2,
+              expected_return_date = now() + (($3::int || ' days')::interval)
         where id = $1`,
-      [params.itemId, resolveLoanPeriodDays(item.lending_terms?.loan_period_days, DEFAULT_LOAN_PERIOD_DAYS)]
+      [
+        params.itemId,
+        publicLabel,
+        resolveLoanPeriodDays(item.lending_terms?.loan_period_days, DEFAULT_LOAN_PERIOD_DAYS),
+      ]
     )
     await client.query(
       `insert into loan_events
         (id, event_type, book_id, book_title, user_display_name, timestamp, location_text, metadata)
-       values ($1, 'checkout', $2, $3, 'Guest', now(), $4, $5::jsonb)`,
+       values ($1, 'checkout', $2, $3, $4, now(), $5, $6::jsonb)`,
       [
         crypto.randomUUID(),
         params.itemId,
         item.title,
+        publicLabel,
         item.current_location_text ?? null,
         JSON.stringify({ item_type: item.item_type ?? "other", guest: true }),
       ]
@@ -1324,7 +1323,8 @@ export async function hasActiveGuestSession(itemId: string, token: string | unde
 
 export async function returnGuestItem(params: {
   itemId: string
-  token: string
+  token?: string
+  borrowerEmail?: string
   verification: "geofence" | "manual" | "steward"
   distanceM?: number
 }): Promise<void> {
@@ -1336,13 +1336,32 @@ export async function returnGuestItem(params: {
     ])
     const item = rows[0]
     if (!item || (item.item_type ?? "book") === "book") throw new Error("Item not found")
-    const { rows: loans } = await client.query<{ id: string }>(
-      `select id from guest_loans
-        where book_id = $1 and session_token_hash = $2 and returned_at is null
-        for update`,
-      [params.itemId, hashGuestToken(params.token)]
-    )
-    if (!loans[0]) throw new Error("This browser is not authorized to return the item")
+
+    let loanId: string | undefined
+    if (params.token) {
+      const { rows: byToken } = await client.query<{ id: string }>(
+        `select id from guest_loans
+          where book_id = $1 and session_token_hash = $2 and returned_at is null
+          for update`,
+        [params.itemId, hashGuestToken(params.token)]
+      )
+      loanId = byToken[0]?.id
+    }
+    if (!loanId && params.borrowerEmail) {
+      const normalizedEmail = params.borrowerEmail.trim().toLowerCase()
+      const { rows: byEmail } = await client.query<{ id: string }>(
+        `select id from guest_loans
+          where book_id = $1 and lower(borrower_email) = $2 and returned_at is null
+          for update`,
+        [params.itemId, normalizedEmail]
+      )
+      loanId = byEmail[0]?.id
+    }
+    if (!loanId) {
+      throw new Error("Could not verify this return. Use the email from sign-out or ask a steward.")
+    }
+
+    const holderLabel = item.current_holder_name ?? "Guest"
 
     const nodeId = item.home_node_id ?? item.current_node_id
     const { rows: nodes } = nodeId
@@ -1355,7 +1374,7 @@ export async function returnGuestItem(params: {
           set returned_at = now(), borrower_email = null,
               return_verification = $2, return_distance_m = $3
         where id = $1`,
-      [loans[0].id, params.verification, params.distanceM == null ? null : Math.round(params.distanceM)]
+      [loanId, params.verification, params.distanceM == null ? null : Math.round(params.distanceM)]
     )
     await client.query(
       `update books
@@ -1370,11 +1389,12 @@ export async function returnGuestItem(params: {
     await client.query(
       `insert into loan_events
         (id, event_type, book_id, book_title, user_display_name, timestamp, location_text, metadata)
-       values ($1, 'return', $2, $3, 'Guest', now(), $4, $5::jsonb)`,
+       values ($1, 'return', $2, $3, $4, now(), $5, $6::jsonb)`,
       [
         crypto.randomUUID(),
         params.itemId,
         item.title,
+        holderLabel,
         node?.location_address ?? node?.name ?? item.current_location_text ?? null,
         JSON.stringify({
           item_type: item.item_type ?? "other",

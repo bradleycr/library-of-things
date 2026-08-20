@@ -26,9 +26,11 @@ in the private `guest_loans` row while the item is checked out; it is never
 written to the public ledger and is erased when the item is returned. The
 return screen is a dedicated “Returned” confirmation.
 
-The browser receives an opaque, HTTP-only loan cookie. A second tap in that
-browser opens the return flow. If the browser session is lost, a steward can
-record the return from the dashboard.
+The browser receives an opaque, HTTP-only loan cookie **per keycard** (so several
+cards can be out at once). A second tap in that browser opens the return flow.
+If the browser session is lost, the borrower can return by entering the same
+email used at sign-out (still private, never shown in the ledger). A steward can
+also record the return from the dashboard.
 
 ## Return location
 

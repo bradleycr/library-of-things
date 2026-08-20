@@ -42,6 +42,7 @@ function ThingCheckoutInner({ params }: { params: Promise<{ uuid: string }> }) {
   const [payload, setPayload] = useState<TapPayload | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [email, setEmail] = useState("")
+  const [borrowerLabel, setBorrowerLabel] = useState("")
   const [emailPromised, setEmailPromised] = useState(false)
   const [busy, setBusy] = useState(false)
   const [locating, setLocating] = useState(false)
@@ -56,10 +57,11 @@ function ThingCheckoutInner({ params }: { params: Promise<{ uuid: string }> }) {
     }
     const response = await fetch(`/api/books/${uuid}/tap?token=${encodeURIComponent(token)}`, {
       cache: "no-store",
+      credentials: "include",
     })
-    const body = await response.json()
-    if (!response.ok) throw new Error(body.error ?? "Item not found")
-    setPayload(body)
+    const body = await response.json().catch(() => ({}))
+    if (!response.ok) throw new Error((body as { error?: string }).error ?? "Item not found")
+    setPayload(body as TapPayload)
   }
 
   useEffect(() => {
@@ -81,6 +83,7 @@ function ThingCheckoutInner({ params }: { params: Promise<{ uuid: string }> }) {
 
   const normalizedEmail = email.trim().toLowerCase()
   const emailLooksValid = EMAIL_PATTERN.test(normalizedEmail)
+  const trimmedLabel = borrowerLabel.trim()
   const canCheckout = emailLooksValid && emailPromised && !busy
 
   const checkout = async () => {
@@ -91,17 +94,34 @@ function ThingCheckoutInner({ params }: { params: Promise<{ uuid: string }> }) {
       const response = await fetch("/api/things/guest-checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           item_id: uuid,
           email: normalizedEmail,
           token,
           email_confirmed: true,
+          borrower_label: trimmedLabel || undefined,
         }),
       })
-      const body = await response.json()
-      if (!response.ok) throw new Error(body.error ?? "Checkout failed")
+      const body = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error((body as { error?: string }).error ?? "Checkout failed")
+      setPayload((current) =>
+        current
+          ? {
+              ...current,
+              guest_session_active: true,
+              book: {
+                ...current.book,
+                availability_status: "checked_out",
+                current_holder_name: trimmedLabel || "Guest",
+              },
+            }
+          : current
+      )
       setComplete("checkout")
-      await load()
+      await load().catch(() => {
+        /* Success screen is enough; a stale catalog fetch must not undo checkout. */
+      })
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Checkout failed")
     } finally {
@@ -144,27 +164,47 @@ function ThingCheckoutInner({ params }: { params: Promise<{ uuid: string }> }) {
         locationBody = locationSampleFromResult(geo)
       }
 
+      const needsReturnEmail = !payload?.guest_session_active
+      if (needsReturnEmail && (!emailLooksValid || !emailPromised)) {
+        throw new Error("Enter the same email you used at sign-out and confirm you can be reached at it.")
+      }
+
       const response = await fetch("/api/things/guest-return", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           item_id: uuid,
           token,
           location: locationBody,
           manual_confirm: manualConfirm,
+          ...(needsReturnEmail
+            ? { email: normalizedEmail, email_confirmed: true }
+            : {}),
         }),
       })
-      const body = await response.json()
+      const body = await response.json().catch(() => ({}))
       if (!response.ok) {
-        if (body.code === "NOT_NEAR_HOME_NODE" && !manualConfirm) {
+        if ((body as { code?: string }).code === "NOT_NEAR_HOME_NODE" && !manualConfirm) {
           throw new Error(
-            `${body.error as string} Check the manual confirmation box if you are physically at ${homeNode?.name ?? "the home node"}.`
+            `${(body as { error?: string }).error as string} Check the manual confirmation box if you are physically at ${homeNode?.name ?? "the home node"}.`
           )
         }
-        throw new Error((body.error as string) ?? "Return failed")
+        throw new Error(((body as { error?: string }).error as string) ?? "Return failed")
       }
+      setPayload((current) =>
+        current
+          ? {
+              ...current,
+              guest_session_active: false,
+              book: { ...current.book, availability_status: "available" },
+            }
+          : current
+      )
       setComplete("return")
-      await load()
+      await load().catch(() => {
+        /* Keep the returned confirmation even if the follow-up fetch fails. */
+      })
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Return failed")
     } finally {
@@ -177,9 +217,12 @@ function ThingCheckoutInner({ params }: { params: Promise<{ uuid: string }> }) {
   if (!payload || !item) return <Message title="Opening item…" loading />
 
   const isAvailable = item.availability_status === "available"
+  const isCheckedOut = item.availability_status === "checked_out"
   const isMissing =
     item.availability_status === "missing" || item.availability_status === "retired"
   const locationBusy = busy || locating
+  const needsReturnEmail = isCheckedOut && !payload.guest_session_active
+  const canReturn = !needsReturnEmail || (emailLooksValid && emailPromised)
 
   return (
     <main className="page-container flex min-h-[70vh] items-center justify-center py-10">
@@ -198,7 +241,15 @@ function ThingCheckoutInner({ params }: { params: Promise<{ uuid: string }> }) {
         </CardHeader>
         <CardContent className="space-y-5">
           {complete === "checkout" ? (
-            <CheckoutSuccess email={normalizedEmail} homeName={homeNode?.name} />
+            <CheckoutSuccess
+              email={normalizedEmail}
+              publicLabel={trimmedLabel || "Guest"}
+              homeName={homeNode?.name}
+              onReturn={() => {
+                setError(null)
+                setComplete(null)
+              }}
+            />
           ) : complete === "return" ? (
             <ReturnSuccess homeName={homeNode?.name} />
           ) : isMissing ? (
@@ -231,23 +282,76 @@ function ThingCheckoutInner({ params }: { params: Promise<{ uuid: string }> }) {
                 {email.trim().length > 0 && !emailLooksValid && (
                   <p className="text-xs text-destructive">Enter a full email, like name@example.com.</p>
                 )}
+                <p className="text-xs text-muted-foreground">
+                  Private — not shown in the public ledger. Erased when you return the card.
+                </p>
               </div>
               <EmailPromiseButton
                 pressed={emailPromised}
                 disabled={!emailLooksValid}
                 onToggle={() => setEmailPromised((current) => !current)}
               />
+              <div className="space-y-2">
+                <Label htmlFor="borrower-label">Public name (optional)</Label>
+                <Input
+                  id="borrower-label"
+                  placeholder="Guest"
+                  value={borrowerLabel}
+                  onChange={(event) => setBorrowerLabel(event.target.value)}
+                  maxLength={200}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Shown in the library instead of your email — e.g. ycluster. Leave blank for Guest.
+                </p>
+              </div>
               <Button className="w-full min-h-11" disabled={!canCheckout} onClick={checkout}>
                 {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Sign out temporary keycard
               </Button>
             </>
-          ) : payload.guest_session_active ? (
+          ) : isCheckedOut ? (
             <>
+              {item.current_holder_name && (
+                <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm">
+                  Signed out to{" "}
+                  <span className="font-medium text-foreground">{item.current_holder_name}</span>
+                </p>
+              )}
               <p className="text-sm text-muted-foreground">
                 Return this temporary keycard to {homeNode?.name ?? "its home node"}. We check your
                 location once when you confirm — not continuously, and coordinates are not published.
               </p>
+
+              {needsReturnEmail && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="return-email">Email used at sign-out</Label>
+                    <Input
+                      id="return-email"
+                      type="email"
+                      inputMode="email"
+                      autoComplete="email"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      placeholder="you@example.com"
+                      value={email}
+                      onChange={(event) => {
+                        setEmail(event.target.value)
+                        if (emailPromised) setEmailPromised(false)
+                      }}
+                    />
+                    {email.trim().length > 0 && !emailLooksValid && (
+                      <p className="text-xs text-destructive">Enter the same email you used when signing out.</p>
+                    )}
+                  </div>
+                  <EmailPromiseButton
+                    pressed={emailPromised}
+                    disabled={!emailLooksValid}
+                    onToggle={() => setEmailPromised((current) => !current)}
+                  />
+                </>
+              )}
 
               <Button
                 variant="outline"
@@ -296,15 +400,19 @@ function ThingCheckoutInner({ params }: { params: Promise<{ uuid: string }> }) {
                 </p>
               </div>
 
-              <Button className="w-full min-h-11" disabled={locationBusy} onClick={returnItem}>
+              <Button
+                className="w-full min-h-11"
+                disabled={locationBusy || !canReturn}
+                onClick={returnItem}
+              >
                 {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Confirm return
               </Button>
             </>
           ) : (
             <p className="rounded-lg bg-muted p-4 text-sm text-muted-foreground">
-              This temporary keycard is signed out. Return must be completed from the browser that
-              signed it out, or by a steward.
+              This temporary keycard is not available for sign-out right now. Ask a steward if you
+              need help.
             </p>
           )}
           {error && complete == null && <p className="text-sm text-destructive">{error}</p>}
@@ -357,12 +465,26 @@ function EmailPromiseButton({
   )
 }
 
-function CheckoutSuccess({ email, homeName }: { email: string; homeName?: string }) {
+function CheckoutSuccess({
+  email,
+  publicLabel,
+  homeName,
+  onReturn,
+}: {
+  email: string
+  publicLabel: string
+  homeName?: string
+  onReturn: () => void
+}) {
   return (
     <div className="space-y-4 text-center" role="status">
       <div className="rounded-xl border border-primary/30 bg-primary/10 px-4 py-5">
         <p className="font-lot text-xl text-foreground">Checked out</p>
         <p className="mt-1 text-sm text-muted-foreground">This temporary keycard is now signed out.</p>
+        <p className="mt-2 text-sm text-foreground">
+          Shown in the library as{" "}
+          <span className="font-medium">{publicLabel}</span>
+        </p>
         <div className="mt-4 flex items-start gap-3 rounded-lg bg-background/80 px-3 py-3 text-left">
           <Mail className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
           <div className="min-w-0">
@@ -378,8 +500,11 @@ function CheckoutSuccess({ email, homeName }: { email: string; homeName?: string
       </div>
       <p className="text-sm leading-relaxed text-muted-foreground">
         Keep this phone. When you bring the card back to {homeName ?? "its home node"}, tap the same
-        NFC tag in this browser to return it.
+        NFC tag in this browser — or use the button below.
       </p>
+      <Button type="button" variant="outline" className="w-full min-h-11" onClick={onReturn}>
+        I’m returning it now
+      </Button>
     </div>
   )
 }
