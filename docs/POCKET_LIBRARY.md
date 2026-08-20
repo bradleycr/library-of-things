@@ -4,6 +4,10 @@ Pocket Library extends the lending model beyond physical nodes. Instead of
 placing a book on a shared shelf, an owner keeps the book and lists it in
 the catalog. Borrowers contact the owner to arrange pickup.
 
+**Privacy:** `owner_contact_email` is shown on the public book page so borrowers
+can arrange pickup. Prefer a dedicated contact address if the owner does not
+want their primary inbox public. See [PRIVACY.md](./PRIVACY.md).
+
 ## How it works
 
 1. Owner goes to `/add-book` and selects **Pocket Library (Keep with me)**.

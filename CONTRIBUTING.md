@@ -5,20 +5,24 @@ and how to make changes that fit.
 
 ## Project values
 
-Library of Things is trust-based physical book sharing. These principles shape
-every decision:
+Library of Things is trust-based physical sharing. These principles shape every
+decision:
 
-- **Physical first.** Real books on real shelves in real places. The software
+- **Physical first.** Real books and objects on real shelves. The software
   supports the physical act of sharing — it doesn't replace it.
-- **Low barrier.** No app to install, no email to provide, no account to create.
-  A pseudonymous library card in the browser is enough to borrow.
+- **Low barrier.** No app to install. A pseudonymous library card in the browser
+  is enough to borrow books. Temporary keycards can sign out with email only.
 - **Trust, not enforcement.** No late fees, no punitive systems. The public
   sharing ledger creates social accountability.
-- **Privacy by default.** Pseudonymous cards, optional contact info, no tracking
-  beyond what's needed for lending.
+- **Privacy by default.** Pseudonymous cards, private contact fields unless
+  opted in, guest emails erased on keycard return. See [docs/PRIVACY.md](./docs/PRIVACY.md).
 
-When proposing changes, ask: *does this make it easier to share physical books
+When proposing changes, ask: *does this make it easier to share physical things
 in a trusted community?* If yes, it probably fits.
+
+**Note on email:** Creating a library card does not require email. Borrowing a
+book usually does — borrower email is required by default for return contact
+unless an item opts out. That email is not shown on the public ledger.
 
 ## Good first contributions
 
@@ -57,6 +61,8 @@ interactivity where needed.
   determines what the user can do (borrow, return, view history).
 - **Steward auth.** Separate password-based login (`STEWARD_PASSWORD` env var).
   Cookie-protected dashboard and API routes.
+- **Temporary keycards.** NFC `/thing/...` flow with private guest email; see
+  [docs/TEMPORARY_KEYCARDS.md](./docs/TEMPORARY_KEYCARDS.md).
 
 **Data layer (backend-agnostic).** All server-side data access goes through
 `lib/server/repositories.ts`; the app does not touch the database elsewhere.
@@ -80,6 +86,7 @@ API; the client and UI stay unchanged.
    pnpm dev
    ```
 4. Make your changes. Run `pnpm check` before pushing — it builds and type-checks.
+   With the server running, optional: `pnpm test:api-smoke`.
 5. **Open a PR** against `main`. Fill out the template with the change, why it
    matters, and the test plan.
 
@@ -87,11 +94,14 @@ For a full self-hosting setup, see [docs/FORKING.md](./docs/FORKING.md).
 
 ## What to avoid
 
-- **Scope creep.** This is a book-sharing app, not a social network or marketplace.
-- **Mandatory accounts.** The pseudonymous library card is core to the design.
+- **Scope creep.** This is a sharing app for physical books and useful objects,
+  not a social network or marketplace.
+- **Mandatory social accounts.** The pseudonymous library card is core to the
+  design (separate from optional borrower email for contact).
 - **Punitive features.** No fines, bans, or reputation-damage mechanics.
 - **Heavy client dependencies.** We use Radix + Tailwind. Think twice before
   adding another UI framework or large library.
+- **Secrets in the repo.** Never commit `.env`, PEMs, or real member data.
 
 ## Code style
 

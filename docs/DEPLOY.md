@@ -56,8 +56,10 @@ project is not named `library-of-things` or lives under a team.
   NFC tag URLs.
 - **First node** — add at least one node from the steward dashboard, then add
   books to that node or as Pocket Library books.
-- **Schema updates** — when you pull new code that adds columns, run
-  `pnpm db:ensure-schema` against your production `DATABASE_URL` once. Otherwise features like profile image regeneration may return "Database needs an update".
+- **Schema updates** — when you pull new code that adds columns or tables (for
+  example `guest_loans` for temporary keycards), run `pnpm db:ensure-schema`
+  against your production `DATABASE_URL` once. Missing schema usually shows up
+  as API errors or empty steward panels.
 
 ## Troubleshooting
 

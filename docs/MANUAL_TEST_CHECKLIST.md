@@ -40,7 +40,7 @@ After deploying, quickly confirm these flows:
 
 ---
 
-## 1. Tap without card — “Get Library Card or Log In”
+## 1. Tap without card — get a card or log in
 
 **Steps**
 
@@ -50,10 +50,9 @@ After deploying, quickly confirm these flows:
 
 **Expected**
 
-- Title: **“Library card required”**
-- Message: “Get a free library card or log in to check out this book.”
-- **One button:** “Get Library Card or Log In” (not “Go to Library of Things”).
-- Tapping the button goes to **/settings** (get card or log in).
+- Clear message that a library card is required to check out.
+- Primary actions to **get a library card** and/or **log in with card** (typically linking to `/settings?mode=generate` and `/settings?mode=login`).
+- No dead-end “go home only” CTA.
 
 **Check on:** Android Chrome, iOS Safari, desktop Chrome/Safari/Firefox.
 
@@ -93,9 +92,9 @@ After deploying, quickly confirm these flows:
 
 ## Quick smoke (already verified in CI/build)
 
-- `pnpm build` — succeeds.
+- `pnpm check` — succeeds.
 - `/settings` — returns 200.
-- Checkout page bundle includes “Get Library Card or Log In”.
+- Checkout page offers get-card / log-in paths when no card is present.
 - Dialog component includes `max-h-[85vh] overflow-y-auto`.
 
 ---

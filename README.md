@@ -83,8 +83,9 @@ Copy `env.example` → `.env.local`:
 | Variable | Required | Purpose |
 |----------|----------|---------|
 | `DATABASE_URL` | Yes | Postgres connection string |
-| `STEWARD_PASSWORD` | No | Steward dashboard password (default: `password123`) |
+| `STEWARD_PASSWORD` | No | Steward dashboard password (**default `password123` is for local dev only — set a strong value in production**) |
 | `DB_SSL` | No | `none` for local dev; omit for Supabase |
+| `APPLE_WALLET_*` | No | Optional pass signing — see [docs/WALLET.md](./docs/WALLET.md) |
 
 ## How it works
 
@@ -113,6 +114,7 @@ Copy `env.example` → `.env.local`:
 app/                    Next.js App Router pages + API routes
   explore/                Browse the catalog
   book/[uuid]/            Book detail + checkout
+  thing/[uuid]/           Temporary keycard / operational item checkout
   my-books/               Borrowed & added books
   ledger/                 Public sharing history
   steward/                Steward dashboard (login-protected)
@@ -123,7 +125,7 @@ hooks/                  useLibraryCard, useBootstrapData
 lib/                    Types, utilities, image compression
   server/                 DB queries, repositories, validation
 scripts/                Database provisioning & migrations
-docs/                   Operational guides
+docs/                   Guides for deploy, privacy, forks, and ops
 ```
 
 ## Stack
@@ -137,12 +139,21 @@ Next.js 16 · React 19 · TypeScript · Tailwind CSS · PostgreSQL (via `pg`, no
 | [CONTRIBUTING.md](./CONTRIBUTING.md) | Project values, architecture, how to submit changes |
 | [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md) | Collaboration expectations |
 | [SECURITY.md](./SECURITY.md) | Vulnerability reporting and sensitive data guidance |
+| [docs/PRIVACY.md](./docs/PRIVACY.md) | What is public vs private in the app |
 | [docs/FORKING.md](./docs/FORKING.md) | Run an independent community library from your fork |
 | [docs/DEPLOY.md](./docs/DEPLOY.md) | Deploy your own instance (Vercel + Supabase) |
 | [docs/DATABASE.md](./docs/DATABASE.md) | Supabase connection setup, local Postgres |
-| [docs/TEMPORARY_KEYCARDS.md](./docs/TEMPORARY_KEYCARDS.md) | Numbered temporary keycards, NFC setup, email privacy, email-first return |
+| [docs/TEMPORARY_KEYCARDS.md](./docs/TEMPORARY_KEYCARDS.md) | Numbered temporary keycards, NFC setup, email-first return |
 | [docs/POCKET_LIBRARY.md](./docs/POCKET_LIBRARY.md) | How the floating-book feature works |
 | [docs/WALLET.md](./docs/WALLET.md) | Optional Apple Wallet pass signing; Google Wallet notes |
+| [docs/ISBN_CHECKOUT_RETURN_PLAN.md](./docs/ISBN_CHECKOUT_RETURN_PLAN.md) | Optional ISBN scan checkout/return |
+
+Maintainer / QA notes (not required for forks): [OSS readiness](./docs/OSS_READINESS.md), [manual test checklist](./docs/MANUAL_TEST_CHECKLIST.md), [card login SQL](./docs/DIAGNOSE_CARD_LOGIN.md).
+
+## Security & privacy
+
+Report vulnerabilities privately via [SECURITY.md](./SECURITY.md). For how member
+and guest data is exposed in the product, see [docs/PRIVACY.md](./docs/PRIVACY.md).
 
 ## Contributing
 

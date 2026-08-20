@@ -7,7 +7,9 @@ members.
 ## What You Get
 
 - A browser-based catalog for physical books.
-- Pseudonymous library cards, no email required.
+- Pseudonymous library cards (borrower email required by default for books;
+  optional public contact is separate).
+- Temporary keycards with email-only sign-out and email-first return.
 - QR/NFC checkout links for each copy.
 - A steward dashboard for nodes, books, members, and settings.
 - A public sharing ledger.

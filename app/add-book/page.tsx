@@ -238,7 +238,7 @@ function AddBookContent() {
                   </h2>
                   <p className="mt-2 text-muted-foreground">
                     You need a Library of Things library card before adding books to the network.
-                    It&apos;s free and pseudonymous—no email required.
+                    It's free and pseudonymous—email is only asked when borrowing requires it.
                   </p>
                 </div>
                 <Button onClick={() => setLibraryCardModalOpen(true)} className="gap-2">

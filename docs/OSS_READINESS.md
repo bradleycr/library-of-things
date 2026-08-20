@@ -1,44 +1,38 @@
-# Open-source readiness checklist
+# Open-source maintenance checklist
 
-Use this when preparing to share the repo or accept contributions.
+This repo is already **public** on GitHub. Use this list when reviewing whether
+it stays safe and welcoming for contributors.
 
-## In this repo (already in good shape)
+## Repo hygiene (keep true)
 
-- **License** — MIT in root (`LICENSE`). Clear and permissive.
-- **Code of Conduct** — `CODE_OF_CONDUCT.md` sets lightweight collaboration expectations.
-- **Security policy** — `SECURITY.md` explains private reporting and sensitive data handling.
-- **README** — Describes the project, quickstart, scripts, docs, and links to CONTRIBUTING.
-- **CONTRIBUTING** — Values, architecture, how to contribute, what to avoid. Points to “open an issue first” and PR against `main`.
-- **Secrets** — `.env*.local` is in `.gitignore`; `env.example` has placeholders only (no real `DATABASE_URL` or `STEWARD_PASSWORD`). Default steward password in code is documented as dev-only.
-- **PR template** — `.github/PULL_REQUEST_TEMPLATE.md` exists (What / Why).
-- **Issue templates** — bug and feature templates guide contributors toward useful reports.
-- **CI** — GitHub Actions runs `pnpm check` on pushes to `main` and pull requests.
-- **Docs** — `docs/` has DEPLOY, DATABASE, POCKET_LIBRARY; README links to them.
-- **Fork guide** — `docs/FORKING.md` explains how to run an independent community library.
-- **package.json** — `"private": true` avoids accidental npm publish; fine for GitHub-only sharing.
+- [ ] MIT `LICENSE` present
+- [ ] `SECURITY.md` and private vulnerability reporting available
+- [ ] `CODE_OF_CONDUCT.md` with a clear reporting path
+- [ ] `CONTRIBUTING.md` matches current product defaults (email, keycards)
+- [ ] `env.example` has placeholders only — no real secrets
+- [ ] `.gitignore` covers `.env*`, `certs/`, `*.pem`, `*.key`, `*.p12`
+- [ ] CI runs `pnpm check` on pushes and pull requests
+- [ ] README clone URL and homepage match the public repo
 
-## Before you share the URL
+## GitHub settings
 
-1. **Clone URL in README**  
-   Update the `git clone` URL in README to the repo you’re actually sharing (e.g. `https://github.com/YOUR_ORG/flybrary.git` if the repo is named `flybrary`). Right now it says `bradleycr/library-of-things`.
+- [ ] Description and homepage set
+- [ ] Issues enabled
+- [ ] Secret scanning + push protection enabled
+- [ ] Dependabot security updates enabled (optional but recommended)
+- [ ] Production `STEWARD_PASSWORD` is **not** the local default `password123`
 
-2. **Fork-specific URLs**
-   If you publish under a different org/name, update README links and
-   `.github/ISSUE_TEMPLATE/config.yml` contact links to point at the new repo.
+## Before accepting contributions
 
-## On GitHub (settings to check)
+- New contributors: fork → branch off `main` → change → `pnpm check` → open PR
+  (see CONTRIBUTING.md).
+- Never ask reporters to paste production `DATABASE_URL`, card numbers, PINs, or
+  member emails into issues.
 
-- **Visibility** — Set to **Public** if you want anyone to see and clone it.
-- **Issues** — **Enable Issues** (Settings → General → Issues). Contributors will open issues and PRs from forks.
-- **Branches** — Default branch `main` is standard. Optional: add a branch protection rule so `main` only accepts merges via PR (Settings → Branches).
-- **Forking** — Forks are allowed by default for public repos; no change needed.
-- **Discussions** (optional) — Enable in Settings → General if you want a discussion space instead of only issues/PRs.
-- **Security** — No need to enable Dependabot unless you want automated dependency PRs.
+## Maintainer-only docs
 
-## After you share
-
-- Share the repo URL (e.g. `https://github.com/YOUR_ORG/YOUR_REPO`).
-- New contributors: fork → branch off `main` → change → run `pnpm build` → open PR (see CONTRIBUTING.md).
-- You can merge PRs from the GitHub UI or locally as you did in the add-book UX flow.
-
-No other repo changes are required for “share the URL and let people contribute.”
+| Doc | Use |
+|-----|-----|
+| [DIAGNOSE_CARD_LOGIN.md](./DIAGNOSE_CARD_LOGIN.md) | SQL steps for card login issues |
+| [MANUAL_TEST_CHECKLIST.md](./MANUAL_TEST_CHECKLIST.md) | Cross-device QA after deploys |
+| [NOTIFY_WHEN_AVAILABLE.md](./NOTIFY_WHEN_AVAILABLE.md) | Future email-notify design notes |

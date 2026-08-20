@@ -1,10 +1,13 @@
 # AGENTS.md
 
+Guidance for AI agents and cloud VMs working in this repo. Humans should start
+with [README.md](./README.md); product/privacy details live in `docs/`.
+
 ## Cursor Cloud specific instructions
 
 ### Overview
 
-Library of Things is a single Next.js 16 full-stack app (App Router, React 19, TypeScript, Tailwind). It uses PostgreSQL via the `pg` driver (no ORM). See `claude.md` for route table, data/auth model, and current feature state. See `README.md` for quickstart. Operational docs live in `docs/` (DEPLOY.md, DATABASE.md, POCKET_LIBRARY.md).
+Library of Things is a single Next.js 16 full-stack app (App Router, React 19, TypeScript, Tailwind). It uses PostgreSQL via the `pg` driver (no ORM). See `claude.md` for route table, data/auth model, and current feature state. See `README.md` for quickstart. Operational docs live in `docs/` (DEPLOY.md, DATABASE.md, PRIVACY.md, TEMPORARY_KEYCARDS.md).
 
 ### Services
 

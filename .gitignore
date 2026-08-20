@@ -5,11 +5,26 @@ __v0_jsx-dev-runtime.ts
 instrumentation-client.js
 instrumentation-client.ts
 
-# Common ignores
+# Dependencies and build
 node_modules/
 .next/
-.env*.local
+*.tsbuildinfo
+
+# Environment and secrets — never commit real credentials
+.env
+.env.*
+!.env.example
+# This repo uses env.example (no leading dot) as the template
+!env.example
+
+# Apple Wallet / TLS material
+certs/
+*.pem
+*.p12
+*.key
+!pass-templates/**/*.png
+
+# Local tooling
 .DS_Store
 .vercel
 .vscode/
-*.tsbuildinfo

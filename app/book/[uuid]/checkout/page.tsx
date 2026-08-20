@@ -350,7 +350,7 @@ export default function CheckoutPage({
     )
   }
 
-  // Checked out: holder — return flow with node list; optional geofencing in codebase but not used here
+  // Checked out: holder — return flow with node list; may request a one-shot location sample on confirm.
   if (!isAvailable && isHolder) {
     return (
       <ReturnFlow
@@ -624,7 +624,7 @@ function AvailableFlow({
 }
 
 // ---------------------------------------------------------------------------
-// Return flow: pick location; optional geofencing available in codebase but not used here.
+// Return flow: pick node (or pocket), acknowledge physical return; location sample may be sent on submit.
 // ---------------------------------------------------------------------------
 
 function ReturnFlow({
