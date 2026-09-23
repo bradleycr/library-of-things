@@ -19,6 +19,7 @@ import {
   Upload,
   Settings,
   Mail,
+  Clock,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -71,7 +72,7 @@ import {
   normalizeLoanPeriodDays,
   resolveLoanPeriodDays,
 } from "@/lib/loan-period"
-import type { Book, Node as NodeType, User } from "@/lib/types"
+import type { Book, LoanEvent, Node as NodeType, User } from "@/lib/types"
 import { TemporaryKeycardManager } from "@/components/steward/temporary-keycard-manager"
 
 type StewardBookStatus = "available" | "checked_out" | "unavailable" | "missing"
@@ -113,6 +114,69 @@ function uniqueHolderEmails(
     emails.push(email)
   }
   return emails
+}
+
+/**
+ * Newest checkout/transfer per book — when the current loan started.
+ * Assumes loanEvents are sorted newest-first (bootstrap / listLoanEvents).
+ */
+function buildLoanStartedAtByBookId(events: LoanEvent[]): Map<string, Date> {
+  const started = new Map<string, Date>()
+  for (const event of events) {
+    if (!event.book_id) continue
+    if (event.event_type !== "checkout" && event.event_type !== "transfer") continue
+    if (started.has(event.book_id)) continue
+    const at = new Date(event.timestamp)
+    if (Number.isNaN(at.getTime())) continue
+    started.set(event.book_id, at)
+  }
+  return started
+}
+
+function formatCheckoutDateTime(at: Date): string {
+  return at.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  })
+}
+
+/** Human loan age: "2 hours", "5 days", "3 months". */
+function formatOutFor(since: Date, now = new Date()): string {
+  const ms = Math.max(0, now.getTime() - since.getTime())
+  const minutes = Math.floor(ms / 60_000)
+  if (minutes < 60) return minutes <= 1 ? "1 minute" : `${minutes} minutes`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 48) return hours === 1 ? "1 hour" : `${hours} hours`
+  const days = Math.floor(hours / 24)
+  if (days < 60) return days === 1 ? "1 day" : `${days} days`
+  const months = Math.floor(days / 30)
+  return months === 1 ? "1 month" : `${months} months`
+}
+
+type CheckedOutRow = {
+  book: Book
+  checkedOutAt: Date | null
+}
+
+function toCheckedOutRows(
+  books: Book[],
+  loanStartedAt: Map<string, Date>
+): CheckedOutRow[] {
+  return books
+    .map((book) => ({
+      book,
+      checkedOutAt: loanStartedAt.get(book.id) ?? null,
+    }))
+    .sort((a, b) => {
+      // Longest out first; unknown checkout time sinks to the bottom.
+      if (!a.checkedOutAt && !b.checkedOutAt) return 0
+      if (!a.checkedOutAt) return 1
+      if (!b.checkedOutAt) return -1
+      return a.checkedOutAt.getTime() - b.checkedOutAt.getTime()
+    })
 }
 
 export default function StewardDashboardPage() {
@@ -274,16 +338,19 @@ export default function StewardDashboardPage() {
       ? "All nodes"
       : nodes.find((n) => n.id === selectedNodeId)?.name ?? "All nodes"
   const catalogBooks = books.filter((b) => (b.item_type ?? "book") === "book")
+  const loanStartedAtByBookId = buildLoanStartedAtByBookId(loanEvents)
   const checkedOutBooksList = catalogBooks.filter(
     (b) => b.availability_status === "checked_out"
   )
-  const checkedOut = checkedOutBooksList.length
+  const checkedOutRows = toCheckedOutRows(checkedOutBooksList, loanStartedAtByBookId)
+  const checkedOut = checkedOutRows.length
   const checkedOutEmails = uniqueHolderEmails(checkedOutBooksList, users)
   const overdueBooksList = catalogBooks.filter((b) => {
     if (!b.expected_return_date) return false
     return new Date(b.expected_return_date) < new Date()
   })
-  const overdueBooks = overdueBooksList.length
+  const overdueRows = toCheckedOutRows(overdueBooksList, loanStartedAtByBookId)
+  const overdueBooks = overdueRows.length
   const overdueEmails = uniqueHolderEmails(overdueBooksList, users)
   const bookEventCounts = loanEvents.reduce(
     (acc, e) => {
@@ -930,16 +997,150 @@ export default function StewardDashboardPage() {
           </Card>
         </div>
 
+        {/* Currently checked out — primary steward view: who, when, how long */}
+        <Card className="mb-8 border-border">
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between space-y-0">
+            <div className="space-y-1">
+              <CardTitle className="flex items-center gap-2 text-card-foreground">
+                <Clock className="h-5 w-5 text-accent" />
+                Currently checked out ({checkedOut})
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Who has each book, when they checked it out, and how long it’s been out. Sorted longest out first.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2 shrink-0">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                disabled={checkedOutEmails.length === 0}
+                onClick={() => copyEmailList(checkedOutEmails, "checked-out-emails-panel")}
+              >
+                {emailsCopied && copiedContactId === "checked-out-emails-panel" ? (
+                  <>
+                    <Check className="h-4 w-4" />
+                    Copied
+                  </>
+                ) : (
+                  <>
+                    <Mail className="h-4 w-4" />
+                    Copy all emails
+                  </>
+                )}
+              </Button>
+              {checkedOut > 0 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowCheckedOutDialog(true)}
+                >
+                  Open full list
+                </Button>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            {checkedOutRows.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No books are checked out right now.</p>
+            ) : (
+              <div className="overflow-x-auto rounded-md border border-border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Holder</TableHead>
+                      <TableHead>Book</TableHead>
+                      <TableHead>Checked out</TableHead>
+                      <TableHead>Out for</TableHead>
+                      <TableHead className="hidden md:table-cell">Email</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {checkedOutRows.map(({ book, checkedOutAt }) => {
+                      const holder = book.current_holder_id
+                        ? users.find((u) => u.id === book.current_holder_id)
+                        : null
+                      const email = holderOutreachEmail(holder)
+                      const isOverdue =
+                        book.expected_return_date != null &&
+                        new Date(book.expected_return_date) < new Date()
+                      return (
+                        <TableRow key={book.id}>
+                          <TableCell className="align-top">
+                            {holder ? (
+                              <Link
+                                href={`/profile/${holder.id}`}
+                                className="font-medium text-primary hover:underline"
+                              >
+                                {holder.display_name}
+                              </Link>
+                            ) : (
+                              <span className="text-muted-foreground">
+                                {book.current_holder_name || "Unknown"}
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell className="align-top">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Link
+                                href={`/book/${book.id}`}
+                                className="font-medium text-foreground hover:underline"
+                              >
+                                {book.title}
+                              </Link>
+                              {isOverdue && (
+                                <Badge variant="destructive" className="text-xs">
+                                  Overdue
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="align-top text-sm text-muted-foreground whitespace-nowrap">
+                            {checkedOutAt ? formatCheckoutDateTime(checkedOutAt) : "—"}
+                          </TableCell>
+                          <TableCell className="align-top whitespace-nowrap">
+                            {checkedOutAt ? (
+                              <span className="font-medium text-foreground">
+                                {formatOutFor(checkedOutAt)}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">Unknown</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="align-top hidden md:table-cell">
+                            {email ? (
+                              <a
+                                href={`mailto:${email}`}
+                                className="text-sm text-primary hover:underline break-all"
+                              >
+                                {email}
+                              </a>
+                            ) : (
+                              <span className="text-sm text-muted-foreground italic">None</span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Checked-out books — holders + copy-all emails for return reminders */}
         <Dialog open={showCheckedOutDialog} onOpenChange={setShowCheckedOutDialog}>
-          <DialogContent className="max-h-[85vh] overflow-y-auto" aria-label="Checked out books">
+          <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl" aria-label="Checked out books">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-card-foreground">
-                <TrendingUp className="h-5 w-5 text-accent" />
-                Checked out books ({checkedOutBooksList.length})
+                <Clock className="h-5 w-5 text-accent" />
+                Checked out ({checkedOutRows.length})
               </DialogTitle>
               <DialogDescription>
-                Borrowers with email on file. Copy the list and paste into your mail app’s To or BCC field for a return reminder.
+                Longest loans first. Copy emails to send a return reminder.
               </DialogDescription>
             </DialogHeader>
             <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -978,12 +1179,12 @@ export default function StewardDashboardPage() {
                 </p>
               </div>
             )}
-            <div className="mt-2 space-y-4">
-              {checkedOutBooksList.length === 0 ? (
+            <div className="mt-2 space-y-3">
+              {checkedOutRows.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No books checked out.</p>
               ) : (
-                <ul className="space-y-4">
-                  {checkedOutBooksList.map((book) => {
+                <ul className="space-y-3">
+                  {checkedOutRows.map(({ book, checkedOutAt }) => {
                     const holder = book.current_holder_id
                       ? users.find((u) => u.id === book.current_holder_id)
                       : null
@@ -1005,54 +1206,56 @@ export default function StewardDashboardPage() {
                         key={book.id}
                         className="rounded-lg border border-border bg-muted/20 p-4 space-y-2"
                       >
-                        <div className="flex flex-wrap items-baseline gap-2">
-                          <p className="font-medium text-foreground">{book.title}</p>
-                          {isOverdue && (
-                            <Badge variant="destructive" className="text-xs">
-                              Overdue
-                            </Badge>
-                          )}
-                        </div>
-                        {expectedReturn && (
-                          <p className="text-sm text-muted-foreground">
-                            Suggested return {expectedReturn}
+                        <div className="flex flex-wrap items-baseline justify-between gap-2">
+                          <p className="font-medium text-foreground">
+                            {holder ? (
+                              <Link
+                                href={`/profile/${holder.id}`}
+                                className="text-primary hover:underline"
+                              >
+                                {holder.display_name}
+                              </Link>
+                            ) : (
+                              book.current_holder_name || "Unknown holder"
+                            )}
                           </p>
-                        )}
+                          <span className="text-sm font-semibold text-foreground tabular-nums">
+                            {checkedOutAt ? `Out ${formatOutFor(checkedOutAt)}` : "Out — unknown"}
+                          </span>
+                        </div>
+                        <p className="text-sm text-foreground">{book.title}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {checkedOutAt
+                            ? `Checked out ${formatCheckoutDateTime(checkedOutAt)}`
+                            : "Checkout time not in ledger"}
+                          {expectedReturn ? ` · Due ${expectedReturn}` : ""}
+                          {isOverdue ? " · Overdue" : ""}
+                        </p>
                         {holder ? (
                           <div className="flex flex-wrap items-center gap-2 text-sm">
-                            <span className="text-muted-foreground">Holder:</span>
-                            <Link
-                              href={`/profile/${holder.id}`}
-                              className="font-medium text-primary hover:underline"
-                            >
-                              {holder.display_name}
-                            </Link>
                             {email && (
-                              <>
-                                <span className="text-muted-foreground">·</span>
-                                <span className="inline-flex items-center gap-1">
-                                  <a
-                                    href={`mailto:${email}`}
-                                    className="text-primary hover:underline truncate max-w-[180px]"
-                                  >
-                                    {email}
-                                  </a>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 shrink-0"
-                                    aria-label="Copy email"
-                                    onClick={() => copyContact(email, copyId("email"))}
-                                  >
-                                    {copiedContactId === copyId("email") ? (
-                                      <Check className="h-4 w-4 text-green-600" />
-                                    ) : (
-                                      <Copy className="h-4 w-4" />
-                                    )}
-                                  </Button>
-                                </span>
-                              </>
+                              <span className="inline-flex items-center gap-1">
+                                <a
+                                  href={`mailto:${email}`}
+                                  className="text-primary hover:underline truncate max-w-[220px]"
+                                >
+                                  {email}
+                                </a>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 shrink-0"
+                                  aria-label="Copy email"
+                                  onClick={() => copyContact(email, copyId("email"))}
+                                >
+                                  {copiedContactId === copyId("email") ? (
+                                    <Check className="h-4 w-4 text-green-600" />
+                                  ) : (
+                                    <Copy className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </span>
                             )}
                             {holder.phone && (
                               <span className="inline-flex items-center gap-1">
@@ -1082,13 +1285,7 @@ export default function StewardDashboardPage() {
                               <span className="text-muted-foreground italic">No contact on file</span>
                             )}
                           </div>
-                        ) : (
-                          <p className="text-sm text-muted-foreground">
-                            {book.current_holder_name
-                              ? `Holder: ${book.current_holder_name} (no member link)`
-                              : "Holder unknown"}
-                          </p>
-                        )}
+                        ) : null}
                       </li>
                     )
                   })}
@@ -1100,14 +1297,14 @@ export default function StewardDashboardPage() {
 
         {/* Overdue books dialog — who has them, contact, copy to clipboard */}
         <Dialog open={showOverdueDialog} onOpenChange={setShowOverdueDialog}>
-          <DialogContent className="max-h-[85vh] overflow-y-auto" aria-label="Overdue books">
+          <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl" aria-label="Overdue books">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-card-foreground">
                 <AlertTriangle className="h-5 w-5 text-destructive" />
-                Overdue books ({overdueBooksList.length})
+                Overdue books ({overdueRows.length})
               </DialogTitle>
               <DialogDescription>
-                Books past their suggested return date. Contact the holder if you have their details.
+                Past suggested return date. Longest out first.
               </DialogDescription>
             </DialogHeader>
             <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1146,12 +1343,12 @@ export default function StewardDashboardPage() {
                 </p>
               </div>
             )}
-            <div className="mt-2 space-y-4">
-              {overdueBooksList.length === 0 ? (
+            <div className="mt-2 space-y-3">
+              {overdueRows.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No overdue books.</p>
               ) : (
-                <ul className="space-y-4">
-                  {overdueBooksList.map((book) => {
+                <ul className="space-y-3">
+                  {overdueRows.map(({ book, checkedOutAt }) => {
                     const holder = book.current_holder_id
                       ? users.find((u) => u.id === book.current_holder_id)
                       : null
@@ -1170,27 +1367,37 @@ export default function StewardDashboardPage() {
                         key={book.id}
                         className="rounded-lg border border-border bg-muted/20 p-4 space-y-2"
                       >
-                        <p className="font-medium text-foreground">{book.title}</p>
+                        <div className="flex flex-wrap items-baseline justify-between gap-2">
+                          <p className="font-medium text-foreground">
+                            {holder ? (
+                              <Link
+                                href={`/profile/${holder.id}`}
+                                className="text-primary hover:underline"
+                              >
+                                {holder.display_name}
+                              </Link>
+                            ) : (
+                              "Unknown holder"
+                            )}
+                          </p>
+                          <span className="text-sm font-semibold text-destructive tabular-nums">
+                            {checkedOutAt ? `Out ${formatOutFor(checkedOutAt)}` : "Out — unknown"}
+                          </span>
+                        </div>
+                        <p className="text-sm text-foreground">{book.title}</p>
                         <p className="text-sm text-muted-foreground">
-                          Suggested return was {expectedReturn}
+                          {checkedOutAt
+                            ? `Checked out ${formatCheckoutDateTime(checkedOutAt)}`
+                            : "Checkout time not in ledger"}
+                          {` · Suggested return was ${expectedReturn}`}
                         </p>
                         {holder ? (
                           <div className="flex flex-wrap items-center gap-2 text-sm">
-                            <span className="text-muted-foreground">Holder:</span>
-                            <Link
-                              href={`/profile/${holder.id}`}
-                              className="font-medium text-primary hover:underline"
-                            >
-                              {holder.display_name}
-                            </Link>
-                            {(email || holder.phone) && (
-                              <span className="text-muted-foreground">·</span>
-                            )}
                             {email && (
                               <span className="inline-flex items-center gap-1">
                                 <a
                                   href={`mailto:${email}`}
-                                  className="text-primary hover:underline truncate max-w-[180px]"
+                                  className="text-primary hover:underline truncate max-w-[220px]"
                                 >
                                   {email}
                                 </a>

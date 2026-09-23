@@ -31,7 +31,7 @@ After deploying, quickly confirm these flows:
 
 5. **Checked-out email list (steward)**
    - With at least one book checked out to a member who has contact email, open **Steward dashboard**.
-   - Click the **Checked Out** stat card. Confirm each book lists holder + email.
+   - Confirm the **Currently checked out** table shows holder, book, checkout date/time, and **Out for** duration (longest first).
    - Click **Copy all emails** — clipboard should get a comma-separated unique list. Same for **Overdue** when any books are past due.
 
 6. **Add book (node selection)**
