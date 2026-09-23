@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
     is_free: true,
     requires_id: false,
     pseudonymous_allowed: true,
-    contact_required: config.default_contact_required,
+    contact_required: true,
     loan_period_days: config.default_loan_period_days,
     shipping_allowed: false,
     local_only: true,
@@ -118,7 +118,8 @@ export async function POST(request: NextRequest) {
     is_free: typeof raw.is_free === "boolean" ? raw.is_free : defaultTerms.is_free,
     requires_id: typeof raw.requires_id === "boolean" ? raw.requires_id : defaultTerms.requires_id,
     pseudonymous_allowed: typeof raw.pseudonymous_allowed === "boolean" ? raw.pseudonymous_allowed : defaultTerms.pseudonymous_allowed,
-    contact_required: typeof raw.contact_required === "boolean" ? raw.contact_required : defaultTerms.contact_required,
+    // Books always require borrower email — clients cannot opt out.
+    contact_required: true,
     loan_period_days:
       typeof raw.loan_period_days === "number" && raw.loan_period_days >= 1
         ? normalizeLoanPeriodDays(raw.loan_period_days)

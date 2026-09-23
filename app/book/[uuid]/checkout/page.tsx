@@ -26,6 +26,7 @@ import { useBootstrapData } from "@/hooks/use-bootstrap-data"
 import { useLibraryCard } from "@/hooks/use-library-card"
 import { useToast } from "@/hooks/use-toast"
 import { MAX_BOOKS_CHECKED_OUT } from "@/lib/constants"
+import { emailsMatch, isValidEmail } from "@/lib/email"
 import { DEFAULT_LOAN_PERIOD_DAYS, resolveLoanPeriodDays } from "@/lib/loan-period"
 import type { Book, Node } from "@/lib/types"
 import { getCurrentPositionResult } from "@/lib/geofence"
@@ -84,6 +85,7 @@ export default function CheckoutPage({
   )
 
   const [email, setEmail] = useState("")
+  const [emailConfirm, setEmailConfirm] = useState("")
   const [agreedToTerms, setAgreedToTerms] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
   const [checkoutComplete, setCheckoutComplete] = useState(false)
@@ -94,15 +96,11 @@ export default function CheckoutPage({
   const isTapEntry = !!token
   const users = data?.users ?? []
   const currentUser = card?.user_id ? users.find((u) => u.id === card.user_id) : null
-  const hasContactInfo = currentUser
-    ? !!(currentUser.contact_email ?? "").trim()
-    : false
-  const contactRequired = book?.lending_terms?.contact_required ?? false
-  // Only treat bootstrap as "loaded" when we have data (so we know the user list and can check contact)
-  const bootstrapLoaded = !bootstrapLoading && data !== null
-  const blockedByContactRequirement = contactRequired && bootstrapLoaded && !hasContactInfo
-  // While bootstrap is loading or we have no data, we can't verify contact — show spinner
-  const contactCheckPending = contactRequired && !bootstrapLoaded
+  const accountEmail = (currentUser?.contact_email ?? "").trim()
+  const hasContactInfo = !!accountEmail
+  // Wait only while bootstrap is in flight; if it fails, fall through to email capture.
+  const contactCheckPending = bootstrapLoading
+  const needsEmailCapture = !bootstrapLoading && !hasContactInfo
   const isAvailable = book?.availability_status === "available"
   const isHolder = !!(book && card?.user_id && book.current_holder_id === card.user_id)
 
@@ -274,7 +272,7 @@ export default function CheckoutPage({
         book={book}
         icon={<Loader2 className="h-12 w-12 animate-spin text-muted-foreground" />}
         title="Checking your profile…"
-        message="This book requires contact info. Verifying your account."
+        message="Book checkout needs an email on your account. Verifying…"
       />
     )
   }
@@ -377,6 +375,10 @@ export default function CheckoutPage({
       cardUserId={card?.user_id}
       email={email}
       setEmail={setEmail}
+      emailConfirm={emailConfirm}
+      setEmailConfirm={setEmailConfirm}
+      accountEmail={accountEmail}
+      needsEmailCapture={needsEmailCapture}
       agreedToTerms={agreedToTerms}
       setAgreedToTerms={setAgreedToTerms}
       isProcessing={isProcessing}
@@ -384,7 +386,6 @@ export default function CheckoutPage({
       setCheckoutComplete={setCheckoutComplete}
       refetchBootstrap={() => refetch()}
       isTapEntry={isTapEntry}
-      emailRequired={blockedByContactRequirement}
     />
   )
 }
@@ -442,6 +443,10 @@ function AvailableFlow({
   cardUserId,
   email,
   setEmail,
+  emailConfirm,
+  setEmailConfirm,
+  accountEmail,
+  needsEmailCapture,
   agreedToTerms,
   setAgreedToTerms,
   isProcessing,
@@ -449,7 +454,6 @@ function AvailableFlow({
   setCheckoutComplete,
   refetchBootstrap,
   isTapEntry,
-  emailRequired,
 }: {
   book: Book
   uuid: string
@@ -458,6 +462,10 @@ function AvailableFlow({
   cardUserId?: string
   email: string
   setEmail: (s: string) => void
+  emailConfirm: string
+  setEmailConfirm: (s: string) => void
+  accountEmail: string
+  needsEmailCapture: boolean
   agreedToTerms: boolean
   setAgreedToTerms: (b: boolean) => void
   isProcessing: boolean
@@ -465,21 +473,42 @@ function AvailableFlow({
   setCheckoutComplete: (b: boolean) => void
   refetchBootstrap: () => Promise<BootstrapPayload | null>
   isTapEntry: boolean
-  emailRequired: boolean
 }) {
   const { toast } = useToast()
   const [step, setStep] = useState<"ask" | "confirm">("ask")
 
+  const emailsReady =
+    !needsEmailCapture || (emailsMatch(email, emailConfirm) && isValidEmail(email))
+  const emailMismatch =
+    needsEmailCapture &&
+    emailConfirm.trim().length > 0 &&
+    email.trim().length > 0 &&
+    !emailsMatch(email, emailConfirm)
+
   const handleCheckout = async () => {
     if (!cardUserId) return
     if (!agreedToTerms) return
+    if (needsEmailCapture && !emailsReady) {
+      toast({
+        variant: "destructive",
+        title: emailMismatch ? "Emails don’t match" : "Email required",
+        description: emailMismatch
+          ? "Type the same address in both fields to catch typos."
+          : "Enter and confirm your email so we can reach you about returns.",
+      })
+      return
+    }
     setIsProcessing(true)
     try {
       const res = await fetch("/api/books/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ book_id: uuid, user_id: cardUserId, contact_email: email || undefined }),
+        body: JSON.stringify({
+          book_id: uuid,
+          user_id: cardUserId,
+          contact_email: needsEmailCapture ? email.trim() : undefined,
+        }),
       })
       if (res.ok) {
         // Refresh app data so My Books / profile show the new loan immediately.
@@ -488,7 +517,8 @@ function AvailableFlow({
       } else {
         const j = await res.json().catch(() => ({}))
         const msg = (j?.error as string) ?? "Checkout failed"
-        const isContactRequired = res.status === 403 && /contact info/i.test(msg)
+        const isEmailRequired =
+          res.status === 403 && /email/i.test(msg)
         const isBorrowingLimit =
           res.status === 403 &&
           (/at most \d+ books checked out/i.test(msg) || /return one to check out another/i.test(msg))
@@ -496,15 +526,15 @@ function AvailableFlow({
           variant: "destructive",
           title: isBorrowingLimit
             ? "Borrowing limit reached"
-            : isContactRequired
-              ? "Contact info required"
+            : isEmailRequired
+              ? "Email required"
               : msg === "Unauthorized"
                 ? "Session expired"
                 : "Checkout failed",
           description: isBorrowingLimit
             ? `You can have at most 2 books checked out at once. Return one from My books, then try again.`
-            : isContactRequired
-              ? "Enter an email address to continue."
+            : isEmailRequired
+              ? "Enter and confirm your email to continue."
               : msg === "Unauthorized"
                 ? "Please reload and try again."
                 : msg,
@@ -575,18 +605,53 @@ function AvailableFlow({
           <Card className="border-border">
             <CardContent className="p-6">
               <div className="space-y-4">
-                <div>
-                  <Label htmlFor="email">Email{emailRequired ? "" : " (optional)"}</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="your@email.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="mt-1"
-                    required={emailRequired}
-                  />
-                </div>
+                {needsEmailCapture ? (
+                  <>
+                    <p className="text-sm text-muted-foreground">
+                      Add an email to your account so the library can reach you about returns. Type it twice to catch typos.
+                    </p>
+                    <div>
+                      <Label htmlFor="email">Email</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        autoComplete="email"
+                        placeholder="your@email.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="mt-1"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="email-confirm">Confirm email</Label>
+                      <Input
+                        id="email-confirm"
+                        type="email"
+                        autoComplete="email"
+                        placeholder="Type your email again"
+                        value={emailConfirm}
+                        onChange={(e) => setEmailConfirm(e.target.value)}
+                        className="mt-1"
+                        required
+                        aria-invalid={emailMismatch || undefined}
+                      />
+                      {emailMismatch && (
+                        <p className="mt-1 text-sm text-destructive">
+                          Emails don’t match — check for a typo.
+                        </p>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    We’ll use <span className="font-medium text-foreground">{accountEmail}</span> on
+                    your account for return contact.{" "}
+                    <Link href="/settings#contact" className="text-primary hover:underline">
+                      Change in Settings
+                    </Link>
+                  </p>
+                )}
                 <div className="flex items-start gap-2">
                   <Checkbox
                     id="terms"
@@ -600,7 +665,7 @@ function AvailableFlow({
                 <Button
                   size="lg"
                   className="w-full gap-2"
-                  disabled={!agreedToTerms || isProcessing || (emailRequired && !email.trim())}
+                  disabled={!agreedToTerms || isProcessing || !emailsReady}
                   onClick={handleCheckout}
                 >
                   {isProcessing ? (

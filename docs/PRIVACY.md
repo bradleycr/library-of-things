@@ -29,9 +29,10 @@ off the public browse surfaces; their NFC URLs are for people who tap the tag.
 
 ## Defaults that affect privacy
 
-- **Borrower email required by default** for book checkout (configurable per item
-  and via library settings). Required email is for stewards / return contact — it
-  is not the same as public profile contact opt-in.
+- **Borrower email required for all book checkouts.** Members must have an email
+  on their account (typed twice at checkout when adding). Required email is for
+  stewards / return contact — it is not the same as public profile contact opt-in.
+  Temporary keycards use a separate guest-email flow and are unchanged.
 - **Profiles are public by default**; members can set a profile private
   (`profile_public`), which shows as “Anonymous” in public views.
 - **Temporary keycard return** is NFC/QR-first: anyone with the physical card

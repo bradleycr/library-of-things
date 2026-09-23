@@ -132,6 +132,8 @@ export async function PATCH(
   let parsedTerms: LendingTerms | undefined
   if (lending_terms != null && typeof lending_terms === "object") {
     parsedTerms = lending_terms as unknown as LendingTerms
+    // Books always require borrower email — stewards cannot opt out.
+    parsedTerms.contact_required = true
     // 21 days is deprecated; normalize any incoming value immediately.
     if (typeof (parsedTerms as any)?.loan_period_days === "number") {
       ;(parsedTerms as any).loan_period_days = normalizeLoanPeriodDays(

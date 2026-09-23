@@ -14,8 +14,8 @@ After deploying, quickly confirm these flows:
    - Check **My Books** and any “current holder” text — all should show the updated name.
 
 2. **Checkout (including contact-required)**
-   - **Normal book:** Open a book’s checkout URL (with `?token=...`). With a valid card, you should be able to complete checkout.
-   - **Email-required book:** A member without email should see an inline required email field. Checkout should save it privately and succeed. An item with “Allow checkout without email” enabled should not require it.
+   - **Normal book:** Open a book’s checkout URL (with `?token=...`). With a valid card and email on the account, you should be able to complete checkout.
+   - **No email on account:** Checkout shows Email + Confirm email. Mismatched addresses block submit; matching addresses save privately and succeed. Temporary keycards still use a single guest email (no confirm).
 
 3. **Temporary keycard (simple checkout / return)**
    - Create two numbered temporary keycards from the steward dashboard. Open **Print QR labels** and confirm a sheet of 1.5″ (and 1″) cut-outs with card numbers.

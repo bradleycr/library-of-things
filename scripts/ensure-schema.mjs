@@ -324,6 +324,16 @@ async function main() {
           insert into app_config (key, value, updated_at)
           values ('contact_required_backfill_v1', 'true', now());
         END IF;
+        -- Re-assert for any books that opted out after v1 (email is always required for books).
+        IF NOT EXISTS (SELECT 1 FROM app_config WHERE key = 'contact_required_backfill_v2') THEN
+          update books
+             set lending_terms = jsonb_set(coalesce(lending_terms, '{}'::jsonb), '{contact_required}', 'true'::jsonb, true)
+           where coalesce(item_type, 'book') = 'book';
+          insert into app_config (key, value, updated_at)
+          values ('contact_required_backfill_v2', 'true', now()),
+                 ('default_contact_required', 'true'::jsonb, now())
+          on conflict (key) do update set value = excluded.value, updated_at = now();
+        END IF;
       END $$;
     `)
 

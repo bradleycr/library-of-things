@@ -651,7 +651,7 @@ export default function StewardDashboardPage() {
           note: editForm.note.trim() || null,
           lending_terms: {
             ...editingBook.lending_terms,
-            contact_required: editForm.contact_required,
+            contact_required: true,
             loan_period_days: normalizeLoanPeriodDays(
               clampLoanPeriodDays(Number(editForm.loan_period_days) || defaultLoanPeriodDays)
             ),
@@ -1511,16 +1511,9 @@ export default function StewardDashboardPage() {
                 }
               />
             </div>
-            <div className="flex items-center gap-2 pb-2">
-              <Checkbox
-                id="config-contact-required"
-                checked={configForm.default_contact_required}
-                onCheckedChange={(checked) =>
-                  setConfigForm((form) => ({ ...form, default_contact_required: checked === true }))
-                }
-              />
-              <Label htmlFor="config-contact-required">Require email by default</Label>
-            </div>
+            <p className="text-sm text-muted-foreground pb-2 sm:max-w-xs">
+              Book checkout always requires an email on the borrower’s account (type twice to confirm when adding). Temporary keycards keep their own guest email flow.
+            </p>
             <Button
               type="button"
               disabled={configSaving}
@@ -1532,7 +1525,11 @@ export default function StewardDashboardPage() {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
                     credentials: "include",
-                    body: JSON.stringify(configForm),
+                    body: JSON.stringify({
+                      default_loan_period_days: configForm.default_loan_period_days,
+                      default_contact_required: true,
+                      return_geofence_radius_m: configForm.return_geofence_radius_m,
+                    }),
                   })
                   const j = await res.json().catch(() => ({}))
                   if (!res.ok) throw new Error(j?.error ?? "Failed to save")
@@ -2299,16 +2296,9 @@ export default function StewardDashboardPage() {
                   maxLength={200}
                 />
               </div>
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="edit-contact"
-                  checked={!editForm.contact_required}
-                  onCheckedChange={(c) => setEditForm((f) => ({ ...f, contact_required: c !== true }))}
-                />
-                <Label htmlFor="edit-contact" className="text-sm font-normal">
-                  Allow checkout without email
-                </Label>
-              </div>
+              <p className="text-sm text-muted-foreground">
+                Book checkout always requires borrower email on their account.
+              </p>
             </div>
           )}
           <DialogFooter>

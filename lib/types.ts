@@ -6,7 +6,7 @@ export interface LendingTerms {
   // Identity requirements
   requires_id: boolean // Does checkout require identification?
   pseudonymous_allowed: boolean // Can be checked out pseudonymously?
-  /** When true, a borrower email is required. It remains private unless separately published on a profile. */
+  /** When true, a borrower email is required on the account to check out. Always true for books. */
   contact_required: boolean
   loan_period_days: number
   shipping_allowed: boolean

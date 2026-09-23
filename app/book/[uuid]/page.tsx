@@ -456,12 +456,10 @@ export default function BookDetailPage({
                         : "No contact"}
                     </span>
                   </div>
-                  {book.lending_terms?.contact_required && (
-                    <div className="flex items-center gap-2 text-card-foreground">
-                      <UserPlus className="h-4 w-4 text-muted-foreground" />
-                      <span>Contact info required to borrow</span>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-2 text-card-foreground">
+                    <UserPlus className="h-4 w-4 text-muted-foreground" />
+                    <span>Email required to borrow</span>
+                  </div>
                 </div>
               </CardContent>
             </Card>

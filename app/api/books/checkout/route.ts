@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { isValidEmail, normalizeEmail } from "@/lib/email"
 import { checkoutBook, getBookById, getUserById, updateUserProfile } from "@/lib/server/repositories"
 import { getSessionUserId } from "@/lib/server/session"
 import { parseJsonBody, isUuid } from "@/lib/server/validate"
@@ -8,7 +9,7 @@ export async function POST(request: NextRequest) {
   if (!parsed.ok) return parsed.response
 
   const { book_id, user_id } = parsed.data
-  const submittedEmail = parsed.data.contact_email?.trim().toLowerCase()
+  const submittedEmail = normalizeEmail(parsed.data.contact_email)
 
   if (!book_id || !user_id) {
     return NextResponse.json(
@@ -29,7 +30,6 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // Enforce contact-required lending terms server-side
     const book = await getBookById(book_id)
     if (!book) {
       return NextResponse.json({ error: "Book not found" }, { status: 404 })
@@ -40,21 +40,19 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
-    const terms = book.lending_terms
-    const contactRequired =
-      typeof terms === "object" && terms !== null && terms.contact_required === true
-    if (contactRequired) {
-      const user = await getUserById(user_id)
-      const email = user?.contact_email?.trim() || submittedEmail
-      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 320) {
-        return NextResponse.json(
-          { error: "This item requires an email address before checkout." },
-          { status: 403 }
-        )
-      }
-      if (!user?.contact_email?.trim() && submittedEmail) {
-        await updateUserProfile(user_id, { contact_email: submittedEmail })
-      }
+
+    // Books always need a private contact email on the account (keycards use guest flow).
+    const user = await getUserById(user_id)
+    const emailOnFile = normalizeEmail(user?.contact_email)
+    const email = emailOnFile || submittedEmail
+    if (!isValidEmail(email)) {
+      return NextResponse.json(
+        { error: "An email address is required on your account before checkout." },
+        { status: 403 }
+      )
+    }
+    if (!emailOnFile && submittedEmail) {
+      await updateUserProfile(user_id, { contact_email: email })
     }
 
     await checkoutBook({ bookId: book_id, userId: user_id })

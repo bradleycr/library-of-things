@@ -82,7 +82,6 @@ function AddBookContent() {
   const [ownerContactEmail, setOwnerContactEmail] = useState("")
 
   // Lending terms
-  const [contactRequired, setContactRequired] = useState(true)
   const [contactOptIn, setContactOptIn] = useState(true)
   const [addAnonymously, setAddAnonymously] = useState(false)
 
@@ -181,7 +180,7 @@ function AddBookContent() {
             type: "borrow",
             shipping_allowed: false,
             local_only: true,
-            contact_required: contactRequired,
+            contact_required: true,
             contact_opt_in: contactOptIn,
           },
           is_pocket_library: locationType === "pocket",
@@ -664,24 +663,10 @@ function AddBookContent() {
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
                 <p className="text-sm text-muted-foreground">
-                  Suggested return period is {formatDefaultLoanPeriod(data?.config?.default_loan_period_days ?? DEFAULT_LOAN_PERIOD_DAYS)}. Borrowers see this as a guideline, not a strict due date.
+                  Suggested return period is {formatDefaultLoanPeriod(data?.config?.default_loan_period_days ?? DEFAULT_LOAN_PERIOD_DAYS)}. Borrowers see this as a guideline, not a strict due date. Checkout always requires an email on the borrower’s account.
                 </p>
 
                 <div className="flex flex-col gap-3">
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      id="contact-required"
-                      checked={!contactRequired}
-                      onCheckedChange={(c) => setContactRequired(c !== true)}
-                    />
-                    <Label htmlFor="contact-required" className="text-sm text-card-foreground">
-                      Allow checkout without email
-                    </Label>
-                  </div>
-                  <p className="ml-6 text-xs text-muted-foreground">
-                    By default, borrowers add an email so they can be contacted about the return.
-                  </p>
-
                   <div className="flex items-center gap-2">
                     <Checkbox
                       id="contact"
