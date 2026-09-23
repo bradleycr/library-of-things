@@ -153,10 +153,16 @@ function LabelSheet({
           <QRCodeSVG
             value={absoluteCheckoutUrl(item, origin)}
             size={Math.round(inches * 128)}
-            level="M"
+            level="H"
             marginSize={0}
             className="h-auto w-full max-h-[62%]"
             style={{ aspectRatio: "1" }}
+            imageSettings={{
+              src: "/foresight-logo.png",
+              height: Math.round(inches * 128 * 0.22),
+              width: Math.round(inches * 128 * 0.22),
+              excavate: true,
+            }}
           />
           <div className="text-center leading-tight text-neutral-800">
             <p className="font-semibold" style={{ fontSize: inches <= 1 ? "7px" : "9px" }}>
