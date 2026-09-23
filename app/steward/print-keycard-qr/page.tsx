@@ -155,12 +155,15 @@ function LabelSheet({
             size={Math.round(inches * 128)}
             level="M"
             marginSize={0}
-            className="h-auto w-full max-h-[70%]"
+            className="h-auto w-full max-h-[62%]"
             style={{ aspectRatio: "1" }}
           />
-          <p className="text-center font-medium leading-none text-neutral-800" style={{ fontSize: inches <= 1 ? "8px" : "10px" }}>
-            {cardNumber(item)}
-          </p>
+          <div className="text-center leading-tight text-neutral-800">
+            <p className="font-semibold" style={{ fontSize: inches <= 1 ? "7px" : "9px" }}>
+              {cardNumber(item)}
+            </p>
+            <p style={{ fontSize: inches <= 1 ? "6px" : "8px" }}>sign-out/return</p>
+          </div>
         </div>
       ))}
     </div>
