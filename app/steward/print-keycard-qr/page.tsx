@@ -140,6 +140,11 @@ function LabelSheet({
   const captionIn = inches <= 1 ? 0.28 : 0.34
   const qrSizePx = Math.round(inches * 120)
   const labelFontPx = inches <= 1 ? 11 : 13
+  // Foresight mark is a wide wordmark (~513×192). Keep native ratio and a small
+  // footprint so level-H QR codes still scan after excavating the center.
+  const logoAspect = 513 / 192
+  const logoWidth = Math.round(qrSizePx * 0.3)
+  const logoHeight = Math.max(10, Math.round(logoWidth / logoAspect))
 
   return (
     <div
@@ -160,13 +165,13 @@ function LabelSheet({
             value={absoluteCheckoutUrl(item, origin)}
             size={qrSizePx}
             level="H"
-            marginSize={0}
+            marginSize={1}
             className="h-auto w-full shrink-0"
             style={{ aspectRatio: "1", maxHeight: `${inches - 0.12}in` }}
             imageSettings={{
               src: "/foresight-logo.png",
-              height: Math.round(qrSizePx * 0.22),
-              width: Math.round(qrSizePx * 0.22),
+              width: logoWidth,
+              height: logoHeight,
               excavate: true,
             }}
           />
