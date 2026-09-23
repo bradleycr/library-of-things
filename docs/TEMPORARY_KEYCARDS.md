@@ -9,40 +9,39 @@ unchanged. Operational items use `/thing/...` URLs.
 1. Run `pnpm db:ensure-schema` after deploying this version.
 2. Open **Steward dashboard → Temporary keycards**.
 3. Choose the home node, leave **Starts at** as `1` and **How many** as `10`.
-4. Create the cards and copy each **NFC URL**.
-5. Program each physical tag as a URL record. Test it before attaching it.
+4. Create the cards and copy each **NFC URL**, or open **Print QR labels**.
+5. Program each physical tag as a URL record, and/or cut out the printed QR
+   squares and attach them to the cards.
 
 Each temporary keycard is hidden from the public book catalog, has its own
 immutable home node and public ledger history, and does not count against the
 two-book limit.
 
-## Temporary keycard borrowing
+## Printable QR labels
 
-A tap opens a minimal page asking for an email address. The borrower must
-confirm that it is a valid address they can be reached at. No library account
-or emailed verification link is required. After sign-out, a dedicated success
-screen shows the card as **Out** and connected to that email. The address is
-stored only in the private `guest_loans` row while the item is checked out; it
-is never written to the public ledger and is erased when the item is returned.
-The return screen is a dedicated **Home / Returned** confirmation.
+`/steward/print-keycard-qr` (steward login required) prints a sheet of cut-out
+labels — **1.5″** by default, or **1″**. Each square is the card number plus a
+QR to that card’s checkout URL (same link as NFC). Print or save as PDF, cut
+along the dashed line, and stick the label on the physical card.
 
-The browser may receive an optional loan cookie, but return never depends on it.
-To return: tap the NFC tag on any phone, enter the same private email used at
-sign-out, promise you are at the home node, and confirm. A steward can also
-record the return from the dashboard.
+## Borrowing
 
-## Return confirmation
+A tap or QR scan opens a simple page: the card image, Available / Out, and
+either an email field + **Check out**, or a **Return** button. No extra
+promises or public-name fields.
 
-Temporary keycards return only to their home node. There is no GPS/geofence
-check on this flow: the borrower must tap a promise that they are physically at
-the home node with the keycard, then confirm return.
+The email is stored in private `guest_loans` while the card is out, shown on
+the NFC/QR tap page (so a found card can be returned to the right person), and
+used as the steward holder label. It is erased on return. Temporary keycards
+stay off the public catalog.
 
-Books may still use separate return geolocation on their own checkout pages.
-A steward can also record a temporary-keycard return from the dashboard.
+Anyone who taps the tag or scans the QR can return the card — possession of
+the physical card is enough. A steward can also record a return from the
+dashboard. The same email may hold multiple keycards.
 
 ## Contact policy
 
 Email is required by default for all existing and newly added books/items.
 Stewards and book contributors can opt a specific item out with **Allow checkout
-without email**. A borrower's email remains private unless they separately turn
-on public contact information for their profile.
+without email**. A book borrower's email remains private unless they separately
+turn on public contact information for their profile.

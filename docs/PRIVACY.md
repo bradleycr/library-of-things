@@ -23,7 +23,7 @@ off the public browse surfaces; their NFC URLs are for people who tap the tag.
 |------|--------|
 | Library card PIN | Salted hash only; never recoverable |
 | Auth / account email and phone | Not public unless the member opts into public contact |
-| Guest borrower email (temporary keycards) | Stored only in `guest_loans` while the card is out; erased on return; never written to the public ledger |
+| Guest borrower email (temporary keycards) | Stored in `guest_loans` while the card is out and shown on the NFC/QR tap page so a found card can be returned; erased on return; not in the public catalog |
 | Raw GPS coordinates | Not retained; book returns may record verification method / rounded distance only |
 | Steward password | Env var only; never returned by the API |
 
@@ -34,8 +34,9 @@ off the public browse surfaces; their NFC URLs are for people who tap the tag.
   is not the same as public profile contact opt-in.
 - **Profiles are public by default**; members can set a profile private
   (`profile_public`), which shows as “Anonymous” in public views.
-- **Temporary keycard return** uses the private email + NFC tag + a physical
-  presence promise. No same-browser cookie requirement.
+- **Temporary keycard return** is NFC/QR-first: anyone with the physical card
+  can tap Return. The borrower email is shown on that tap page while the card
+  is out.
 
 ## Operator responsibilities
 

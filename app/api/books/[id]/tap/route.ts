@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getBookById, hasActiveGuestSession, listNodes } from "@/lib/server/repositories"
+import { getActiveGuestLoanEmail, getBookById, listNodes } from "@/lib/server/repositories"
 import { isUuid } from "@/lib/server/validate"
-import { getGuestSessionToken } from "@/lib/server/guest-session"
 import { itemTokenMatches } from "@/lib/server/item-token"
 
 /**
@@ -43,14 +42,14 @@ export async function GET(
     }
 
     const nodes = await listNodes()
-    const guestSessionActive =
-      book.item_type !== "book"
-        ? await hasActiveGuestSession(book.id, await getGuestSessionToken(book.id))
-        : false
+    const holderEmail =
+      book.item_type !== "book" && book.availability_status === "checked_out"
+        ? await getActiveGuestLoanEmail(book.id)
+        : null
     return NextResponse.json({
       book,
       nodes,
-      guest_session_active: guestSessionActive,
+      holder_email: holderEmail,
     })
   } catch (error) {
     console.error("[api/books/[id]/tap]", error)

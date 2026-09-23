@@ -1244,14 +1244,13 @@ function hashGuestToken(token: string): string {
 export async function checkoutGuestItem(params: {
   itemId: string
   borrowerEmail: string
-  borrowerLabel?: string
 }): Promise<{ token: string; loan: GuestLoan }> {
   const client = await resilientConnect()
   const token = randomBytes(32).toString("base64url")
-  const publicLabel = (params.borrowerLabel?.trim() || "Guest").slice(0, LIMITS.displayName)
+  const normalizedEmail = params.borrowerEmail.trim().toLowerCase()
+  const publicLabel = normalizedEmail.slice(0, LIMITS.displayName)
   try {
     await client.query("begin")
-    const normalizedEmail = params.borrowerEmail.trim().toLowerCase()
     const { rows } = await client.query<DbBook>("select * from books where id = $1 for update", [
       params.itemId,
     ])
@@ -1309,6 +1308,18 @@ export async function checkoutGuestItem(params: {
   }
 }
 
+/** Active guest borrower email — only for NFC-gated tap/return surfaces. */
+export async function getActiveGuestLoanEmail(itemId: string): Promise<string | null> {
+  const { rows } = await resilientQuery<{ borrower_email: string | null }>(
+    `select borrower_email from guest_loans
+      where book_id = $1 and returned_at is null
+      limit 1`,
+    [itemId]
+  )
+  const email = rows[0]?.borrower_email?.trim().toLowerCase()
+  return email || null
+}
+
 export async function hasActiveGuestSession(itemId: string, token: string | undefined): Promise<boolean> {
   if (!token) return false
   const { rows } = await resilientQuery<{ present: boolean }>(
@@ -1323,7 +1334,6 @@ export async function hasActiveGuestSession(itemId: string, token: string | unde
 
 export async function returnGuestItem(params: {
   itemId: string
-  borrowerEmail: string
   verification: "geofence" | "manual" | "steward"
   distanceM?: number
 }): Promise<void> {
@@ -1336,16 +1346,15 @@ export async function returnGuestItem(params: {
     const item = rows[0]
     if (!item || (item.item_type ?? "book") === "book") throw new Error("Item not found")
 
-    const normalizedEmail = params.borrowerEmail.trim().toLowerCase()
     const { rows: loanRows } = await client.query<{ id: string }>(
       `select id from guest_loans
-        where book_id = $1 and lower(borrower_email) = $2 and returned_at is null
+        where book_id = $1 and returned_at is null
         for update`,
-      [params.itemId, normalizedEmail]
+      [params.itemId]
     )
     const loanId = loanRows[0]?.id
     if (!loanId) {
-      throw new Error("That email does not match this keycard's active loan. Ask a steward if you need help.")
+      throw new Error("This keycard is not checked out.")
     }
 
     const holderLabel = item.current_holder_name ?? "Guest"

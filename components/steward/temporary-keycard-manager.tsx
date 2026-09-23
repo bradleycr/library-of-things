@@ -1,7 +1,8 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { Check, Copy, CreditCard, Loader2, RotateCcw } from "lucide-react"
+import Link from "next/link"
+import { Check, Copy, CreditCard, Loader2, Printer, RotateCcw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -124,7 +125,7 @@ export function TemporaryKeycardManager({
           Temporary keycards
         </CardTitle>
         <p className="text-sm text-muted-foreground">
-          Create numbered cards, copy their NFC URLs, and recover returns when a borrower loses their browser session.
+          Create numbered cards, copy NFC URLs, print cut-out QR labels, and recover a return from the dashboard.
         </p>
       </CardHeader>
       <CardContent className="space-y-5">
@@ -153,10 +154,20 @@ export function TemporaryKeycardManager({
             <Input id="keycard-count" type="number" min={1} max={100} value={count} onChange={(event) => setCount(Number(event.target.value) || 1)} />
           </div>
         </div>
-        <Button onClick={create} disabled={busy || !nodeId}>
-          {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Create numbered temporary keycards
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={create} disabled={busy || !nodeId}>
+            {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Create numbered temporary keycards
+          </Button>
+          {keycards.length > 0 && (
+            <Button asChild variant="outline">
+              <Link href="/steward/print-keycard-qr">
+                <Printer className="mr-2 h-4 w-4" />
+                Print QR labels
+              </Link>
+            </Button>
+          )}
+        </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
         {nodes.filter((node) => node.location_lat == null || node.location_lng == null).map((node) => (
           <div key={node.id} className="flex items-center justify-between gap-3 rounded-lg border border-amber-300/60 bg-amber-50/60 p-3 dark:bg-amber-950/20">

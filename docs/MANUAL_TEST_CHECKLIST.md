@@ -17,25 +17,30 @@ After deploying, quickly confirm these flows:
    - **Normal book:** Open a book’s checkout URL (with `?token=...`). With a valid card, you should be able to complete checkout.
    - **Email-required book:** A member without email should see an inline required email field. Checkout should save it privately and succeed. An item with “Allow checkout without email” enabled should not require it.
 
-3. **Temporary keycard (email-first return)**
-   - Create two numbered temporary keycards from the steward dashboard and copy an NFC URL.
-   - Open the URL in a private browser, enter an email + public name, promise the email, and sign it out. Confirm success shows **Out** and that the public bootstrap/ledger does not contain the email.
-   - Open the same URL in a **different** private browser (or clear cookies). Enter the same email, promise you are at the home node, and return. Confirm success shows **Home / Returned**.
+3. **Temporary keycard (simple checkout / return)**
+   - Create two numbered temporary keycards from the steward dashboard. Open **Print QR labels** and confirm a sheet of 1.5″ (and 1″) cut-outs with card numbers.
+   - Open an NFC or QR URL. Enter only an email and tap **Check out**. The card should show **Out** and that email.
+   - Open the same URL on another phone. Confirm the holder email is visible and **Return** works with one tap (no email re-entry).
    - Sign out a second keycard with the **same** email — both should be allowed.
-   - A steward return must recover a forgotten email.
+   - A steward return must still recover a stuck card.
 
 4. **Cover upload (steward)**
    - **Steward dashboard** → Book Management → **Show more** if needed → Edit a book.
    - **Cover image:** Paste a URL (e.g. OpenLibrary) **or** click “Upload photo” and choose an image. Save.
    - Book detail and explore should show the new cover (and URL pastes should still work).
 
-4. **Add book (node selection)**
+5. **Checked-out email list (steward)**
+   - With at least one book checked out to a member who has contact email, open **Steward dashboard**.
+   - Click the **Checked Out** stat card. Confirm each book lists holder + email.
+   - Click **Copy all emails** — clipboard should get a comma-separated unique list. Same for **Overdue** when any books are past due.
+
+6. **Add book (node selection)**
    - **Add book** → choose “Library node” → select a node → fill title and submit. Should create the book without “Invalid node_id”.
 
-5. **Node collections (home → explore)**
+7. **Node collections (home → explore)**
    - **Home** → Library nodes section → click **View Collection** on a node card. Should open **Explore** with the same layout as before, filtered to that node’s books (URL has `?node=<id>`). No location prompt on explore.
 
-6. **Add node (steward)**
+8. **Add node (steward)**
    - **Steward dashboard** → **Add node** → fill name, type (including “other”), steward, **address** (no lat/lng fields). Submit. New node should appear on homepage and in add-book node list; directions link should work if geocoding succeeded.
 
 ---

@@ -18,6 +18,7 @@ import {
   Building2,
   Upload,
   Settings,
+  Mail,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -88,6 +89,32 @@ function fromStewardStatus(status: StewardBookStatus): Book["availability_status
   return status
 }
 
+/** Steward outreach email: profile contact first, then account email. */
+function holderOutreachEmail(user: User | undefined | null): string | null {
+  const raw = user?.contact_email?.trim() || user?.email?.trim()
+  return raw || null
+}
+
+/** Unique emails for a set of checked-out books, ready for a mass BCC/To paste. */
+function uniqueHolderEmails(
+  checkedOutBooks: Book[],
+  users: User[]
+): string[] {
+  const seen = new Set<string>()
+  const emails: string[] = []
+  for (const book of checkedOutBooks) {
+    if (!book.current_holder_id) continue
+    const holder = users.find((u) => u.id === book.current_holder_id)
+    const email = holderOutreachEmail(holder)
+    if (!email) continue
+    const key = email.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    emails.push(email)
+  }
+  return emails
+}
+
 export default function StewardDashboardPage() {
   const { data, refetch } = useBootstrapData()
   const books = data?.books ?? []
@@ -106,7 +133,9 @@ export default function StewardDashboardPage() {
   const [selectedBookIds, setSelectedBookIds] = useState<Set<string>>(new Set())
   const [urlsCopied, setUrlsCopied] = useState(false)
   const [showOverdueDialog, setShowOverdueDialog] = useState(false)
+  const [showCheckedOutDialog, setShowCheckedOutDialog] = useState(false)
   const [copiedContactId, setCopiedContactId] = useState<string | null>(null)
+  const [emailsCopied, setEmailsCopied] = useState(false)
 
   // Edit book state
   const [editingBook, setEditingBook] = useState<Book | null>(null)
@@ -244,14 +273,18 @@ export default function StewardDashboardPage() {
     selectedNodeId === "all"
       ? "All nodes"
       : nodes.find((n) => n.id === selectedNodeId)?.name ?? "All nodes"
-  const checkedOut = books.filter(
+  const catalogBooks = books.filter((b) => (b.item_type ?? "book") === "book")
+  const checkedOutBooksList = catalogBooks.filter(
     (b) => b.availability_status === "checked_out"
-  ).length
-  const overdueBooksList = books.filter((b) => {
+  )
+  const checkedOut = checkedOutBooksList.length
+  const checkedOutEmails = uniqueHolderEmails(checkedOutBooksList, users)
+  const overdueBooksList = catalogBooks.filter((b) => {
     if (!b.expected_return_date) return false
     return new Date(b.expected_return_date) < new Date()
   })
   const overdueBooks = overdueBooksList.length
+  const overdueEmails = uniqueHolderEmails(overdueBooksList, users)
   const bookEventCounts = loanEvents.reduce(
     (acc, e) => {
       if (e.event_type === "checkout") {
@@ -375,6 +408,32 @@ export default function StewardDashboardPage() {
       setUrlsCopied(true)
       setTimeout(() => setUrlsCopied(false), 2000)
     })
+  }
+
+  const copyContact = async (text: string, id: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopiedContactId(id)
+      setTimeout(() => setCopiedContactId(null), 2000)
+    } catch {
+      // Clipboard may be denied; ignore
+    }
+  }
+
+  /** Comma-separated unique emails — paste into To/BCC for a return reminder. */
+  const copyEmailList = async (emails: string[], copyKey: string) => {
+    if (emails.length === 0) return
+    try {
+      await navigator.clipboard.writeText(emails.join(", "))
+      setEmailsCopied(true)
+      setCopiedContactId(copyKey)
+      setTimeout(() => {
+        setEmailsCopied(false)
+        setCopiedContactId((current) => (current === copyKey ? null : current))
+      }, 2000)
+    } catch {
+      // Clipboard may be denied; ignore
+    }
   }
 
   const handleBulkAdd = async () => {
@@ -819,12 +878,23 @@ export default function StewardDashboardPage() {
             <CardContent className="flex flex-col items-center p-4">
               <BookOpen className="h-5 w-5 text-primary" />
               <span className="mt-2 text-2xl font-bold text-foreground">
-                {books.length}
+                {catalogBooks.length}
               </span>
               <span className="text-xs text-muted-foreground">Total Books</span>
             </CardContent>
           </Card>
-          <Card className="border-border">
+          <Card
+            className="border-border cursor-pointer transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring"
+            role="button"
+            tabIndex={0}
+            onClick={() => checkedOut > 0 && setShowCheckedOutDialog(true)}
+            onKeyDown={(e) => e.key === "Enter" && checkedOut > 0 && setShowCheckedOutDialog(true)}
+            aria-label={
+              checkedOut > 0
+                ? `${checkedOut} checked out — click to view holders and copy emails`
+                : "Checked out"
+            }
+          >
             <CardContent className="flex flex-col items-center p-4">
               <TrendingUp className="h-5 w-5 text-accent" />
               <span className="mt-2 text-2xl font-bold text-foreground">
@@ -853,12 +923,180 @@ export default function StewardDashboardPage() {
             <CardContent className="flex flex-col items-center p-4">
               <BookOpen className="h-5 w-5 text-muted-foreground" />
               <span className="mt-2 text-2xl font-bold text-foreground">
-                {books.length - checkedOut}
+                {catalogBooks.length - checkedOut}
               </span>
               <span className="text-xs text-muted-foreground">Available</span>
             </CardContent>
           </Card>
         </div>
+
+        {/* Checked-out books — holders + copy-all emails for return reminders */}
+        <Dialog open={showCheckedOutDialog} onOpenChange={setShowCheckedOutDialog}>
+          <DialogContent className="max-h-[85vh] overflow-y-auto" aria-label="Checked out books">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-card-foreground">
+                <TrendingUp className="h-5 w-5 text-accent" />
+                Checked out books ({checkedOutBooksList.length})
+              </DialogTitle>
+              <DialogDescription>
+                Borrowers with email on file. Copy the list and paste into your mail app’s To or BCC field for a return reminder.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-muted-foreground">
+                {checkedOutEmails.length > 0
+                  ? `${checkedOutEmails.length} unique email${checkedOutEmails.length !== 1 ? "s" : ""}`
+                  : "No emails on file for current holders"}
+              </p>
+              <Button
+                type="button"
+                variant="default"
+                size="sm"
+                className="gap-2 shrink-0"
+                disabled={checkedOutEmails.length === 0}
+                onClick={() => copyEmailList(checkedOutEmails, "checked-out-emails")}
+                aria-label="Copy all borrower emails as comma-separated list"
+              >
+                {emailsCopied && copiedContactId === "checked-out-emails" ? (
+                  <>
+                    <Check className="h-4 w-4" />
+                    Copied
+                  </>
+                ) : (
+                  <>
+                    <Mail className="h-4 w-4" />
+                    Copy all emails
+                  </>
+                )}
+              </Button>
+            </div>
+            {checkedOutEmails.length > 0 && (
+              <div className="rounded-md border border-border bg-muted/30 p-3">
+                <p className="text-xs font-medium text-muted-foreground mb-1">Comma-separated</p>
+                <p className="text-sm text-foreground break-all select-all font-mono leading-relaxed">
+                  {checkedOutEmails.join(", ")}
+                </p>
+              </div>
+            )}
+            <div className="mt-2 space-y-4">
+              {checkedOutBooksList.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No books checked out.</p>
+              ) : (
+                <ul className="space-y-4">
+                  {checkedOutBooksList.map((book) => {
+                    const holder = book.current_holder_id
+                      ? users.find((u) => u.id === book.current_holder_id)
+                      : null
+                    const email = holderOutreachEmail(holder)
+                    const expectedReturn = book.expected_return_date
+                      ? new Date(book.expected_return_date).toLocaleDateString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })
+                      : null
+                    const isOverdue =
+                      book.expected_return_date != null &&
+                      new Date(book.expected_return_date) < new Date()
+                    const copyId = (kind: "email" | "phone") =>
+                      `out-${kind}-${book.current_holder_id ?? ""}`
+                    return (
+                      <li
+                        key={book.id}
+                        className="rounded-lg border border-border bg-muted/20 p-4 space-y-2"
+                      >
+                        <div className="flex flex-wrap items-baseline gap-2">
+                          <p className="font-medium text-foreground">{book.title}</p>
+                          {isOverdue && (
+                            <Badge variant="destructive" className="text-xs">
+                              Overdue
+                            </Badge>
+                          )}
+                        </div>
+                        {expectedReturn && (
+                          <p className="text-sm text-muted-foreground">
+                            Suggested return {expectedReturn}
+                          </p>
+                        )}
+                        {holder ? (
+                          <div className="flex flex-wrap items-center gap-2 text-sm">
+                            <span className="text-muted-foreground">Holder:</span>
+                            <Link
+                              href={`/profile/${holder.id}`}
+                              className="font-medium text-primary hover:underline"
+                            >
+                              {holder.display_name}
+                            </Link>
+                            {email && (
+                              <>
+                                <span className="text-muted-foreground">·</span>
+                                <span className="inline-flex items-center gap-1">
+                                  <a
+                                    href={`mailto:${email}`}
+                                    className="text-primary hover:underline truncate max-w-[180px]"
+                                  >
+                                    {email}
+                                  </a>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 shrink-0"
+                                    aria-label="Copy email"
+                                    onClick={() => copyContact(email, copyId("email"))}
+                                  >
+                                    {copiedContactId === copyId("email") ? (
+                                      <Check className="h-4 w-4 text-green-600" />
+                                    ) : (
+                                      <Copy className="h-4 w-4" />
+                                    )}
+                                  </Button>
+                                </span>
+                              </>
+                            )}
+                            {holder.phone && (
+                              <span className="inline-flex items-center gap-1">
+                                <a
+                                  href={`tel:${holder.phone}`}
+                                  className="text-primary hover:underline"
+                                >
+                                  {holder.phone}
+                                </a>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 shrink-0"
+                                  aria-label="Copy phone"
+                                  onClick={() => copyContact(holder.phone!, copyId("phone"))}
+                                >
+                                  {copiedContactId === copyId("phone") ? (
+                                    <Check className="h-4 w-4 text-green-600" />
+                                  ) : (
+                                    <Copy className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </span>
+                            )}
+                            {!email && !holder.phone && (
+                              <span className="text-muted-foreground italic">No contact on file</span>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">
+                            {book.current_holder_name
+                              ? `Holder: ${book.current_holder_name} (no member link)`
+                              : "Holder unknown"}
+                          </p>
+                        )}
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Overdue books dialog — who has them, contact, copy to clipboard */}
         <Dialog open={showOverdueDialog} onOpenChange={setShowOverdueDialog}>
@@ -872,7 +1110,43 @@ export default function StewardDashboardPage() {
                 Books past their suggested return date. Contact the holder if you have their details.
               </DialogDescription>
             </DialogHeader>
-            <div className="mt-4 space-y-4">
+            <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-muted-foreground">
+                {overdueEmails.length > 0
+                  ? `${overdueEmails.length} unique email${overdueEmails.length !== 1 ? "s" : ""}`
+                  : "No emails on file for overdue holders"}
+              </p>
+              <Button
+                type="button"
+                variant="default"
+                size="sm"
+                className="gap-2 shrink-0"
+                disabled={overdueEmails.length === 0}
+                onClick={() => copyEmailList(overdueEmails, "overdue-emails")}
+                aria-label="Copy all overdue borrower emails as comma-separated list"
+              >
+                {emailsCopied && copiedContactId === "overdue-emails" ? (
+                  <>
+                    <Check className="h-4 w-4" />
+                    Copied
+                  </>
+                ) : (
+                  <>
+                    <Mail className="h-4 w-4" />
+                    Copy all emails
+                  </>
+                )}
+              </Button>
+            </div>
+            {overdueEmails.length > 0 && (
+              <div className="rounded-md border border-border bg-muted/30 p-3">
+                <p className="text-xs font-medium text-muted-foreground mb-1">Comma-separated</p>
+                <p className="text-sm text-foreground break-all select-all font-mono leading-relaxed">
+                  {overdueEmails.join(", ")}
+                </p>
+              </div>
+            )}
+            <div className="mt-2 space-y-4">
               {overdueBooksList.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No overdue books.</p>
               ) : (
@@ -881,6 +1155,7 @@ export default function StewardDashboardPage() {
                     const holder = book.current_holder_id
                       ? users.find((u) => u.id === book.current_holder_id)
                       : null
+                    const email = holderOutreachEmail(holder)
                     const expectedReturn = book.expected_return_date
                       ? new Date(book.expected_return_date).toLocaleDateString(undefined, {
                           month: "short",
@@ -890,15 +1165,6 @@ export default function StewardDashboardPage() {
                       : "—"
                     const copyId = (kind: "email" | "phone") =>
                       `${kind}-${book.current_holder_id ?? ""}`
-                    const handleCopy = async (text: string, id: string) => {
-                      try {
-                        await navigator.clipboard.writeText(text)
-                        setCopiedContactId(id)
-                        setTimeout(() => setCopiedContactId(null), 2000)
-                      } catch {
-                        // ignore
-                      }
-                    }
                     return (
                       <li
                         key={book.id}
@@ -917,16 +1183,16 @@ export default function StewardDashboardPage() {
                             >
                               {holder.display_name}
                             </Link>
-                            {(holder.contact_email || holder.phone) && (
+                            {(email || holder.phone) && (
                               <span className="text-muted-foreground">·</span>
                             )}
-                            {holder.contact_email && (
+                            {email && (
                               <span className="inline-flex items-center gap-1">
                                 <a
-                                  href={`mailto:${holder.contact_email}`}
+                                  href={`mailto:${email}`}
                                   className="text-primary hover:underline truncate max-w-[180px]"
                                 >
-                                  {holder.contact_email}
+                                  {email}
                                 </a>
                                 <Button
                                   type="button"
@@ -934,7 +1200,7 @@ export default function StewardDashboardPage() {
                                   size="icon"
                                   className="h-8 w-8 shrink-0"
                                   aria-label="Copy email"
-                                  onClick={() => handleCopy(holder.contact_email!, copyId("email"))}
+                                  onClick={() => copyContact(email, copyId("email"))}
                                 >
                                   {copiedContactId === copyId("email") ? (
                                     <Check className="h-4 w-4 text-green-600" />
@@ -958,7 +1224,7 @@ export default function StewardDashboardPage() {
                                   size="icon"
                                   className="h-8 w-8 shrink-0"
                                   aria-label="Copy phone"
-                                  onClick={() => handleCopy(holder.phone!, copyId("phone"))}
+                                  onClick={() => copyContact(holder.phone!, copyId("phone"))}
                                 >
                                   {copiedContactId === copyId("phone") ? (
                                     <Check className="h-4 w-4 text-green-600" />
@@ -968,7 +1234,7 @@ export default function StewardDashboardPage() {
                                 </Button>
                               </span>
                             )}
-                            {!holder.contact_email && !holder.phone && (
+                            {!email && !holder.phone && (
                               <span className="text-muted-foreground italic">No contact on file</span>
                             )}
                           </div>

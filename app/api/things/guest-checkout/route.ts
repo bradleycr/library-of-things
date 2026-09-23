@@ -8,7 +8,7 @@ import {
 } from "@/lib/server/guest-session"
 import { itemTokenMatches } from "@/lib/server/item-token"
 import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
-import { clampString, isUuid, LIMITS, parseJsonBody } from "@/lib/server/validate"
+import { isUuid, parseJsonBody } from "@/lib/server/validate"
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -22,20 +22,12 @@ export async function POST(request: NextRequest) {
     item_id?: string
     email?: string
     token?: string
-    email_confirmed?: boolean
-    borrower_label?: string
   }>(request)
   if (!parsed.ok) return parsed.response
   const itemId = parsed.data.item_id
   const email = parsed.data.email?.trim().toLowerCase()
   if (!itemId || !isUuid(itemId) || !email || email.length > 320 || !EMAIL_PATTERN.test(email)) {
     return NextResponse.json({ error: "A valid item and email address are required." }, { status: 400 })
-  }
-  if (parsed.data.email_confirmed !== true) {
-    return NextResponse.json(
-      { error: "Promise that this is a valid email you can be reached at." },
-      { status: 400 }
-    )
   }
 
   try {
@@ -47,12 +39,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Open this page from the item's NFC tag." }, { status: 403 })
     }
 
-    const borrowerLabel = clampString(parsed.data.borrower_label, LIMITS.displayName)
-    const result = await checkoutGuestItem({ itemId, borrowerEmail: email, borrowerLabel })
+    const result = await checkoutGuestItem({ itemId, borrowerEmail: email })
     const cookieStore = await cookies()
     cookieStore.set(guestSessionCookieName(itemId), result.token, GUEST_SESSION_COOKIE_OPTIONS)
     cookieStore.delete(GUEST_SESSION_COOKIE_LEGACY)
-    return NextResponse.json({ success: true, borrower_label: borrowerLabel ?? "Guest" })
+    return NextResponse.json({ success: true, holder_email: email })
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Checkout failed" },
