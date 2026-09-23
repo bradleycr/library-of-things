@@ -1409,7 +1409,7 @@ export async function returnGuestItem(params: {
   }
 }
 
-/** Steward recovery path for lost browser sessions. */
+/** Steward recovery path for lost browser sessions or orphaned checked-out state. */
 export async function stewardReturnGuestItem(itemId: string): Promise<void> {
   const client = await resilientConnect()
   try {
@@ -1417,17 +1417,21 @@ export async function stewardReturnGuestItem(itemId: string): Promise<void> {
     const { rows } = await client.query<DbBook>("select * from books where id = $1 for update", [itemId])
     const item = rows[0]
     if (!item || (item.item_type ?? "book") === "book") throw new Error("Item not found")
+    if (item.availability_status !== "checked_out") {
+      throw new Error("Item is not checked out")
+    }
     const { rows: loans } = await client.query<{ id: string }>(
       "select id from guest_loans where book_id = $1 and returned_at is null for update",
       [itemId]
     )
-    if (!loans[0]) throw new Error("No active guest loan")
-    await client.query(
-      `update guest_loans
-          set returned_at = now(), borrower_email = null, return_verification = 'steward'
-        where id = $1`,
-      [loans[0].id]
-    )
+    if (loans[0]) {
+      await client.query(
+        `update guest_loans
+            set returned_at = now(), borrower_email = null, return_verification = 'steward'
+          where id = $1`,
+        [loans[0].id]
+      )
+    }
     await client.query(
       `update books
           set availability_status = 'available', current_holder_name = null,
@@ -1444,7 +1448,11 @@ export async function stewardReturnGuestItem(itemId: string): Promise<void> {
         itemId,
         item.title,
         item.current_location_text ?? null,
-        JSON.stringify({ item_type: item.item_type ?? "other", location_verification: "steward" }),
+        JSON.stringify({
+          item_type: item.item_type ?? "other",
+          location_verification: "steward",
+          orphan_recovery: !loans[0],
+        }),
       ]
     )
     await client.query("commit")
