@@ -13,10 +13,6 @@ const SIZES = [
   { id: "1", inches: 1, label: "1″" },
 ] as const
 
-function cardNumber(item: Book) {
-  return item.asset_number != null ? `#${item.asset_number}` : item.title.replace(/^Temporary\s+/i, "")
-}
-
 function absoluteCheckoutUrl(item: Book, origin: string) {
   const raw = item.checkout_url.trim()
   if (raw.startsWith("http://") || raw.startsWith("https://")) return raw
@@ -140,6 +136,11 @@ function LabelSheet({
   origin: string
   preview?: boolean
 }) {
+  // Caption band under the QR so “Sign out / return” stays readable when cut out.
+  const captionIn = inches <= 1 ? 0.28 : 0.34
+  const qrSizePx = Math.round(inches * 120)
+  const labelFontPx = inches <= 1 ? 11 : 13
+
   return (
     <div
       className={preview ? "flex flex-wrap gap-3 rounded-xl border bg-muted/30 p-4" : "flex flex-wrap gap-[0.12in]"}
@@ -147,29 +148,34 @@ function LabelSheet({
       {cards.map((item) => (
         <div
           key={item.id}
-          className="flex flex-col items-center justify-between border-2 border-dashed border-neutral-400 bg-white p-[0.08in] text-black"
-          style={{ width: `${inches}in`, height: `${inches}in` }}
+          className="flex flex-col items-center justify-start border-2 border-dashed border-neutral-500 bg-white text-black"
+          style={{
+            width: `${inches}in`,
+            height: `${inches + captionIn}in`,
+            padding: "0.06in",
+            gap: "0.04in",
+          }}
         >
           <QRCodeSVG
             value={absoluteCheckoutUrl(item, origin)}
-            size={Math.round(inches * 128)}
+            size={qrSizePx}
             level="H"
             marginSize={0}
-            className="h-auto w-full max-h-[62%]"
-            style={{ aspectRatio: "1" }}
+            className="h-auto w-full shrink-0"
+            style={{ aspectRatio: "1", maxHeight: `${inches - 0.12}in` }}
             imageSettings={{
               src: "/foresight-logo.png",
-              height: Math.round(inches * 128 * 0.22),
-              width: Math.round(inches * 128 * 0.22),
+              height: Math.round(qrSizePx * 0.22),
+              width: Math.round(qrSizePx * 0.22),
               excavate: true,
             }}
           />
-          <div className="text-center leading-tight text-neutral-800">
-            <p className="font-semibold" style={{ fontSize: inches <= 1 ? "7px" : "9px" }}>
-              {cardNumber(item)}
-            </p>
-            <p style={{ fontSize: inches <= 1 ? "6px" : "8px" }}>sign-out/return</p>
-          </div>
+          <p
+            className="w-full shrink-0 text-center font-semibold tracking-tight text-neutral-900"
+            style={{ fontSize: `${labelFontPx}px`, lineHeight: 1.15 }}
+          >
+            Sign out / return
+          </p>
         </div>
       ))}
     </div>
