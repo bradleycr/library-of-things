@@ -1,33 +1,15 @@
 "use client"
 
-/* ────────────────────────────────────────────────────────────────────────────
- * ISBN Scanner Dialog
- * ────────────────────────────────────────────────────────────────────────────
- * Two-engine, single-UI scanner that resolves to a normalized, validated ISBN.
+/**
+ * ISBN scanner — keep this lean.
  *
- *   1. Native engine  — `BarcodeDetector` (Chrome/Edge and some Android
- *      browsers). Fast, accurate, hardware-accelerated. Used whenever available.
- *
- *   2. Quagga2 engine — pure-JS EAN-13 decoder.
- *      Normal path for iPhone Safari and Firefox.
- *      Conservative config (no advanced focus modes, modest resolution) so
- *      iPhones don't trigger macro-mode auto-switching between back cameras.
- *
- * Safety nets shared by both engines and the photo path:
- *   • EAN-13 only
- *   • Check-digit validation
- *   • Bookland prefix (978/979) — refuses non-book product barcodes
- *   • Two-read confirmation within a short window — refuses single misreads
- *
- * Parent `onScan` / `onOpenChange` are read through refs so re-renders never
- * tear down the live camera mid-scan.
- * ──────────────────────────────────────────────────────────────────────────── */
+ * Live: BarcodeDetector + getUserMedia when available; Quagga2 otherwise (iPhone Safari).
+ * Photo: always available (never blocked by a stuck camera). Native detect(Blob) first,
+ * then Quagga decodeSingle. Manual ISBN entry is the fallback.
+ */
 
-import Quagga, {
-  type QuaggaJSResultObject,
-  type QuaggaJSStatic,
-} from "@ericblade/quagga2"
-import { useRef, useState, useEffect, useCallback } from "react"
+import Quagga, { type QuaggaJSResultObject } from "@ericblade/quagga2"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { Camera, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -51,346 +33,159 @@ export interface IsbnScannerDialogProps {
   onScan: (isbn: string) => void
 }
 
-/* ────────────────────────────────────────────────────────────────────────────
- * Tunables
- * ──────────────────────────────────────────────────────────────────────────── */
+const WARMUP_MS = 500
+const CONFIRM_MS = 2500
+const CONFIRM_COUNT = 2
+const POLL_MS = 150
 
-/** Short delay so first frames (autofocus / exposure) don't burn confirmations. */
-const CAMERA_WARMUP_MS = 600
-/** Two identical valid reads within this window = accept (3 was too slow on iPhone Quagga). */
-const STABLE_READ_MS = 3000
-const STABLE_READ_COUNT = 2
-/** Quagga confidence gate. Lower is better; rejects plausible but fuzzy misreads. */
-const MAX_QUAGGA_AVERAGE_ERROR = 0.22
-/** Native engine polling cap. We don't need 60 Hz; this keeps phones cool. */
-const NATIVE_SCAN_INTERVAL_MS = 120
-/** Retry budget for waiting on the container ref to mount. */
-const MAX_SCANNER_REF_RETRIES = 60
+type Status = "idle" | "loading" | "live" | "photo" | "error" | "no-camera"
 
-type ScannerStatus =
-  | "idle"
-  | "loading"
-  | "live"
-  | "photo"
-  | "error"
-  | "no-camera"
-
-/** iPhone Safari has no BarcodeDetector; Quagga is the reliable live path there. */
-function prefersQuaggaLive(): boolean {
+function isIosOrSafari(): boolean {
   if (typeof navigator === "undefined") return true
   const ua = navigator.userAgent
-  return /iPhone|iPad|iPod/i.test(ua) || (/Safari/i.test(ua) && !/Chrome|CriOS|FxiOS/i.test(ua))
+  return /iPhone|iPad|iPod/i.test(ua) || (/Safari/i.test(ua) && !/Chrome|CriOS|FxiOS|Edg/i.test(ua))
 }
 
-/* ────────────────────────────────────────────────────────────────────────────
- * Validation
- * ──────────────────────────────────────────────────────────────────────────── */
-
-function validateScannedIsbn(
-  raw: string,
-): { normalized: string } | { error: string } {
-  const normalized = normalizeIsbn(raw)
-  if (!normalized) {
+function validateScannedIsbn(raw: string): { ok: true; isbn: string } | { ok: false; error: string } {
+  const isbn = normalizeIsbn(raw)
+  if (!isbn) {
     return {
+      ok: false,
       error:
-        "Barcode not recognized as ISBN. Use the 13-digit ISBN barcode on the back of the book, or type it manually.",
+        "Not recognized as an ISBN. Use the 13-digit barcode on the back of the book, or type it.",
     }
   }
-
-  if (!validateIsbnCheckDigit(normalized)) {
+  if (!validateIsbnCheckDigit(isbn)) {
+    return { ok: false, error: "That ISBN fails its check digit. Try again or type it." }
+  }
+  if (isbn.length === 13 && !isBooklandEan13(isbn)) {
     return {
-      error:
-        "That ISBN does not pass its check digit. Try again with a clearer image or type it manually.",
+      ok: false,
+      error: "That barcode is not a book ISBN (needs 978/979). Scan the ISBN on the book.",
     }
   }
-
-  if (normalized.length === 13 && !isBooklandEan13(normalized)) {
-    return {
-      error:
-        "That barcode is not a book ISBN. Scan the ISBN barcode on the back of the book, usually starting with 978 or 979.",
-    }
-  }
-
-  return { normalized }
+  return { ok: true, isbn }
 }
 
-/* ────────────────────────────────────────────────────────────────────────────
- * Native BarcodeDetector — type shim + capability probe
- * ──────────────────────────────────────────────────────────────────────────── */
-
-type DetectedBarcode = { rawValue: string; format: string }
-type BarcodeDetectorLike = {
-  detect: (source: CanvasImageSource | ImageBitmap) => Promise<DetectedBarcode[]>
-}
-type BarcodeDetectorCtor = {
-  new (init?: { formats?: string[] }): BarcodeDetectorLike
-  getSupportedFormats?: () => Promise<string[]>
+type Detector = {
+  detect: (source: ImageBitmapSource) => Promise<Array<{ rawValue: string; format: string }>>
 }
 
-function getBarcodeDetectorCtor(): BarcodeDetectorCtor | null {
+function getDetector(): Detector | null {
   if (typeof window === "undefined") return null
-  const ctor = (window as unknown as { BarcodeDetector?: BarcodeDetectorCtor })
+  const Ctor = (window as unknown as { BarcodeDetector?: new (o?: { formats?: string[] }) => Detector })
     .BarcodeDetector
-  return ctor ?? null
-}
-
-async function nativeDetectorSupportsEan13(): Promise<boolean> {
-  const ctor = getBarcodeDetectorCtor()
-  if (!ctor) return false
+  if (!Ctor) return null
   try {
-    const formats = (await ctor.getSupportedFormats?.()) ?? []
-    return formats.includes("ean_13")
-  } catch {
-    return false
-  }
-}
-
-function createNativeDetector(): BarcodeDetectorLike | null {
-  const ctor = getBarcodeDetectorCtor()
-  if (!ctor) return null
-  try {
-    return new ctor({ formats: ["ean_13"] })
+    return new Ctor({ formats: ["ean_13"] })
   } catch {
     return null
   }
 }
 
-/* ────────────────────────────────────────────────────────────────────────────
- * Camera helpers
- *
- * Notes on the constraint design:
- *   • No `advanced: [{ focusMode: "continuous" }]`. On iOS Safari (especially
- *     iPhone 13 Pro+) this hint nudges the system into macro/back-camera
- *     auto-switching, which manifests as the camera "switching cameras" and
- *     hunting focus — exactly what users were reporting.
- *   • Modest resolution biases iOS toward the main wide camera, which has the
- *     best close-focus behavior for book barcodes (~10–20 cm).
- * ──────────────────────────────────────────────────────────────────────────── */
-
-const PREFERRED_CONSTRAINTS: MediaTrackConstraints = {
-  width: { ideal: 1280 },
-  height: { ideal: 720 },
-  facingMode: { ideal: "environment" },
-}
-
-const QUAGGA_CONSTRAINTS: MediaTrackConstraints = {
-  // Matches the historically reliable config; smaller frames = less CPU,
-  // less AF thrash, and bias toward the main back camera on iPhones.
-  width: { ideal: 640 },
-  height: { ideal: 480 },
-  facingMode: { ideal: "environment" },
-}
-
-const FALLBACK_CONSTRAINTS: MediaTrackConstraints = {
-  facingMode: { ideal: "environment" },
-}
-
-/**
- * After camera permission is granted, try to lock onto a "stable" back camera
- * (not labelled as ultra-wide / macro / telephoto). This prevents iOS from
- * silently switching cameras when subject distance changes.
- */
-async function pickStableBackCameraId(): Promise<string | null> {
-  if (typeof navigator === "undefined" || !navigator.mediaDevices?.enumerateDevices) {
-    return null
-  }
-  try {
-    const devices = await navigator.mediaDevices.enumerateDevices()
-    const cams = devices.filter((d) => d.kind === "videoinput")
-    if (cams.length <= 1) return null
-
-    const isBack = (label: string) => /back|rear|environment/i.test(label)
-    const isExotic = (label: string) => /ultra|macro|tele/i.test(label)
-
-    const stable = cams.find((c) => isBack(c.label) && !isExotic(c.label))
-    if (stable?.deviceId) return stable.deviceId
-
-    const anyBack = cams.find((c) => isBack(c.label))
-    return anyBack?.deviceId ?? null
-  } catch {
-    return null
-  }
-}
-
-/**
- * Request camera permission once, pick a stable back camera id, then release.
- * Quagga opens its own stream — this primes labels/deviceId on iOS.
- */
-async function prepareBackCameraConstraints(
-  base: MediaTrackConstraints,
-): Promise<MediaTrackConstraints> {
-  if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
-    return base
-  }
-  let stream: MediaStream | null = null
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({ video: base, audio: false })
-  } catch {
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: FALLBACK_CONSTRAINTS,
-        audio: false,
-      })
-    } catch {
-      return base
-    }
-  }
-  const stableId = await pickStableBackCameraId()
-  stream.getTracks().forEach((track) => track.stop())
-  if (stableId) {
-    return { ...base, deviceId: { exact: stableId } }
-  }
-  return base
-}
-
-/* ────────────────────────────────────────────────────────────────────────────
- * Photo decode (native first, Quagga multi-pass fallback)
- * ──────────────────────────────────────────────────────────────────────────── */
-
-async function decodePhotoNative(file: File): Promise<string | null> {
-  const detector = createNativeDetector()
+async function decodeWithNative(source: ImageBitmapSource): Promise<string | null> {
+  const detector = getDetector()
   if (!detector) return null
   try {
-    const bitmap = await createImageBitmap(file)
-    try {
-      const codes = await detector.detect(bitmap)
-      for (const code of codes) {
-        if (code.format !== "ean_13") continue
-        const validated = validateScannedIsbn(code.rawValue)
-        if (!("error" in validated)) return validated.normalized
-      }
-    } finally {
-      ;(bitmap as ImageBitmap & { close?: () => void }).close?.()
+    const codes = await detector.detect(source)
+    for (const code of codes) {
+      if (code.format && code.format !== "ean_13") continue
+      const validated = validateScannedIsbn(code.rawValue)
+      if (validated.ok) return validated.isbn
     }
   } catch {
-    return null
+    /* fall through */
   }
   return null
 }
 
-async function decodePhotoQuagga(imageUrl: string): Promise<string | null> {
-  const passes: Array<{
-    size: number
-    locator?: { halfSample: boolean; patchSize: string }
-  }> = [
-    { size: 1280, locator: { halfSample: false, patchSize: "medium" } },
-    { size: 800, locator: { halfSample: true, patchSize: "large" } },
-    { size: 1280 },
-  ]
-
-  for (const pass of passes) {
+async function decodeWithQuagga(imageUrl: string): Promise<string | null> {
+  const sizes = [1600, 1200, 800]
+  for (const size of sizes) {
     try {
-      const result = await Quagga.decodeSingle({
-        decoder: { readers: ["ean_reader"] },
-        inputStream: { size: pass.size },
-        locate: true,
-        ...(pass.locator ? { locator: pass.locator } : {}),
-        src: imageUrl,
+      const result = await new Promise<QuaggaJSResultObject | null>((resolve) => {
+        let settled = false
+        const done = (value: QuaggaJSResultObject | null) => {
+          if (settled) return
+          settled = true
+          resolve(value)
+        }
+        const timer = setTimeout(() => done(null), 8000)
+        const finish = (value: QuaggaJSResultObject | null) => {
+          clearTimeout(timer)
+          done(value)
+        }
+        try {
+          const maybePromise = Quagga.decodeSingle(
+            {
+              src: imageUrl,
+              numOfWorkers: 0,
+              locate: true,
+              decoder: { readers: ["ean_reader"] },
+              locator: { patchSize: "medium", halfSample: false },
+              inputStream: {
+                type: "ImageStream",
+                size,
+                singleChannel: false,
+              },
+            },
+            (r) => finish(r ?? null),
+          )
+          // Quagga2 may resolve via callback and/or Promise — first wins.
+          void Promise.resolve(maybePromise).then(
+            (r) => finish((r as QuaggaJSResultObject | null | undefined) ?? null),
+            () => finish(null),
+          )
+        } catch {
+          finish(null)
+        }
       })
-
       const code = result?.codeResult?.code
       if (!code) continue
-
       const validated = validateScannedIsbn(code)
-      if ("error" in validated) continue
-
-      return validated.normalized
+      if (validated.ok) return validated.isbn
     } catch {
-      continue
+      /* try next size */
     }
   }
-
   return null
 }
 
-async function decodePhoto(file: File): Promise<string | null> {
-  const native = await decodePhotoNative(file)
-  if (native) return native
+async function decodePhotoFile(file: File): Promise<string | null> {
+  // Chrome/Android: Blob is a valid ImageBitmapSource.
+  const fromNative = await decodeWithNative(file)
+  if (fromNative) return fromNative
 
-  const url = URL.createObjectURL(file)
+  // Load as an <img> for a second native attempt (some engines prefer elements).
+  const objectUrl = URL.createObjectURL(file)
   try {
-    return await decodePhotoQuagga(url)
-  } finally {
-    URL.revokeObjectURL(url)
-  }
-}
-
-/* ────────────────────────────────────────────────────────────────────────────
- * Stable-read accumulator — shared between engines
- * ──────────────────────────────────────────────────────────────────────────── */
-
-interface StableReadState {
-  lastCode: string | null
-  lastAt: number
-  count: number
-}
-
-function pushStableRead(state: StableReadState, normalized: string): boolean {
-  const now = Date.now()
-  if (
-    state.lastCode === normalized &&
-    now - state.lastAt <= STABLE_READ_MS
-  ) {
-    state.count += 1
-  } else {
-    state.count = 1
-  }
-  state.lastCode = normalized
-  state.lastAt = now
-  return state.count >= STABLE_READ_COUNT
-}
-
-function freshStableState(): StableReadState {
-  return { lastCode: null, lastAt: 0, count: 0 }
-}
-
-function quaggaReadLooksSharp(result: QuaggaJSResultObject): boolean {
-  const decodedCodes = result.codeResult?.decodedCodes
-  if (!Array.isArray(decodedCodes) || decodedCodes.length === 0) return true
-
-  const errors = decodedCodes
-    .map((part) => {
-      const maybeError = (part as { error?: unknown }).error
-      return typeof maybeError === "number" ? maybeError : null
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image()
+      el.onload = () => resolve(el)
+      el.onerror = () => reject(new Error("image load failed"))
+      el.src = objectUrl
     })
-    .filter((value): value is number => value !== null)
-
-  if (errors.length === 0) return true
-  const averageError =
-    errors.reduce((total, value) => total + value, 0) / errors.length
-
-  return averageError <= MAX_QUAGGA_AVERAGE_ERROR
+    const fromImg = await decodeWithNative(img)
+    if (fromImg) return fromImg
+    return await decodeWithQuagga(objectUrl)
+  } finally {
+    URL.revokeObjectURL(objectUrl)
+  }
 }
 
-/* ────────────────────────────────────────────────────────────────────────────
- * Component
- * ──────────────────────────────────────────────────────────────────────────── */
-
-export function IsbnScannerDialog({
-  open,
-  onOpenChange,
-  onScan,
-}: IsbnScannerDialogProps) {
-  /* ---- DOM refs ---- */
+export function IsbnScannerDialog({ open, onOpenChange, onScan }: IsbnScannerDialogProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const photoInputRef = useRef<HTMLInputElement>(null)
-  /** Video element used by the native engine. The Quagga engine creates its own. */
-  const nativeVideoRef = useRef<HTMLVideoElement | null>(null)
-
-  /* ---- UI state ---- */
-  const [status, setStatus] = useState<ScannerStatus>("idle")
-  const [message, setMessage] = useState<string | null>(null)
-  const [manualIsbn, setManualIsbn] = useState("")
-  const [manualError, setManualError] = useState<string | null>(null)
-  const [restartNonce, setRestartNonce] = useState(0)
-
-  /* ---- Live-scan refs (don't trigger re-render) ---- */
   const stopLiveRef = useRef<(() => Promise<void>) | null>(null)
+  const sessionRef = useRef(0)
   const detectedRef = useRef(false)
   const readyAtRef = useRef(0)
-  const stableRef = useRef<StableReadState>(freshStableState())
+  const confirmRef = useRef<{ code: string | null; at: number; count: number }>({
+    code: null,
+    at: 0,
+    count: 0,
+  })
 
-  /* ---- Parent callback refs — keep effect deps minimal ---- */
   const onScanRef = useRef(onScan)
   const onOpenChangeRef = useRef(onOpenChange)
   useEffect(() => {
@@ -398,433 +193,346 @@ export function IsbnScannerDialog({
     onOpenChangeRef.current = onOpenChange
   }, [onScan, onOpenChange])
 
-  /* -----------------------------------------------------------------
-   * Finish a scan: stop the engine, return the ISBN, close the dialog.
-   * Re-entrancy is blocked by `detectedRef`.
-   * ----------------------------------------------------------------- */
-  const finishScan = useCallback((normalized: string) => {
-    if (detectedRef.current) return
-    detectedRef.current = true
-    setStatus("loading")
-    setMessage(`ISBN confirmed: ${normalized}. Opening…`)
+  const [status, setStatus] = useState<Status>("idle")
+  const [message, setMessage] = useState<string | null>(null)
+  const [manualIsbn, setManualIsbn] = useState("")
+  const [manualError, setManualError] = useState<string | null>(null)
+  const [restartNonce, setRestartNonce] = useState(0)
+
+  const stopLive = useCallback(async () => {
     const stop = stopLiveRef.current
     stopLiveRef.current = null
-    const completion = () => {
-      onScanRef.current(normalized)
-      onOpenChangeRef.current(false)
-    }
-    if (stop) {
-      void stop().finally(completion)
-    } else {
-      completion()
-    }
+    if (stop) await stop()
   }, [])
 
-  /* -----------------------------------------------------------------
-   * Frame handler — used by both engines via this closure.
-   * Holds the gate during warmup; runs validation + double-read logic.
-   * ----------------------------------------------------------------- */
-  const handleCandidate = useCallback(
-    (raw: string) => {
+  const finish = useCallback(
+    (isbn: string) => {
       if (detectedRef.current) return
-      if (Date.now() < readyAtRef.current) return
+      detectedRef.current = true
+      setStatus("loading")
+      setMessage(`ISBN: ${isbn}`)
+      void stopLive().finally(() => {
+        onScanRef.current(isbn)
+        onOpenChangeRef.current(false)
+      })
+    },
+    [stopLive],
+  )
 
+  const onCandidate = useCallback(
+    (raw: string) => {
+      if (detectedRef.current || Date.now() < readyAtRef.current) return
       const validated = validateScannedIsbn(raw)
-      if ("error" in validated) {
-        // Don't reset stable counter — invalid frames between valid reads are
-        // common during autofocus hunting.
-        if (stableRef.current.lastCode === null) {
+      if (!validated.ok) {
+        if (confirmRef.current.code == null) {
           setMessage("Center the ISBN barcode in the frame.")
         }
         return
       }
-
-      const confirmed = pushStableRead(stableRef.current, validated.normalized)
-      if (!confirmed) {
+      const now = Date.now()
+      if (confirmRef.current.code === validated.isbn && now - confirmRef.current.at <= CONFIRM_MS) {
+        confirmRef.current.count += 1
+      } else {
+        confirmRef.current = { code: validated.isbn, at: now, count: 1 }
+      }
+      confirmRef.current.at = now
+      if (confirmRef.current.count < CONFIRM_COUNT) {
         setMessage("Got it — hold steady…")
         return
       }
-      finishScan(validated.normalized)
+      finish(validated.isbn)
     },
-    [finishScan],
+    [finish],
   )
 
-  /* -----------------------------------------------------------------
-   * Native engine — getUserMedia + BarcodeDetector polling loop.
-   * Returns a stop function, or null if it could not start.
-   * ----------------------------------------------------------------- */
-  const startNativeEngine = useCallback(
-    async (container: HTMLDivElement): Promise<(() => Promise<void>) | null> => {
-      const detector = createNativeDetector()
-      if (!detector) return null
+  const startNativeLive = useCallback(
+    async (container: HTMLDivElement, session: number): Promise<(() => Promise<void>) | null> => {
+      const detector = getDetector()
+      if (!detector || isIosOrSafari()) return null
 
-      let stream: MediaStream | null = null
+      let stream: MediaStream
       try {
         stream = await navigator.mediaDevices.getUserMedia({
-          video: PREFERRED_CONSTRAINTS,
+          video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
           audio: false,
         })
       } catch {
         try {
           stream = await navigator.mediaDevices.getUserMedia({
-            video: FALLBACK_CONSTRAINTS,
+            video: { facingMode: { ideal: "environment" } },
             audio: false,
           })
         } catch {
           return null
         }
       }
-
-      // Best-effort: pin to a non-macro back camera to prevent iOS from
-      // auto-switching cameras when subject distance changes.
-      const stableId = await pickStableBackCameraId()
-      if (stableId) {
-        try {
-          const swap = await navigator.mediaDevices.getUserMedia({
-            video: { ...PREFERRED_CONSTRAINTS, deviceId: { exact: stableId } },
-            audio: false,
-          })
-          stream.getTracks().forEach((t) => t.stop())
-          stream = swap
-        } catch {
-          // ignore — keep original stream
-        }
+      if (sessionRef.current !== session) {
+        stream.getTracks().forEach((t) => t.stop())
+        return null
       }
 
       const video = document.createElement("video")
       video.setAttribute("playsinline", "true")
-      video.setAttribute("muted", "true")
       video.playsInline = true
       video.muted = true
       video.autoplay = true
-      video.className =
-        "absolute inset-0 h-full w-full object-cover"
-      container.appendChild(video)
-      nativeVideoRef.current = video
+      video.className = "absolute inset-0 h-full w-full object-cover"
+      container.replaceChildren(video)
       video.srcObject = stream
-
       try {
         await video.play()
       } catch {
-        // Some browsers throw AbortError on quick close; safe to ignore.
+        /* ignore */
       }
 
       let running = true
-      let pollTimer: ReturnType<typeof setTimeout> | null = null
-
+      let timer: ReturnType<typeof setTimeout> | null = null
       const tick = async () => {
-        if (!running) return
+        if (!running || sessionRef.current !== session) return
         if (video.readyState >= 2 && video.videoWidth > 0) {
           try {
             const codes = await detector.detect(video)
             for (const code of codes) {
-              if (code.format !== "ean_13") continue
-              handleCandidate(code.rawValue)
+              if (code.format && code.format !== "ean_13") continue
+              onCandidate(code.rawValue)
               if (detectedRef.current) return
             }
           } catch {
-            // Transient detect errors are normal (e.g. resize). Keep polling.
+            /* keep polling */
           }
         }
-        if (running) {
-          pollTimer = setTimeout(tick, NATIVE_SCAN_INTERVAL_MS)
-        }
+        if (running) timer = setTimeout(tick, POLL_MS)
       }
-
-      pollTimer = setTimeout(tick, NATIVE_SCAN_INTERVAL_MS)
+      timer = setTimeout(tick, POLL_MS)
 
       return async () => {
         running = false
-        if (pollTimer !== null) clearTimeout(pollTimer)
-        try {
-          video.pause()
-          video.srcObject = null
-        } catch {
-          // ignore
-        }
-        try {
-          stream?.getTracks().forEach((t) => t.stop())
-        } catch {
-          // ignore
-        }
-        try {
-          if (nativeVideoRef.current === video) {
-            nativeVideoRef.current = null
-          }
-          video.remove()
-        } catch {
-          // ignore
-        }
+        if (timer) clearTimeout(timer)
+        video.pause()
+        video.srcObject = null
+        stream.getTracks().forEach((t) => t.stop())
+        video.remove()
       }
     },
-    [handleCandidate],
+    [onCandidate],
   )
 
-  /* -----------------------------------------------------------------
-   * Quagga2 engine — fallback for browsers without BarcodeDetector.
-   * Conservative config: no advanced focus mode, modest resolution,
-   * default-locator patch size, no `area` constraint.
-   * ----------------------------------------------------------------- */
-  const startQuaggaEngine = useCallback(
-    async (
-      container: HTMLDivElement,
-      constraints: MediaTrackConstraints,
-      allowFallback: boolean,
-    ): Promise<(() => Promise<void>) | null> => {
-      const Q: QuaggaJSStatic = Quagga
+  const startQuaggaLive = useCallback(
+    async (container: HTMLDivElement, session: number): Promise<(() => Promise<void>) | null> => {
       let started = false
-      let detachDetected: (() => void) | null = null
-
-      const detectedHandler = (data: QuaggaJSResultObject) => {
-        const code = data?.codeResult?.code ?? null
+      const onDetected = (data: QuaggaJSResultObject) => {
+        const code = data?.codeResult?.code
         if (!code || data.codeResult?.format !== "ean_13") return
-        if (!quaggaReadLooksSharp(data)) return
-        handleCandidate(code)
+        onCandidate(code)
       }
-
-      const resolvedConstraints = allowFallback
-        ? await prepareBackCameraConstraints(constraints)
-        : constraints
 
       try {
         await new Promise<void>((resolve, reject) => {
-          Q.init(
+          Quagga.init(
             {
               inputStream: {
                 type: "LiveStream",
                 target: container,
-                constraints: resolvedConstraints,
+                constraints: {
+                  facingMode: { ideal: "environment" },
+                  width: { ideal: 640 },
+                  height: { ideal: 480 },
+                },
                 willReadFrequently: true,
               },
               decoder: { readers: ["ean_reader"] },
               locate: true,
               frequency: 8,
-              numOfWorkers:
-                typeof navigator !== "undefined"
-                  ? Math.max(1, Math.min(4, navigator.hardwareConcurrency || 2))
-                  : 2,
-              locator: {
-                halfSample: true,
-                patchSize: "medium",
-              },
+              numOfWorkers: 0,
+              locator: { halfSample: true, patchSize: "medium" },
             },
-            (err: Error | null) => (err ? reject(err) : resolve()),
+            (err) => (err ? reject(err) : resolve()),
           )
         })
       } catch {
-        if (allowFallback) {
-          return startQuaggaEngine(container, FALLBACK_CONSTRAINTS, false)
+        return null
+      }
+
+      if (sessionRef.current !== session) {
+        try {
+          await Quagga.stop()
+        } catch {
+          /* ignore */
         }
         return null
       }
 
       try {
-        Q.onDetected(detectedHandler)
-        detachDetected = () => Q.offDetected(detectedHandler)
-        Q.start()
+        Quagga.onDetected(onDetected)
+        Quagga.start()
         started = true
       } catch {
-        try {
-          detachDetected?.()
-        } catch {
-          // ignore
-        }
         return null
       }
 
       return async () => {
         try {
-          detachDetected?.()
+          Quagga.offDetected(onDetected)
         } catch {
-          // ignore
+          /* ignore */
         }
         if (started) {
           try {
-            await Q.stop()
+            await Quagga.stop()
           } catch {
-            // ignore
+            /* ignore */
           }
         }
         try {
-          if (typeof Q.CameraAccess?.release === "function") {
-            await Q.CameraAccess.release()
-          }
+          await Quagga.CameraAccess?.release?.()
         } catch {
-          // ignore
+          /* ignore */
         }
+        container.replaceChildren()
       }
     },
-    [handleCandidate],
+    [onCandidate],
   )
 
-  /* -----------------------------------------------------------------
-   * Lifecycle: when the dialog opens, start the best available engine.
-   * Keep dependency list small so parent re-renders don't tear down.
-   * ----------------------------------------------------------------- */
   useEffect(() => {
     if (!open) return
 
+    const session = ++sessionRef.current
+    detectedRef.current = false
+    confirmRef.current = { code: null, at: 0, count: 0 }
+    setManualError(null)
+    setStatus("loading")
+    setMessage("Opening camera…")
+
     let cancelled = false
-    let rafId = 0
-    let retries = 0
+    let raf = 0
 
     const launch = async () => {
       const container = containerRef.current
-      if (!container || cancelled) return
+      if (!container || cancelled || sessionRef.current !== session) return
 
-      detectedRef.current = false
-      readyAtRef.current = 0
-      stableRef.current = freshStableState()
-      setManualError(null)
-      setStatus("loading")
-      setMessage("Opening camera…")
-
-      const hasGUM =
-        typeof navigator !== "undefined" &&
-        navigator.mediaDevices != null &&
-        typeof navigator.mediaDevices.getUserMedia === "function"
-
-      if (!hasGUM) {
+      if (!navigator.mediaDevices?.getUserMedia) {
         setStatus("no-camera")
-        setMessage(
-          "Camera not supported in this browser. Use Take photo or type the ISBN below.",
-        )
+        setMessage("Camera not available. Use Take photo or type the ISBN.")
         return
       }
 
-      let stop: (() => Promise<void>) | null = null
+      container.replaceChildren()
+      let stop =
+        (await startNativeLive(container, session)) ??
+        (await startQuaggaLive(container, session))
 
-      // iPhone Safari: skip native probe — go straight to Quagga with stable back camera.
-      if (!prefersQuaggaLive()) {
-        const canNative = await nativeDetectorSupportsEan13()
-        if (cancelled) return
-        if (canNative) {
-          stop = await startNativeEngine(container)
-        }
-      }
-
-      if (!stop && !cancelled) {
-        stop = await startQuaggaEngine(container, QUAGGA_CONSTRAINTS, true)
-      }
-
-      if (cancelled) {
+      if (cancelled || sessionRef.current !== session) {
         await stop?.()
         return
       }
-
       if (!stop) {
         setStatus("no-camera")
-        setMessage(
-          "Could not open the camera. Allow camera access and try again, or use Take photo / type the ISBN below.",
-        )
+        setMessage("Could not open the camera. Use Take photo or type the ISBN.")
         return
       }
 
       stopLiveRef.current = stop
-      readyAtRef.current = Date.now() + CAMERA_WARMUP_MS
+      readyAtRef.current = Date.now() + WARMUP_MS
       setStatus("live")
-      setMessage("Point the camera at the barcode on the back of the book.")
+      setMessage("Point at the ISBN barcode on the back of the book.")
     }
 
-    const waitForRef = () => {
-      if (cancelled) return
+    let tries = 0
+    const wait = () => {
+      if (cancelled || sessionRef.current !== session) return
       if (!containerRef.current) {
-        retries += 1
-        if (retries >= MAX_SCANNER_REF_RETRIES) {
-          setStatus("error")
-          setMessage("Scanner view not ready. Please close and try again.")
+        tries += 1
+        if (tries > 90) {
+          setStatus("no-camera")
+          setMessage("Scanner view not ready. Use Take photo or type the ISBN.")
           return
         }
-        rafId = requestAnimationFrame(waitForRef)
+        raf = requestAnimationFrame(wait)
         return
       }
       void launch()
     }
-
-    rafId = requestAnimationFrame(waitForRef)
+    raf = requestAnimationFrame(wait)
 
     return () => {
       cancelled = true
-      cancelAnimationFrame(rafId)
+      cancelAnimationFrame(raf)
+      sessionRef.current += 1
       const stop = stopLiveRef.current
       stopLiveRef.current = null
       void stop?.()
-      setStatus("idle")
-      setMessage(null)
     }
-  }, [open, restartNonce, startNativeEngine, startQuaggaEngine])
-
-  /* -----------------------------------------------------------------
-   * UI handlers
-   * ----------------------------------------------------------------- */
-  const handleClose = useCallback(() => {
-    const stop = stopLiveRef.current
-    stopLiveRef.current = null
-    void stop?.()
-    setStatus("idle")
-    setMessage(null)
-    setManualError(null)
-    onOpenChange(false)
-  }, [onOpenChange])
-
-  const stopLiveScan = useCallback(async () => {
-    const stop = stopLiveRef.current
-    stopLiveRef.current = null
-    if (stop) await stop()
-  }, [])
-
-  const handlePhotoClick = () => {
-    void stopLiveScan().then(() => photoInputRef.current?.click())
-  }
-
-  const handlePhotoFile = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0]
-      if (photoInputRef.current) photoInputRef.current.value = ""
-      if (!file) return
-
-      setManualError(null)
-      setStatus("photo")
-      setMessage("Scanning image…")
-
-      try {
-        const decoded = await decodePhoto(file)
-        if (decoded) {
-          finishScan(decoded)
-        } else {
-          setMessage(
-            "No ISBN barcode found. Try a clearer photo of the back of the book, or type the ISBN below.",
-          )
-          setStatus("error")
-        }
-      } catch {
-        setMessage("Photo scan failed. Try a clearer image, or type the ISBN below.")
-        setStatus("error")
-      }
-    },
-    [finishScan],
-  )
-
-  const handleManualSubmit = useCallback(() => {
-    const validated = validateScannedIsbn(manualIsbn)
-    if ("error" in validated) {
-      setManualError(validated.error)
-      return
-    }
-    setManualError(null)
-    finishScan(validated.normalized)
-  }, [finishScan, manualIsbn])
+  }, [open, restartNonce, startNativeLive, startQuaggaLive])
 
   useEffect(() => {
     if (!open) {
       setManualIsbn("")
       setManualError(null)
+      setMessage(null)
+      setStatus("idle")
     }
   }, [open])
 
-  /* -----------------------------------------------------------------
-   * Render
-   * ----------------------------------------------------------------- */
+  const handleClose = () => {
+    sessionRef.current += 1
+    void stopLive()
+    setStatus("idle")
+    setMessage(null)
+    onOpenChange(false)
+  }
+
+  const handlePhotoClick = () => {
+    // Cancel stuck camera starts, but open the file picker in this same user gesture.
+    // iOS Safari ignores input.click() after an await — that broke Take photo.
+    sessionRef.current += 1
+    setStatus("idle")
+    setMessage("Choose or take a photo of the ISBN barcode.")
+    photoInputRef.current?.click()
+    void stopLive()
+  }
+
+  const handlePhotoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (photoInputRef.current) photoInputRef.current.value = ""
+    if (!file) return
+
+    setManualError(null)
+    setStatus("photo")
+    setMessage("Scanning photo…")
+
+    try {
+      // Ensure Quagga live singleton is fully released before decodeSingle.
+      await stopLive()
+      try {
+        await Quagga.stop()
+      } catch {
+        /* already stopped */
+      }
+
+      const isbn = await decodePhotoFile(file)
+      if (isbn) {
+        finish(isbn)
+        return
+      }
+      setStatus("error")
+      setMessage("No ISBN found in that photo. Try a clearer shot of the back barcode, or type it.")
+    } catch {
+      setStatus("error")
+      setMessage("Photo scan failed. Try again or type the ISBN.")
+    }
+  }
+
+  const handleManual = () => {
+    const validated = validateScannedIsbn(manualIsbn)
+    if (!validated.ok) {
+      setManualError(validated.error)
+      return
+    }
+    setManualError(null)
+    finish(validated.isbn)
+  }
+
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) handleClose() }}>
       <DialogContent
@@ -834,19 +542,14 @@ export function IsbnScannerDialog({
         <DialogHeader>
           <DialogTitle>Scan ISBN</DialogTitle>
           <DialogDescription id="isbn-scanner-description">
-            Type the ISBN if you already know it, use the live camera, or take a
-            photo of the barcode.
+            Type the ISBN, use the camera, or take a photo of the barcode.
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex min-w-0 flex-col gap-4">
-          {/* Manual ISBN entry — first to nudge the easiest path. */}
           <div className="rounded-lg border border-border bg-muted/30 p-3">
-            <Label
-              htmlFor="manual-isbn"
-              className="text-sm font-medium text-foreground"
-            >
-              Type ISBN (often on the copyright page too)
+            <Label htmlFor="manual-isbn" className="text-sm font-medium">
+              Type ISBN
             </Label>
             <div className="mt-2 flex flex-col gap-2 sm:flex-row">
               <Input
@@ -861,43 +564,36 @@ export function IsbnScannerDialog({
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     e.preventDefault()
-                    handleManualSubmit()
+                    handleManual()
                   }
                 }}
               />
-              <Button
-                type="button"
-                variant="default"
-                className="shrink-0"
-                onClick={handleManualSubmit}
-              >
+              <Button type="button" className="shrink-0" onClick={handleManual}>
                 Use ISBN
               </Button>
             </div>
-            {manualError && (
-              <p className="mt-2 text-xs text-destructive">{manualError}</p>
-            )}
+            {manualError && <p className="mt-2 text-xs text-destructive">{manualError}</p>}
           </div>
 
-          {/* Scanner viewport — same container for native <video> and Quagga's video. */}
           {status !== "no-camera" && (
             <div
               ref={containerRef}
-              className="relative aspect-video w-full min-w-0 max-w-full overflow-hidden rounded-lg border border-border bg-muted"
-              aria-hidden="true"
+              className="relative aspect-video w-full overflow-hidden rounded-lg border border-border bg-muted"
+              aria-hidden
             >
-              {status === "loading" && (
+              {(status === "loading" || status === "photo") && (
                 <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-muted text-muted-foreground">
                   <Loader2 className="h-8 w-8 animate-spin" />
-                  <span className="text-sm">Opening camera…</span>
+                  <span className="text-sm">
+                    {status === "photo" ? "Scanning photo…" : "Opening camera…"}
+                  </span>
                 </div>
               )}
-
-              {/* Visual scan-area guide — purely informative; both engines scan the full frame. */}
-              <div className="pointer-events-none absolute inset-0 z-20">
-                <div className="absolute inset-x-[8%] top-[22%] bottom-[22%] rounded-2xl border-2 border-white/90 shadow-[0_0_0_9999px_rgba(15,23,42,0.28)]" />
-                <div className="absolute inset-x-[14%] top-1/2 h-px -translate-y-1/2 bg-white/75" />
-              </div>
+              {status === "live" && (
+                <div className="pointer-events-none absolute inset-0 z-20">
+                  <div className="absolute inset-x-[8%] top-[22%] bottom-[22%] rounded-2xl border-2 border-white/90 shadow-[0_0_0_9999px_rgba(15,23,42,0.28)]" />
+                </div>
+              )}
             </div>
           )}
 
@@ -905,11 +601,7 @@ export function IsbnScannerDialog({
             <p
               role="status"
               aria-live="polite"
-              className={
-                status === "error"
-                  ? "text-sm text-destructive"
-                  : "text-sm text-muted-foreground"
-              }
+              className={status === "error" ? "text-sm text-destructive" : "text-sm text-muted-foreground"}
             >
               {message}
             </p>
@@ -922,32 +614,26 @@ export function IsbnScannerDialog({
               size="sm"
               className="gap-2"
               onClick={handlePhotoClick}
-              disabled={status === "loading"}
+              disabled={status === "photo"}
             >
               <Camera className="h-4 w-4" />
               Take photo
             </Button>
-            {(status === "error" || status === "no-camera") && (
+            {(status === "error" || status === "no-camera" || status === "idle") && open && (
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={() => {
                   setManualError(null)
-                  setStatus("idle")
                   setMessage(null)
-                  void stopLiveScan().then(() => setRestartNonce((v) => v + 1))
+                  setRestartNonce((n) => n + 1)
                 }}
               >
                 Try camera again
               </Button>
             )}
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={handleClose}
-            >
+            <Button type="button" variant="ghost" size="sm" onClick={handleClose}>
               Cancel
             </Button>
           </div>
