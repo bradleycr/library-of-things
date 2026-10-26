@@ -105,8 +105,8 @@ function AddBookContent() {
     }
   }, [searchParams])
 
-  const lookupIsbn = useCallback(async (isbnToLookUp?: string) => {
-    const value = (isbnToLookUp ?? isbn).trim().replace(/[\s-]/g, "")
+  const lookupIsbn = useCallback(async (isbnToLookUp: string) => {
+    const value = isbnToLookUp.trim().replace(/[\s-]/g, "")
     if (!value) return
     const is10 = value.length === 10
     const is13 = value.length === 13
@@ -130,11 +130,11 @@ function AddBookContent() {
       }
       const payload = (await response.json()) as IsbnMetadataLookupResponse
       const metadata = payload.metadata
-      setTitle(metadata.title || title)
-      setAuthor(metadata.author ?? author)
-      setEdition(metadata.edition ?? edition)
-      setCoverImageUrl(metadata.coverImageUrl ?? coverImageUrl)
-      setDescription(metadata.description ?? description)
+      if (metadata.title) setTitle(metadata.title)
+      if (metadata.author) setAuthor(metadata.author)
+      if (metadata.edition) setEdition(metadata.edition)
+      if (metadata.coverImageUrl) setCoverImageUrl(metadata.coverImageUrl)
+      if (metadata.description) setDescription(metadata.description)
       setIsbnLookedUp(true)
     } catch (error) {
       if ((error as Error).name === "AbortError") return
@@ -145,7 +145,7 @@ function AddBookContent() {
     } finally {
       if (!signal.aborted) setLookupInProgress(false)
     }
-  }, [isbn, title, author, edition, coverImageUrl, description])
+  }, [])
 
   // Debounced auto-lookup when ISBN looks complete (10 or 13 digits). Only depends on isbn so we don't re-trigger after title/author update from a previous lookup.
   useEffect(() => {
@@ -772,6 +772,7 @@ function AddBookContent() {
           setIsbnLookedUp(false)
           setCoverImageUrl("")
           setIsbnScannerOpen(false)
+          void lookupIsbn(value)
         }}
       />
     </div>

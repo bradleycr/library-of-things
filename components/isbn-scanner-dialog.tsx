@@ -1,16 +1,34 @@
 "use client"
 
 /**
- * ISBN scanner — keep this lean.
+ * ISBN Barcode Scanner Dialog
  *
- * Live: BarcodeDetector + getUserMedia when available; Quagga2 otherwise (iPhone Safari).
- * Photo: always available (never blocked by a stuck camera). Native detect(Blob) first,
- * then Quagga decodeSingle. Manual ISBN entry is the fallback.
+ * Architecture & iOS Crash Prevention:
+ * ────────────────────────────────────
+ * 1. Zero third-party DOM mutation:
+ *    Previously, Quagga2's `LiveStream` appended `<video>` and `<canvas>` nodes
+ *    directly into a React-managed container that also rendered conditional React
+ *    children (`<Loader2>`, scan guide). When status transitioned, React's
+ *    reconciler threw `NotFoundError: The node to be removed is not a child of
+ *    this node`, crashing the entire client app on iPhone Safari.
+ *    Now, React owns a single `<video>` element (`ref={videoRef}`) and never
+ *    shares its DOM subtree with imperative code.
+ *
+ * 2. Single-stream camera lifecycle:
+ *    Opens `navigator.mediaDevices.getUserMedia` once per dialog session with
+ *    clean cancellation (`sessionRef`). If the user taps "Take photo", closes
+ *    the dialog, or submits manually, all tracks are stopped immediately.
+ *
+ * 3. Crash-proof photo decoding:
+ *    iPhone camera photos are 12MP–48MP with EXIF orientation tags. Passing raw
+ *    `blob:` URLs to `Quagga.decodeSingle` caused iOS Safari tab crashes / OOM
+ *    and failed on portrait EXIF photos. `decodeIsbnFromPhotoFile` draws the
+ *    photo to a small offscreen `<canvas>` first (normalizing EXIF and bounding
+ *    memory) and runs native + multi-angle adaptive scanline + Quagga passes.
  */
 
-import Quagga, { type QuaggaJSResultObject } from "@ericblade/quagga2"
 import { useCallback, useEffect, useRef, useState } from "react"
-import { Camera, Loader2 } from "lucide-react"
+import { Camera, ImageUp, Loader2, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -22,10 +40,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import {
-  normalizeIsbn,
-  validateIsbnCheckDigit,
-  isBooklandEan13,
-} from "@/lib/isbn-utils"
+  decodeImageDataScanlines,
+  decodeIsbnFromPhotoFile,
+  detectWithNative,
+  validateScannedIsbn,
+} from "@/lib/isbn-scanner-engine"
 
 export interface IsbnScannerDialogProps {
   open: boolean
@@ -33,159 +52,61 @@ export interface IsbnScannerDialogProps {
   onScan: (isbn: string) => void
 }
 
-const WARMUP_MS = 500
-const CONFIRM_MS = 2500
-const CONFIRM_COUNT = 2
-const POLL_MS = 150
+/** Brief delay after camera starts so autofocus settles before accepting reads. */
+const WARMUP_MS = 350
+/** Window for two confirming reads from live video frames. */
+const CONFIRM_WINDOW_MS = 3000
+/** Number of matching valid frames required during live video scanning. */
+const REQUIRED_CONFIRMATIONS = 2
+/** Interval between live frame decode ticks (~7.5 fps keeps phones cool). */
+const LIVE_POLL_MS = 130
 
-type Status = "idle" | "loading" | "live" | "photo" | "error" | "no-camera"
+type ScannerStatus = "idle" | "loading" | "live" | "photo" | "error" | "no-camera"
 
-function isIosOrSafari(): boolean {
-  if (typeof navigator === "undefined") return true
-  const ua = navigator.userAgent
-  return /iPhone|iPad|iPod/i.test(ua) || (/Safari/i.test(ua) && !/Chrome|CriOS|FxiOS|Edg/i.test(ua))
-}
-
-function validateScannedIsbn(raw: string): { ok: true; isbn: string } | { ok: false; error: string } {
-  const isbn = normalizeIsbn(raw)
-  if (!isbn) {
-    return {
-      ok: false,
-      error:
-        "Not recognized as an ISBN. Use the 13-digit barcode on the back of the book, or type it.",
-    }
+/**
+ * Picks a stable rear camera on multi-lens phones (avoids ultra-wide / telephoto
+ * when labels are available after permission is granted).
+ */
+async function pickStableRearDeviceId(): Promise<string | null> {
+  if (typeof navigator === "undefined" || !navigator.mediaDevices?.enumerateDevices) {
+    return null
   }
-  if (!validateIsbnCheckDigit(isbn)) {
-    return { ok: false, error: "That ISBN fails its check digit. Try again or type it." }
-  }
-  if (isbn.length === 13 && !isBooklandEan13(isbn)) {
-    return {
-      ok: false,
-      error: "That barcode is not a book ISBN (needs 978/979). Scan the ISBN on the book.",
-    }
-  }
-  return { ok: true, isbn }
-}
-
-type Detector = {
-  detect: (source: ImageBitmapSource) => Promise<Array<{ rawValue: string; format: string }>>
-}
-
-function getDetector(): Detector | null {
-  if (typeof window === "undefined") return null
-  const Ctor = (window as unknown as { BarcodeDetector?: new (o?: { formats?: string[] }) => Detector })
-    .BarcodeDetector
-  if (!Ctor) return null
   try {
-    return new Ctor({ formats: ["ean_13"] })
+    const devices = await navigator.mediaDevices.enumerateDevices()
+    const cameras = devices.filter((d) => d.kind === "videoinput" && d.deviceId)
+    if (cameras.length <= 1) return null
+
+    const isBack = (label: string) => /back|rear|environment|rück|arrière/i.test(label)
+    const isAuxLens = (label: string) => /ultra|tele|macro|depth|desk/i.test(label)
+
+    const primaryBack = cameras.find((c) => isBack(c.label) && !isAuxLens(c.label))
+    if (primaryBack) return primaryBack.deviceId
+
+    const anyBack = cameras.find((c) => isBack(c.label))
+    return anyBack?.deviceId ?? null
   } catch {
     return null
   }
 }
 
-async function decodeWithNative(source: ImageBitmapSource): Promise<string | null> {
-  const detector = getDetector()
-  if (!detector) return null
-  try {
-    const codes = await detector.detect(source)
-    for (const code of codes) {
-      if (code.format && code.format !== "ean_13") continue
-      const validated = validateScannedIsbn(code.rawValue)
-      if (validated.ok) return validated.isbn
-    }
-  } catch {
-    /* fall through */
-  }
-  return null
-}
-
-async function decodeWithQuagga(imageUrl: string): Promise<string | null> {
-  const sizes = [1600, 1200, 800]
-  for (const size of sizes) {
-    try {
-      const result = await new Promise<QuaggaJSResultObject | null>((resolve) => {
-        let settled = false
-        const done = (value: QuaggaJSResultObject | null) => {
-          if (settled) return
-          settled = true
-          resolve(value)
-        }
-        const timer = setTimeout(() => done(null), 8000)
-        const finish = (value: QuaggaJSResultObject | null) => {
-          clearTimeout(timer)
-          done(value)
-        }
-        try {
-          const maybePromise = Quagga.decodeSingle(
-            {
-              src: imageUrl,
-              numOfWorkers: 0,
-              locate: true,
-              decoder: { readers: ["ean_reader"] },
-              locator: { patchSize: "medium", halfSample: false },
-              inputStream: {
-                type: "ImageStream",
-                size,
-                singleChannel: false,
-              },
-            },
-            (r) => finish(r ?? null),
-          )
-          // Quagga2 may resolve via callback and/or Promise — first wins.
-          void Promise.resolve(maybePromise).then(
-            (r) => finish((r as QuaggaJSResultObject | null | undefined) ?? null),
-            () => finish(null),
-          )
-        } catch {
-          finish(null)
-        }
-      })
-      const code = result?.codeResult?.code
-      if (!code) continue
-      const validated = validateScannedIsbn(code)
-      if (validated.ok) return validated.isbn
-    } catch {
-      /* try next size */
-    }
-  }
-  return null
-}
-
-async function decodePhotoFile(file: File): Promise<string | null> {
-  // Chrome/Android: Blob is a valid ImageBitmapSource.
-  const fromNative = await decodeWithNative(file)
-  if (fromNative) return fromNative
-
-  // Load as an <img> for a second native attempt (some engines prefer elements).
-  const objectUrl = URL.createObjectURL(file)
-  try {
-    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const el = new Image()
-      el.onload = () => resolve(el)
-      el.onerror = () => reject(new Error("image load failed"))
-      el.src = objectUrl
-    })
-    const fromImg = await decodeWithNative(img)
-    if (fromImg) return fromImg
-    return await decodeWithQuagga(objectUrl)
-  } finally {
-    URL.revokeObjectURL(objectUrl)
-  }
-}
-
-export function IsbnScannerDialog({ open, onOpenChange, onScan }: IsbnScannerDialogProps) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const photoInputRef = useRef<HTMLInputElement>(null)
-  const stopLiveRef = useRef<(() => Promise<void>) | null>(null)
+export function IsbnScannerDialog({
+  open,
+  onOpenChange,
+  onScan,
+}: IsbnScannerDialogProps) {
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
+  const streamRef = useRef<MediaStream | null>(null)
   const sessionRef = useRef(0)
-  const detectedRef = useRef(false)
+  const completedRef = useRef(false)
   const readyAtRef = useRef(0)
-  const confirmRef = useRef<{ code: string | null; at: number; count: number }>({
-    code: null,
+  const confirmRef = useRef<{ isbn: string | null; at: number; count: number }>({
+    isbn: null,
     at: 0,
     count: 0,
   })
 
+  // Keep parent callbacks in refs so inline functions in parents never restart the camera effect
   const onScanRef = useRef(onScan)
   const onOpenChangeRef = useRef(onOpenChange)
   useEffect(() => {
@@ -193,278 +114,268 @@ export function IsbnScannerDialog({ open, onOpenChange, onScan }: IsbnScannerDia
     onOpenChangeRef.current = onOpenChange
   }, [onScan, onOpenChange])
 
-  const [status, setStatus] = useState<Status>("idle")
+  const [status, setStatus] = useState<ScannerStatus>("idle")
   const [message, setMessage] = useState<string | null>(null)
   const [manualIsbn, setManualIsbn] = useState("")
   const [manualError, setManualError] = useState<string | null>(null)
   const [restartNonce, setRestartNonce] = useState(0)
 
-  const stopLive = useCallback(async () => {
-    const stop = stopLiveRef.current
-    stopLiveRef.current = null
-    if (stop) await stop()
+  /** Stops any active MediaStream and detaches it from `<video>`. */
+  const stopCamera = useCallback(() => {
+    const stream = streamRef.current
+    streamRef.current = null
+    if (stream) {
+      for (const track of stream.getTracks()) {
+        try {
+          track.stop()
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+    const video = videoRef.current
+    if (video) {
+      try {
+        video.pause()
+        video.srcObject = null
+      } catch {
+        /* ignore */
+      }
+    }
   }, [])
 
-  const finish = useCallback(
+  /** Completes the scan once, stops the camera, and notifies the parent. */
+  const finishWithIsbn = useCallback(
     (isbn: string) => {
-      if (detectedRef.current) return
-      detectedRef.current = true
+      if (completedRef.current) return
+      completedRef.current = true
+      sessionRef.current += 1
+      stopCamera()
       setStatus("loading")
-      setMessage(`ISBN: ${isbn}`)
-      void stopLive().finally(() => {
-        onScanRef.current(isbn)
-        onOpenChangeRef.current(false)
-      })
+      setMessage(`ISBN found: ${isbn}`)
+      onScanRef.current(isbn)
+      onOpenChangeRef.current(false)
     },
-    [stopLive],
+    [stopCamera],
   )
 
-  const onCandidate = useCallback(
-    (raw: string) => {
-      if (detectedRef.current || Date.now() < readyAtRef.current) return
-      const validated = validateScannedIsbn(raw)
-      if (!validated.ok) {
-        if (confirmRef.current.code == null) {
-          setMessage("Center the ISBN barcode in the frame.")
+  /** Records a live candidate ISBN and finishes once confirmed across 2 reads. */
+  const handleLiveCandidate = useCallback(
+    (isbn: string) => {
+      if (completedRef.current || Date.now() < readyAtRef.current) return
+      const now = Date.now()
+      const prev = confirmRef.current
+      if (prev.isbn === isbn && now - prev.at <= CONFIRM_WINDOW_MS) {
+        prev.count += 1
+      } else {
+        prev.isbn = isbn
+        prev.count = 1
+      }
+      prev.at = now
+
+      if (prev.count < REQUIRED_CONFIRMATIONS) {
+        setMessage(`Detected ${isbn} — hold steady…`)
+        return
+      }
+      finishWithIsbn(isbn)
+    },
+    [finishWithIsbn],
+  )
+
+  /** Live camera effect — React owns the `<video>` element; no third-party DOM mutation. */
+  useEffect(() => {
+    if (!open) return
+
+    const session = ++sessionRef.current
+    completedRef.current = false
+    confirmRef.current = { isbn: null, at: 0, count: 0 }
+    setManualError(null)
+    setStatus("loading")
+    setMessage("Opening camera…")
+
+    let pollTimer: ReturnType<typeof setTimeout> | null = null
+    const workCanvas = document.createElement("canvas")
+    const workCtx = workCanvas.getContext("2d", { willReadFrequently: true })
+
+    const startLive = async () => {
+      if (
+        typeof navigator === "undefined" ||
+        !navigator.mediaDevices ||
+        typeof navigator.mediaDevices.getUserMedia !== "function"
+      ) {
+        if (sessionRef.current === session) {
+          setStatus("no-camera")
+          setMessage("Live camera is unavailable here. Tap “Take photo” or type the ISBN above.")
         }
         return
       }
-      const now = Date.now()
-      if (confirmRef.current.code === validated.isbn && now - confirmRef.current.at <= CONFIRM_MS) {
-        confirmRef.current.count += 1
-      } else {
-        confirmRef.current = { code: validated.isbn, at: now, count: 1 }
-      }
-      confirmRef.current.at = now
-      if (confirmRef.current.count < CONFIRM_COUNT) {
-        setMessage("Got it — hold steady…")
-        return
-      }
-      finish(validated.isbn)
-    },
-    [finish],
-  )
 
-  const startNativeLive = useCallback(
-    async (container: HTMLDivElement, session: number): Promise<(() => Promise<void>) | null> => {
-      const detector = getDetector()
-      if (!detector || isIosOrSafari()) return null
-
-      let stream: MediaStream
+      let stream: MediaStream | null = null
       try {
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
+          video: {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
           audio: false,
         })
       } catch {
         try {
           stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: { ideal: "environment" } },
+            video: { facingMode: "environment" },
             audio: false,
           })
         } catch {
-          return null
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: true,
+              audio: false,
+            })
+          } catch {
+            stream = null
+          }
         }
       }
+
       if (sessionRef.current !== session) {
-        stream.getTracks().forEach((t) => t.stop())
-        return null
+        stream?.getTracks().forEach((t) => t.stop())
+        return
       }
 
-      const video = document.createElement("video")
-      video.setAttribute("playsinline", "true")
-      video.playsInline = true
-      video.muted = true
-      video.autoplay = true
-      video.className = "absolute inset-0 h-full w-full object-cover"
-      container.replaceChildren(video)
+      if (!stream) {
+        setStatus("no-camera")
+        setMessage("Camera access was blocked or unavailable. Tap “Take photo” or type the ISBN.")
+        return
+      }
+
+      // If the device has multiple rear lenses and picked an ultra-wide/macro lens, switch cleanly to primary rear
+      const preferredId = await pickStableRearDeviceId()
+      if (sessionRef.current !== session) {
+        stream.getTracks().forEach((t) => t.stop())
+        return
+      }
+      const currentSettings = stream.getVideoTracks()[0]?.getSettings?.()
+      if (preferredId && currentSettings?.deviceId && currentSettings.deviceId !== preferredId) {
+        try {
+          const betterStream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              deviceId: { exact: preferredId },
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            },
+            audio: false,
+          })
+          stream.getTracks().forEach((t) => t.stop())
+          stream = betterStream
+        } catch {
+          /* keep original stream */
+        }
+      }
+
+      if (sessionRef.current !== session) {
+        stream.getTracks().forEach((t) => t.stop())
+        return
+      }
+
+      streamRef.current = stream
+      const video = videoRef.current
+      if (!video) {
+        stopCamera()
+        return
+      }
+
       video.srcObject = stream
       try {
         await video.play()
       } catch {
-        /* ignore */
-      }
-
-      let running = true
-      let timer: ReturnType<typeof setTimeout> | null = null
-      const tick = async () => {
-        if (!running || sessionRef.current !== session) return
-        if (video.readyState >= 2 && video.videoWidth > 0) {
-          try {
-            const codes = await detector.detect(video)
-            for (const code of codes) {
-              if (code.format && code.format !== "ean_13") continue
-              onCandidate(code.rawValue)
-              if (detectedRef.current) return
-            }
-          } catch {
-            /* keep polling */
-          }
-        }
-        if (running) timer = setTimeout(tick, POLL_MS)
-      }
-      timer = setTimeout(tick, POLL_MS)
-
-      return async () => {
-        running = false
-        if (timer) clearTimeout(timer)
-        video.pause()
-        video.srcObject = null
-        stream.getTracks().forEach((t) => t.stop())
-        video.remove()
-      }
-    },
-    [onCandidate],
-  )
-
-  const startQuaggaLive = useCallback(
-    async (container: HTMLDivElement, session: number): Promise<(() => Promise<void>) | null> => {
-      let started = false
-      const onDetected = (data: QuaggaJSResultObject) => {
-        const code = data?.codeResult?.code
-        if (!code || data.codeResult?.format !== "ean_13") return
-        onCandidate(code)
-      }
-
-      try {
-        await new Promise<void>((resolve, reject) => {
-          Quagga.init(
-            {
-              inputStream: {
-                type: "LiveStream",
-                target: container,
-                constraints: {
-                  facingMode: { ideal: "environment" },
-                  width: { ideal: 640 },
-                  height: { ideal: 480 },
-                },
-                willReadFrequently: true,
-              },
-              decoder: { readers: ["ean_reader"] },
-              locate: true,
-              frequency: 8,
-              numOfWorkers: 0,
-              locator: { halfSample: true, patchSize: "medium" },
-            },
-            (err) => (err ? reject(err) : resolve()),
-          )
-        })
-      } catch {
-        return null
+        /* autoplay with muted+playsinline succeeds once metadata arrives */
       }
 
       if (sessionRef.current !== session) {
-        try {
-          await Quagga.stop()
-        } catch {
-          /* ignore */
-        }
-        return null
-      }
-
-      try {
-        Quagga.onDetected(onDetected)
-        Quagga.start()
-        started = true
-      } catch {
-        return null
-      }
-
-      return async () => {
-        try {
-          Quagga.offDetected(onDetected)
-        } catch {
-          /* ignore */
-        }
-        if (started) {
-          try {
-            await Quagga.stop()
-          } catch {
-            /* ignore */
-          }
-        }
-        try {
-          await Quagga.CameraAccess?.release?.()
-        } catch {
-          /* ignore */
-        }
-        container.replaceChildren()
-      }
-    },
-    [onCandidate],
-  )
-
-  useEffect(() => {
-    if (!open) return
-
-    const session = ++sessionRef.current
-    detectedRef.current = false
-    confirmRef.current = { code: null, at: 0, count: 0 }
-    setManualError(null)
-    setStatus("loading")
-    setMessage("Opening camera…")
-
-    let cancelled = false
-    let raf = 0
-
-    const launch = async () => {
-      const container = containerRef.current
-      if (!container || cancelled || sessionRef.current !== session) return
-
-      if (!navigator.mediaDevices?.getUserMedia) {
-        setStatus("no-camera")
-        setMessage("Camera not available. Use Take photo or type the ISBN.")
+        stopCamera()
         return
       }
 
-      container.replaceChildren()
-      let stop =
-        (await startNativeLive(container, session)) ??
-        (await startQuaggaLive(container, session))
-
-      if (cancelled || sessionRef.current !== session) {
-        await stop?.()
-        return
-      }
-      if (!stop) {
-        setStatus("no-camera")
-        setMessage("Could not open the camera. Use Take photo or type the ISBN.")
-        return
-      }
-
-      stopLiveRef.current = stop
       readyAtRef.current = Date.now() + WARMUP_MS
       setStatus("live")
-      setMessage("Point at the ISBN barcode on the back of the book.")
+      setMessage("Center the 13-digit barcode on the back of the book.")
+
+      const tick = async () => {
+        if (sessionRef.current !== session || completedRef.current) return
+        const v = videoRef.current
+        if (v && v.readyState >= 2 && v.videoWidth > 32 && v.videoHeight > 32 && workCtx) {
+          try {
+            // Crop middle band (84% width × 60% height) where the guide box sits
+            const vw = v.videoWidth
+            const vh = v.videoHeight
+            const sx = Math.floor(vw * 0.06)
+            const sy = Math.floor(vh * 0.18)
+            const sw = Math.floor(vw * 0.88)
+            const sh = Math.floor(vh * 0.64)
+
+            const scale = Math.min(1, 960 / Math.max(sw, sh))
+            const cw = Math.max(120, Math.round(sw * scale))
+            const ch = Math.max(80, Math.round(sh * scale))
+
+            if (workCanvas.width !== cw) workCanvas.width = cw
+            if (workCanvas.height !== ch) workCanvas.height = ch
+
+            workCtx.drawImage(v, sx, sy, sw, sh, 0, 0, cw, ch)
+
+            // 1. Native detector if available (fast hardware path on Android / Chrome)
+            const nativeIsbn = await detectWithNative(workCanvas)
+            if (sessionRef.current !== session || completedRef.current) return
+            if (nativeIsbn) {
+              handleLiveCandidate(nativeIsbn)
+              if (completedRef.current) return
+            } else {
+              // 2. Pure-JS multi-threshold scanline decoder (works on iPhone Safari)
+              const imgData = workCtx.getImageData(0, 0, cw, ch)
+              // Require 2 scanlines in the same frame OR 2 consecutive frames
+              const multiLineIsbn = decodeImageDataScanlines(imgData, {
+                exhaustive: false,
+                requireMultipleLines: true,
+              })
+              if (multiLineIsbn) {
+                // Two distinct scanlines in the same frame already confirmed this ISBN;
+                // count it twice so clean barcodes lock in right away without feeling sluggish.
+                handleLiveCandidate(multiLineIsbn)
+                if (!completedRef.current) handleLiveCandidate(multiLineIsbn)
+                if (completedRef.current) return
+              } else {
+                const singleLineIsbn = decodeImageDataScanlines(imgData, {
+                  exhaustive: false,
+                  requireMultipleLines: false,
+                })
+                if (singleLineIsbn) {
+                  handleLiveCandidate(singleLineIsbn)
+                  if (completedRef.current) return
+                }
+              }
+            }
+          } catch {
+            /* transient frame read error — continue polling */
+          }
+        }
+        if (sessionRef.current === session && !completedRef.current) {
+          pollTimer = setTimeout(tick, LIVE_POLL_MS)
+        }
+      }
+
+      pollTimer = setTimeout(tick, LIVE_POLL_MS)
     }
 
-    let tries = 0
-    const wait = () => {
-      if (cancelled || sessionRef.current !== session) return
-      if (!containerRef.current) {
-        tries += 1
-        if (tries > 90) {
-          setStatus("no-camera")
-          setMessage("Scanner view not ready. Use Take photo or type the ISBN.")
-          return
-        }
-        raf = requestAnimationFrame(wait)
-        return
-      }
-      void launch()
-    }
-    raf = requestAnimationFrame(wait)
+    void startLive()
 
     return () => {
-      cancelled = true
-      cancelAnimationFrame(raf)
       sessionRef.current += 1
-      const stop = stopLiveRef.current
-      stopLiveRef.current = null
-      void stop?.()
+      if (pollTimer) clearTimeout(pollTimer)
+      stopCamera()
     }
-  }, [open, restartNonce, startNativeLive, startQuaggaLive])
+  }, [open, restartNonce, handleLiveCandidate, stopCamera])
 
+  // Reset form state when dialog closes
   useEffect(() => {
     if (!open) {
       setManualIsbn("")
@@ -474,67 +385,73 @@ export function IsbnScannerDialog({ open, onOpenChange, onScan }: IsbnScannerDia
     }
   }, [open])
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     sessionRef.current += 1
-    void stopLive()
+    stopCamera()
     setStatus("idle")
     setMessage(null)
+    setManualError(null)
     onOpenChange(false)
-  }
+  }, [onOpenChange, stopCamera])
 
-  const handlePhotoClick = () => {
-    // Cancel stuck camera starts, but open the file picker in this same user gesture.
-    // iOS Safari ignores input.click() after an await — that broke Take photo.
+  /**
+   * Opens the native camera / photo picker synchronously within the click gesture
+   * (required by iOS Safari), while stopping the live stream so the hardware
+   * camera is free for the native camera sheet.
+   */
+  const handleTakePhotoClick = () => {
     sessionRef.current += 1
+    stopCamera()
+    setManualError(null)
     setStatus("idle")
-    setMessage("Choose or take a photo of the ISBN barcode.")
-    photoInputRef.current?.click()
-    void stopLive()
+    setMessage("Take a clear photo of the barcode on the back of the book.")
+    cameraInputRef.current?.click()
   }
 
-  const handlePhotoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (photoInputRef.current) photoInputRef.current.value = ""
+    if (cameraInputRef.current) cameraInputRef.current.value = ""
     if (!file) return
 
+    sessionRef.current += 1
+    stopCamera()
     setManualError(null)
     setStatus("photo")
-    setMessage("Scanning photo…")
+    setMessage("Reading barcode from photo…")
 
     try {
-      // Ensure Quagga live singleton is fully released before decodeSingle.
-      await stopLive()
-      try {
-        await Quagga.stop()
-      } catch {
-        /* already stopped */
-      }
-
-      const isbn = await decodePhotoFile(file)
+      const isbn = await decodeIsbnFromPhotoFile(file)
       if (isbn) {
-        finish(isbn)
+        finishWithIsbn(isbn)
         return
       }
       setStatus("error")
-      setMessage("No ISBN found in that photo. Try a clearer shot of the back barcode, or type it.")
+      setMessage(
+        "Couldn’t read a 978/979 ISBN barcode from that photo. Try a closer, well-lit shot of the barcode, or type the digits above.",
+      )
     } catch {
       setStatus("error")
-      setMessage("Photo scan failed. Try again or type the ISBN.")
+      setMessage("Couldn’t process that photo. Try another shot or type the ISBN above.")
     }
   }
 
-  const handleManual = () => {
+  const handleManualSubmit = () => {
     const validated = validateScannedIsbn(manualIsbn)
     if (!validated.ok) {
       setManualError(validated.error)
       return
     }
     setManualError(null)
-    finish(validated.isbn)
+    finishWithIsbn(validated.isbn)
   }
 
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (!next) handleClose() }}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) handleClose()
+      }}
+    >
       <DialogContent
         className="max-h-[85vh] w-[min(100vw-2rem,28rem)] max-w-[calc(100vw-2rem)] overflow-y-auto"
         aria-describedby="isbn-scanner-description"
@@ -542,11 +459,12 @@ export function IsbnScannerDialog({ open, onOpenChange, onScan }: IsbnScannerDia
         <DialogHeader>
           <DialogTitle>Scan ISBN</DialogTitle>
           <DialogDescription id="isbn-scanner-description">
-            Type the ISBN, use the camera, or take a photo of the barcode.
+            Point your camera at the 13-digit barcode, snap a photo, or type the ISBN.
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex min-w-0 flex-col gap-4">
+          {/* Manual ISBN input — always available at the top */}
           <div className="rounded-lg border border-border bg-muted/30 p-3">
             <Label htmlFor="manual-isbn" className="text-sm font-medium">
               Type ISBN
@@ -555,6 +473,7 @@ export function IsbnScannerDialog({ open, onOpenChange, onScan }: IsbnScannerDia
               <Input
                 id="manual-isbn"
                 inputMode="text"
+                autoComplete="off"
                 placeholder="9780199678112"
                 value={manualIsbn}
                 onChange={(e) => {
@@ -564,34 +483,44 @@ export function IsbnScannerDialog({ open, onOpenChange, onScan }: IsbnScannerDia
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     e.preventDefault()
-                    handleManual()
+                    handleManualSubmit()
                   }
                 }}
               />
-              <Button type="button" className="shrink-0" onClick={handleManual}>
+              <Button type="button" className="shrink-0" onClick={handleManualSubmit}>
                 Use ISBN
               </Button>
             </div>
             {manualError && <p className="mt-2 text-xs text-destructive">{manualError}</p>}
           </div>
 
+          {/* Live camera viewport — React exclusively owns all child DOM nodes */}
           {status !== "no-camera" && (
             <div
-              ref={containerRef}
-              className="relative aspect-video w-full overflow-hidden rounded-lg border border-border bg-muted"
-              aria-hidden
+              className="relative aspect-video w-full overflow-hidden rounded-lg border border-border bg-black"
+              aria-hidden="true"
             >
+              <video
+                ref={videoRef}
+                playsInline
+                muted
+                autoPlay
+                className="h-full w-full object-cover"
+              />
+
               {(status === "loading" || status === "photo") && (
                 <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-muted text-muted-foreground">
                   <Loader2 className="h-8 w-8 animate-spin" />
                   <span className="text-sm">
-                    {status === "photo" ? "Scanning photo…" : "Opening camera…"}
+                    {status === "photo" ? "Reading barcode from photo…" : "Opening camera…"}
                   </span>
                 </div>
               )}
+
               {status === "live" && (
                 <div className="pointer-events-none absolute inset-0 z-20">
-                  <div className="absolute inset-x-[8%] top-[22%] bottom-[22%] rounded-2xl border-2 border-white/90 shadow-[0_0_0_9999px_rgba(15,23,42,0.28)]" />
+                  <div className="absolute inset-x-[7%] top-[20%] bottom-[20%] rounded-xl border-2 border-white/90 shadow-[0_0_0_9999px_rgba(15,23,42,0.35)]" />
+                  <div className="absolute inset-x-[12%] top-1/2 h-0.5 -translate-y-1/2 bg-emerald-400/80" />
                 </div>
               )}
             </div>
@@ -601,52 +530,61 @@ export function IsbnScannerDialog({ open, onOpenChange, onScan }: IsbnScannerDia
             <p
               role="status"
               aria-live="polite"
-              className={status === "error" ? "text-sm text-destructive" : "text-sm text-muted-foreground"}
+              className={
+                status === "error"
+                  ? "text-sm text-destructive"
+                  : "text-sm text-muted-foreground"
+              }
             >
               {message}
             </p>
           )}
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               type="button"
               variant="secondary"
               size="sm"
               className="gap-2"
-              onClick={handlePhotoClick}
+              onClick={handleTakePhotoClick}
               disabled={status === "photo"}
             >
               <Camera className="h-4 w-4" />
               Take photo
             </Button>
+
             {(status === "error" || status === "no-camera" || status === "idle") && open && (
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
+                className="gap-1.5"
                 onClick={() => {
                   setManualError(null)
                   setMessage(null)
                   setRestartNonce((n) => n + 1)
                 }}
               >
-                Try camera again
+                <RefreshCw className="h-3.5 w-3.5" />
+                Live camera
               </Button>
             )}
+
             <Button type="button" variant="ghost" size="sm" onClick={handleClose}>
               Cancel
             </Button>
           </div>
         </div>
 
+        {/* Native camera / photo input */}
         <input
-          ref={photoInputRef}
+          ref={cameraInputRef}
           type="file"
           accept="image/*"
           capture="environment"
-          onChange={handlePhotoFile}
+          onChange={handlePhotoFileChange}
           className="hidden"
-          aria-label="Choose or take a photo of the barcode"
+          aria-label="Take a photo of the ISBN barcode"
         />
       </DialogContent>
     </Dialog>
