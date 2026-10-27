@@ -13,7 +13,7 @@ import {
   PlusCircle,
   CreditCard,
   ChevronDown,
-  Camera,
+  BookOpen,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -92,10 +92,10 @@ export function SiteHeader() {
               size="sm"
               className="gap-2 text-foreground"
               onClick={() => setScanCheckoutOpen(true)}
-              aria-label="Scan to checkout or return a book"
+              aria-label="Checkout or return a book"
             >
-              <Camera className="h-4 w-4" />
-              Scan to checkout or return
+              <BookOpen className="h-4 w-4" />
+              Checkout / return
             </Button>
           )}
           <DropdownMenu>
@@ -134,7 +134,7 @@ export function SiteHeader() {
                   Get library card
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setLoginModalOpen(true)}>
-                  Log in with card
+                  Returning member
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -215,7 +215,7 @@ export function SiteHeader() {
                     setMobileOpen(false)
                   }}
                 >
-                  Log in with card
+                  Returning member
                 </Button>
               </>
             )}
@@ -236,8 +236,8 @@ export function SiteHeader() {
                   setMobileOpen(false)
                 }}
               >
-                <Camera className="h-5 w-5" />
-                Scan to checkout or return
+                <BookOpen className="h-5 w-5" />
+                Checkout / return
               </Button>
             )}
             <div className="my-1 border-t border-border pt-1">

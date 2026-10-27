@@ -20,7 +20,7 @@ export interface IsbnCheckoutReturnDialogProps {
 }
 
 /**
- * Global "Scan to checkout or return" flow: scan ISBN → lookup books →
+ * Global "Checkout / return" flow: ISBN → lookup books →
  * redirect to single copy or show copy picker. Only mounted when feature is on.
  */
 export function IsbnCheckoutReturnDialog({

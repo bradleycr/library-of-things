@@ -161,7 +161,7 @@ export function AddBookSuccessCard({
         )}
         {!showGuide && ISBN_CHECKOUT_RETURN_ENABLED && (
           <p className="mt-3 text-center text-xs text-muted-foreground">
-            You can still check out or return this book using the ISBN scanner — find it in the menu under &quot;Scan to checkout or return&quot;.
+            You can still check out or return this book from the menu under &quot;Checkout / return&quot;.
           </p>
         )}
 
