@@ -23,7 +23,7 @@ off the public browse surfaces; their NFC URLs are for people who tap the tag.
 |------|--------|
 | Library card PIN | Salted hash only; never recoverable |
 | Auth / account email and phone | Not public unless the member opts into public contact |
-| Guest borrower email (temporary keycards) | Stored in `guest_loans` while the card is out and shown on the NFC/QR tap page so a found card can be returned; erased on return; not in the public catalog |
+| Guest borrower email (temporary keycards) | Stored in `guest_loans` while the card is out and shown on the NFC/QR tap page so a found card can be returned; erased on return. Public bootstrap and ledger export omit keycard events so those emails are not on `/ledger`. Stewards still see them. |
 | Raw GPS coordinates | Not retained; book returns may record verification method / rounded distance only |
 | Steward password | Env var only; never returned by the API |
 

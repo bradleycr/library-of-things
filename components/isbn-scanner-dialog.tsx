@@ -332,26 +332,15 @@ export function IsbnScannerDialog({
             } else {
               // 2. Pure-JS multi-threshold scanline decoder (works on iPhone Safari)
               const imgData = workCtx.getImageData(0, 0, cw, ch)
-              // Require 2 scanlines in the same frame OR 2 consecutive frames
-              const multiLineIsbn = decodeImageDataScanlines(imgData, {
+              // One pass per frame. A second full sweep was freezing iPhone Safari.
+              // Two matching frames still confirm before we accept the ISBN.
+              const scannedIsbn = decodeImageDataScanlines(imgData, {
                 exhaustive: false,
-                requireMultipleLines: true,
+                requireMultipleLines: false,
               })
-              if (multiLineIsbn) {
-                // Two distinct scanlines in the same frame already confirmed this ISBN;
-                // count it twice so clean barcodes lock in right away without feeling sluggish.
-                handleLiveCandidate(multiLineIsbn)
-                if (!completedRef.current) handleLiveCandidate(multiLineIsbn)
+              if (scannedIsbn) {
+                handleLiveCandidate(scannedIsbn)
                 if (completedRef.current) return
-              } else {
-                const singleLineIsbn = decodeImageDataScanlines(imgData, {
-                  exhaustive: false,
-                  requireMultipleLines: false,
-                })
-                if (singleLineIsbn) {
-                  handleLiveCandidate(singleLineIsbn)
-                  if (completedRef.current) return
-                }
               }
             }
           } catch {

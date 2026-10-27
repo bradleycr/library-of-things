@@ -1353,7 +1353,7 @@ export async function returnGuestItem(params: {
       [params.itemId]
     )
     const loanId = loanRows[0]?.id
-    if (!loanId) {
+    if (!loanId && item.availability_status !== "checked_out") {
       throw new Error("This keycard is not checked out.")
     }
 
@@ -1365,13 +1365,15 @@ export async function returnGuestItem(params: {
       : { rows: [] as DbNode[] }
     const node = nodes[0]
 
-    await client.query(
-      `update guest_loans
-          set returned_at = now(), borrower_email = null,
-              return_verification = $2, return_distance_m = $3
-        where id = $1`,
-      [loanId, params.verification, params.distanceM == null ? null : Math.round(params.distanceM)]
-    )
+    if (loanId) {
+      await client.query(
+        `update guest_loans
+            set returned_at = now(), borrower_email = null,
+                return_verification = $2, return_distance_m = $3
+          where id = $1`,
+        [loanId, params.verification, params.distanceM == null ? null : Math.round(params.distanceM)]
+      )
+    }
     await client.query(
       `update books
           set availability_status = 'available', current_holder_id = null,

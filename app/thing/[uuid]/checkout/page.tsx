@@ -136,10 +136,7 @@ function ThingCheckoutInner({ params }: { params: Promise<{ uuid: string }> }) {
 
   const isAvailable = item.availability_status === "available"
   const isCheckedOut = item.availability_status === "checked_out"
-  const isBlocked =
-    item.availability_status === "missing" ||
-    item.availability_status === "retired" ||
-    item.availability_status === "unavailable"
+  const isBlocked = !isAvailable && !isCheckedOut
   const covers = getBookCoverSrcs(item)
 
   return (

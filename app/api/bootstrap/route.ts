@@ -9,10 +9,10 @@ import {
 } from "@/lib/server/repositories"
 import { getStewardCookieName, verifyStewardToken } from "@/lib/server/steward-auth"
 import { DEFAULT_LOAN_PERIOD_DAYS } from "@/lib/loan-period"
-import type { Book } from "@/lib/types"
+import type { Book, User } from "@/lib/types"
 import { isAppleWalletConfigured } from "@/lib/server/apple-wallet-pass"
 import { getSessionUserId } from "@/lib/server/session"
-import type { User } from "@/lib/types"
+import { publicLoanEvents } from "@/lib/public-ledger"
 
 /** Cache-Control so browsers (e.g. Safari) don't cache a partial or error response. */
 const NO_STORE_HEADERS = {
@@ -92,10 +92,12 @@ export async function GET() {
       return privateContactRemoved
     })
 
+    const loanEventsForClient = isSteward ? loanEvents : publicLoanEvents(loanEvents, books)
+
     return NextResponse.json(
       {
         books: booksForClient,
-        loanEvents,
+        loanEvents: loanEventsForClient,
         nodes,
         users: usersForClient,
         config: {

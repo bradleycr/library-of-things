@@ -74,8 +74,7 @@ export function HuntDownPanel({
 
     for (const item of books) {
       if (item.availability_status !== "checked_out") continue
-      const kind = item.item_type === "keycard" ? "keycard" : "book"
-      if (kind === "book" && (item.item_type ?? "book") !== "book") continue
+      const kind = (item.item_type ?? "book") === "book" ? "book" : "keycard"
 
       const checkedOutAt = started.get(item.id) ?? null
       const holderUser = item.current_holder_id

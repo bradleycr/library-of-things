@@ -312,7 +312,7 @@ export default function StewardDashboardPage() {
   const checkedOut = checkedOutRows.length
   const checkedOutEmails = uniqueHolderEmails(checkedOutBooksList, users)
   const overdueBooksList = catalogBooks.filter((b) => {
-    if (!b.expected_return_date) return false
+    if (b.availability_status !== "checked_out" || !b.expected_return_date) return false
     return new Date(b.expected_return_date) < new Date()
   })
   const overdueRows = toCheckedOutRows(overdueBooksList, loanStartedAtByBookId)
@@ -320,7 +320,7 @@ export default function StewardDashboardPage() {
   const overdueEmails = uniqueHolderEmails(overdueBooksList, users)
   const bookEventCounts = loanEvents.reduce(
     (acc, e) => {
-      if (e.event_type === "checkout") {
+      if (e.event_type === "checkout" && e.book_id && catalogBooks.some((b) => b.id === e.book_id)) {
         acc[e.book_title || ""] = (acc[e.book_title || ""] || 0) + 1
       }
       return acc
