@@ -68,7 +68,16 @@ async function main() {
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'profile_public') THEN
           ALTER TABLE public.users ADD COLUMN profile_public boolean not null default true;
         END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'email_verified_at') THEN
+          ALTER TABLE public.users ADD COLUMN email_verified_at timestamptz;
+        END IF;
       END $$;
+    `)
+
+    await client.query(`
+      create unique index if not exists users_email_lower_unique
+        on public.users (lower(email))
+        where email is not null
     `)
 
     await client.query(`
@@ -169,6 +178,24 @@ async function main() {
         pin_hash text not null,
         user_id text not null references users(id) on delete cascade,
         pseudonym text not null,
+        created_at timestamptz not null default now()
+      );
+    `)
+
+    // One-time links for "confirm this email" and "save this card on this device".
+    // delivery_pin is the new PIN in the clear, only until the link is used or it expires.
+    await client.query(`
+      create table if not exists library_card_challenges (
+        id text primary key,
+        email text not null,
+        display_name text,
+        purpose text not null check (purpose in ('signup', 'verify', 'deliver')),
+        user_id text references users(id) on delete cascade,
+        token_hash text not null unique,
+        card_number text,
+        delivery_pin text,
+        expires_at timestamptz not null,
+        consumed_at timestamptz,
         created_at timestamptz not null default now()
       );
     `)
@@ -277,6 +304,41 @@ async function main() {
     `)
     await client.query(`drop index if exists idx_guest_loans_one_active_per_email`)
 
+    // A guest confirms by email before the card is checked out. The token is
+    // stored hashed. Unconfirmed rows are swept when a new request is created.
+    await client.query(`
+      create table if not exists guest_checkout_requests (
+        id text primary key,
+        book_id text not null references books(id) on delete cascade,
+        borrower_email text not null,
+        borrower_name text not null,
+        token_hash text not null unique,
+        node_name text not null,
+        card_label text not null,
+        valid_from_label text not null,
+        valid_until_label text not null,
+        valid_until timestamptz not null,
+        loan_period_days integer not null,
+        created_at timestamptz not null default now(),
+        expires_at timestamptz not null,
+        consumed_at timestamptz
+      );
+      create index if not exists idx_guest_checkout_requests_book
+        on guest_checkout_requests(book_id, created_at desc);
+    `)
+
+    // Sharing history is public. Move any guest address out of the name column
+    // and into steward-only metadata. Safe to re-run: already-cleaned rows no
+    // longer match the email pattern.
+    await client.query(`
+      update loan_events
+         set metadata = coalesce(metadata, '{}'::jsonb)
+             || jsonb_build_object('borrower_email', user_display_name),
+             user_display_name = 'Guest'
+       where user_id is null
+         and user_display_name like '%@%'
+    `)
+
     await client.query(`
       create index if not exists idx_loan_events_book_timestamp on loan_events(book_id, timestamp desc);
       create index if not exists idx_loan_events_user_timestamp on loan_events(user_id, timestamp desc);
@@ -338,7 +400,7 @@ async function main() {
     `)
 
     await client.query("commit")
-    console.log("Schema ensured. Tables: users, nodes, books, guest_loans, library_cards, loan_events, trust_events, app_config.")
+    console.log("Schema ensured. Tables: users, nodes, books, guest_loans, guest_checkout_requests, library_cards, library_card_challenges, loan_events, trust_events, app_config.")
   } catch (error) {
     await client.query("rollback")
     console.error("Schema ensure failed:", error.message)

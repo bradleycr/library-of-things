@@ -12,18 +12,36 @@ export function getBookCoverUrl(book: {
 }
 
 /**
+ * Open Library stores three sizes on the same path (`-S`, `-M`, `-L`).
+ * A catalog card is about 150px wide, so the large file is mostly wasted
+ * bytes and is what makes a grid feel stuck.
+ */
+export function fitOpenLibraryCover(url: string, size: "S" | "M" | "L"): string {
+  if (!url.includes("covers.openlibrary.org")) return url
+  return url.replace(/-(S|M|L)(\.jpg)(?=$|\?)/i, `-${size}$2`)
+}
+
+/**
  * Returns both the primary cover source and a fallback (the generated SVG
  * endpoint). Consumers should pass both to `<BookCover>` so it can chain
  * gracefully when the primary image is a dead OpenLibrary URL or data URI.
+ *
+ * Pass `"M"` on grids and lists. The book page keeps the stored size.
  */
-export function getBookCoverSrcs(book: {
-  id: string
-  cover_image_url?: string | null
-}): { src: string; fallbackSrc?: string } {
+export function getBookCoverSrcs(
+  book: {
+    id: string
+    cover_image_url?: string | null
+  },
+  openLibrarySize?: "S" | "M" | "L",
+): { src: string; fallbackSrc?: string } {
   const generated = `/api/books/${book.id}/cover`
   const primary = book.cover_image_url?.trim()
   if (primary) {
-    return { src: primary, fallbackSrc: generated }
+    return {
+      src: openLibrarySize ? fitOpenLibraryCover(primary, openLibrarySize) : primary,
+      fallbackSrc: generated,
+    }
   }
   return { src: generated }
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getActiveGuestLoanEmail, getBookById, listNodes } from "@/lib/server/repositories"
+import { redactPublicHolderName } from "@/lib/public-ledger"
+import { getBookById, listNodes } from "@/lib/server/repositories"
 import { isUuid } from "@/lib/server/validate"
 import { itemTokenMatches } from "@/lib/server/item-token"
 
@@ -42,14 +43,15 @@ export async function GET(
     }
 
     const nodes = await listNodes()
-    const holderEmail =
-      book.item_type !== "book" && book.availability_status === "checked_out"
-        ? await getActiveGuestLoanEmail(book.id)
-        : null
+    // Anyone who taps the card can see that it is out. They cannot see to whom.
+    const publicBook = {
+      ...book,
+      current_holder_name: redactPublicHolderName(book.current_holder_name),
+      owner_contact_email: book.item_type === "book" ? book.owner_contact_email : undefined,
+    }
     return NextResponse.json({
-      book,
+      book: publicBook,
       nodes,
-      holder_email: holderEmail,
     })
   } catch (error) {
     console.error("[api/books/[id]/tap]", error)

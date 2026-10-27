@@ -96,7 +96,8 @@ export default function CheckoutPage({
   const isTapEntry = !!token
   const users = data?.users ?? []
   const currentUser = card?.user_id ? users.find((u) => u.id === card.user_id) : null
-  const accountEmail = (currentUser?.contact_email ?? "").trim()
+  const accountEmail = (currentUser?.contact_email || currentUser?.email || "").trim()
+  const emailVerified = Boolean(currentUser?.email_verified_at)
   const hasContactInfo = !!accountEmail
   // Wait only while bootstrap is in flight; if it fails, fall through to email capture.
   const contactCheckPending = bootstrapLoading
@@ -378,6 +379,7 @@ export default function CheckoutPage({
       emailConfirm={emailConfirm}
       setEmailConfirm={setEmailConfirm}
       accountEmail={accountEmail}
+      emailVerified={emailVerified}
       needsEmailCapture={needsEmailCapture}
       agreedToTerms={agreedToTerms}
       setAgreedToTerms={setAgreedToTerms}
@@ -413,7 +415,7 @@ function MinimalScreen({
         {book && (
           <div className="mx-auto mb-6 w-28 flex-shrink-0 overflow-hidden rounded-lg shadow-md">
             <div className="aspect-[2/3] w-full">
-              <BookCover {...getBookCoverSrcs(book)} title={book.title} />
+              <BookCover {...getBookCoverSrcs(book, "M")} title={book.title} />
             </div>
           </div>
         )}
@@ -446,6 +448,7 @@ function AvailableFlow({
   emailConfirm,
   setEmailConfirm,
   accountEmail,
+  emailVerified,
   needsEmailCapture,
   agreedToTerms,
   setAgreedToTerms,
@@ -465,6 +468,7 @@ function AvailableFlow({
   emailConfirm: string
   setEmailConfirm: (s: string) => void
   accountEmail: string
+  emailVerified: boolean
   needsEmailCapture: boolean
   agreedToTerms: boolean
   setAgreedToTerms: (b: boolean) => void
@@ -476,6 +480,7 @@ function AvailableFlow({
 }) {
   const { toast } = useToast()
   const [step, setStep] = useState<"ask" | "confirm">("ask")
+  const [verifySent, setVerifySent] = useState(false)
 
   const emailsReady =
     !needsEmailCapture || (emailsMatch(email, emailConfirm) && isValidEmail(email))
@@ -558,7 +563,7 @@ function AvailableFlow({
         <div className="mx-auto w-full max-w-sm text-center">
           <div className="mx-auto mb-6 w-28 flex-shrink-0 overflow-hidden rounded-lg shadow-md">
             <div className="aspect-[2/3] w-full">
-              <BookCover {...getBookCoverSrcs(book)} title={book.title} />
+              <BookCover {...getBookCoverSrcs(book, "M")} title={book.title} />
             </div>
           </div>
           <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
@@ -595,7 +600,7 @@ function AvailableFlow({
         <div className="mx-auto max-w-md">
           <div className="mb-6 flex gap-4">
             <div className="w-20 flex-shrink-0 overflow-hidden rounded-lg">
-              <BookCover {...getBookCoverSrcs(book)} title={book.title} />
+              <BookCover {...getBookCoverSrcs(book, "M")} title={book.title} />
             </div>
             <div>
               <h2 className="font-semibold text-foreground">{book.title}</h2>
@@ -605,7 +610,113 @@ function AvailableFlow({
           <Card className="border-border">
             <CardContent className="p-6">
               <div className="space-y-4">
-                {needsEmailCapture ? (
+                {!emailVerified ? (
+                  <div className="space-y-3">
+                    <p className="text-sm leading-relaxed text-muted-foreground">
+                      Borrowing needs an email you can open, so the library can reach you about this book.
+                      We’ll send a confirmation. After you open it, come back and check the book out.
+                    </p>
+                    {needsEmailCapture ? (
+                      <>
+                        <div>
+                          <Label htmlFor="email">Email</Label>
+                          <Input
+                            id="email"
+                            type="email"
+                            autoComplete="email"
+                            placeholder="your@email.com"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            className="mt-1"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="email-confirm">Confirm email</Label>
+                          <Input
+                            id="email-confirm"
+                            type="email"
+                            autoComplete="email"
+                            placeholder="Type your email again"
+                            value={emailConfirm}
+                            onChange={(e) => setEmailConfirm(e.target.value)}
+                            className="mt-1"
+                            required
+                            aria-invalid={emailMismatch || undefined}
+                          />
+                          {emailMismatch && (
+                            <p className="mt-1 text-sm text-destructive">
+                              Emails don’t match — check for a typo.
+                            </p>
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        We’ll send it to <span className="font-medium text-foreground">{accountEmail}</span>.
+                      </p>
+                    )}
+                    {verifySent ? (
+                      <div className="space-y-3">
+                        <p className="text-sm leading-relaxed text-foreground">
+                          Check your inbox, open the link, then come back here.
+                        </p>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full"
+                          onClick={() => void refetchBootstrap()}
+                        >
+                          I’ve confirmed it
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        type="button"
+                        size="lg"
+                        className="w-full"
+                        disabled={isProcessing || (needsEmailCapture && !emailsReady)}
+                        onClick={() => {
+                          const target = needsEmailCapture ? email.trim() : accountEmail
+                          if (!isValidEmail(target)) return
+                          setIsProcessing(true)
+                          void fetch("/api/library-card/email", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            credentials: "include",
+                            body: JSON.stringify({ email: target }),
+                          })
+                            .then(async (response) => {
+                              const body = (await response.json().catch(() => ({}))) as { error?: string }
+                              if (!response.ok) {
+                                toast({
+                                  variant: "destructive",
+                                  title: "Couldn’t send the email",
+                                  description: body.error ?? "Please try again.",
+                                })
+                                return
+                              }
+                              setVerifySent(true)
+                            })
+                            .catch(() => {
+                              toast({
+                                variant: "destructive",
+                                title: "Couldn’t send the email",
+                                description: "Please try again.",
+                              })
+                            })
+                            .finally(() => setIsProcessing(false))
+                        }}
+                      >
+                        {isProcessing ? (
+                          <><Loader2 className="h-5 w-5 animate-spin" /> Sending…</>
+                        ) : (
+                          "Email me a confirmation"
+                        )}
+                      </Button>
+                    )}
+                  </div>
+                ) : needsEmailCapture ? (
                   <>
                     <p className="text-sm text-muted-foreground">
                       Add an email to your account so the library can reach you about returns. Type it twice to catch typos.
@@ -652,28 +763,32 @@ function AvailableFlow({
                     </Link>
                   </p>
                 )}
-                <div className="flex items-start gap-2">
-                  <Checkbox
-                    id="terms"
-                    checked={agreedToTerms}
-                    onCheckedChange={(c) => setAgreedToTerms(c === true)}
-                  />
-                  <label htmlFor="terms" className="cursor-pointer text-sm text-muted-foreground">
-                    I’ll return it within {suggestedLoanPeriodDays} days and treat it with care.
-                  </label>
-                </div>
-                <Button
-                  size="lg"
-                  className="w-full gap-2"
-                  disabled={!agreedToTerms || isProcessing || !emailsReady}
-                  onClick={handleCheckout}
-                >
-                  {isProcessing ? (
-                    <><Loader2 className="h-5 w-5 animate-spin" /> Confirming…</>
-                  ) : (
-                    <>Confirm checkout</>
-                  )}
-                </Button>
+                {emailVerified && (
+                  <>
+                    <div className="flex items-start gap-2">
+                      <Checkbox
+                        id="terms"
+                        checked={agreedToTerms}
+                        onCheckedChange={(c) => setAgreedToTerms(c === true)}
+                      />
+                      <label htmlFor="terms" className="cursor-pointer text-sm text-muted-foreground">
+                        I’ll return it within {suggestedLoanPeriodDays} days and treat it with care.
+                      </label>
+                    </div>
+                    <Button
+                      size="lg"
+                      className="w-full gap-2"
+                      disabled={!agreedToTerms || isProcessing || !emailsReady}
+                      onClick={handleCheckout}
+                    >
+                      {isProcessing ? (
+                        <><Loader2 className="h-5 w-5 animate-spin" /> Confirming…</>
+                      ) : (
+                        <>Confirm checkout</>
+                      )}
+                    </Button>
+                  </>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -817,7 +932,7 @@ function ReturnFlow({
       <div className="mx-auto w-full max-w-md">
         <div className="mb-6 flex justify-center">
           <div className="w-28 flex-shrink-0 overflow-hidden rounded-lg shadow-md">
-            <BookCover {...getBookCoverSrcs(book)} title={book.title} />
+            <BookCover {...getBookCoverSrcs(book, "M")} title={book.title} />
           </div>
         </div>
         <h1 className="text-center text-xl font-semibold text-foreground">Return: {book.title}</h1>

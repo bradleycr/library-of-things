@@ -4,11 +4,31 @@ Library of Things is meant to be forked. A fork can run a completely separate
 community library with its own database, steward password, nodes, books, and
 members.
 
+**Want a node on the existing Foresight library instead?** Email
+**[bradley@foresight.org](mailto:bradley@foresight.org)** with your place,
+address, and who will steward the shelf. You do not need to self-host for that.
+
+## License obligations (AGPL-3.0)
+
+This project is licensed under the **[GNU Affero General Public License v3](../LICENSE)**
+(AGPL-3.0). In short:
+
+- Keep your fork (and any hosted service built from it) **open source** under
+  AGPL-3.0.
+- If you modify the software and run it as a network service, you must offer
+  users the **complete corresponding source** of your version.
+- Please **contribute useful improvements back** to the
+  [original repository](https://github.com/bradleycr/library-of-things) via pull
+  request when you can — that is how independent libraries stay compatible and
+  the commons grows.
+
+Copyright © 2025–2026 Foresight Institute.
+
 ## What You Get
 
 - A browser-based catalog for physical books.
-- Pseudonymous library cards (borrower email required by default for books;
-  optional public contact is separate).
+- Pseudonymous library cards (borrower email required for books; showing contact
+  on a public profile is optional).
 - Temporary keycards with email-only sign-out and email-first return.
 - QR/NFC checkout links for each copy.
 - A steward dashboard for nodes, books, members, and settings.
@@ -121,6 +141,9 @@ pnpm check
 Run `pnpm db:ensure-schema` after pulling upstream changes that mention schema
 updates. It is designed to be safe to re-run and does not delete data.
 
+When you invent something useful (a bugfix, steward UX, deploy tip), open a
+pull request against upstream so other libraries benefit.
+
 ## Things To Customize Carefully
 
 - **Branding**: update logos, copy, and footer links for your community.
@@ -129,3 +152,5 @@ updates. It is designed to be safe to re-run and does not delete data.
 - **Database URL**: keep `.env.local` private; it is intentionally gitignored.
 - **Trust model**: avoid adding punitive mechanics unless your community has
   agreed to them. The app is built around voluntary return and public history.
+- **License notices**: keep AGPL notices and a way for users of your hosted
+  instance to obtain the source of your running version.

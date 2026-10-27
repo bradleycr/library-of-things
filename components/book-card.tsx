@@ -26,7 +26,7 @@ export function BookCard({ book }: { book: Book }) {
       <Card className="h-full overflow-hidden border-border transition-shadow hover:shadow-md">
         <div className="relative aspect-[2/3] overflow-hidden bg-muted">
           <BookCover
-            {...getBookCoverSrcs(book)}
+            {...getBookCoverSrcs(book, "M")}
             title={book.title}
             className="transition-transform duration-300 group-hover:scale-105"
           />

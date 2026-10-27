@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
+import { isValidEmail, normalizeEmail } from "@/lib/email"
 import { updateUserProfile, deleteUserAccount } from "@/lib/server/repositories"
 import { getSessionUserId } from "@/lib/server/session"
 
-/** PATCH /api/users/[id] — update profile (display name and/or optional contact info). */
+/** PATCH /api/users/[id] — update profile (display name and/or contact info). */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -36,7 +37,20 @@ export async function PATCH(
       updates.contact_opt_in = Boolean(body.contact_opt_in)
     }
     if (body.contact_email !== undefined) {
-      updates.contact_email = body.contact_email === null || body.contact_email === "" ? null : String(body.contact_email)
+      // Contact email is required for borrowing; clearing it is not allowed.
+      // Public display is controlled separately by contact_opt_in.
+      const nextEmail = normalizeEmail(
+        body.contact_email === null || body.contact_email === ""
+          ? ""
+          : String(body.contact_email)
+      )
+      if (!isValidEmail(nextEmail)) {
+        return NextResponse.json(
+          { error: "A valid contact email is required (needed to borrow books)." },
+          { status: 400 }
+        )
+      }
+      updates.contact_email = nextEmail
     }
     if (body.phone !== undefined) {
       updates.phone = body.phone === null || body.phone === "" ? null : String(body.phone)

@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { EmailMyCardForm } from "@/components/email-my-card-form"
 import { useLibraryCard } from "@/hooks/use-library-card"
 import type { LibraryCard as LibraryCardType } from "@/lib/types"
 
@@ -115,6 +116,14 @@ export function LoginLibraryCardModal({ open, onOpenChange, initialCardNumber, o
             {loading ? "Linking…" : isPinOnlyMode ? "Link card" : "Log in"}
           </Button>
         </form>
+        {!isPinOnlyMode && (
+          <div className="border-t border-border/70 pt-4">
+            <EmailMyCardForm
+              submitLabel="Email me my card"
+              intro="Lost the number or PIN? We’ll send both to the email on the card. The new PIN replaces the old one. Don’t share that email."
+            />
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   )

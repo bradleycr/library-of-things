@@ -21,23 +21,24 @@ off the public browse surfaces; their NFC URLs are for people who tap the tag.
 
 | Data | Notes |
 |------|--------|
-| Library card PIN | Salted hash only; never recoverable |
+| Library card PIN | Salted hash in the database. Asking for the card emails a new PIN and retires the old one. The plaintext lives only in that email and, for up to 24 hours, on the one-time link. |
 | Auth / account email and phone | Not public unless the member opts into public contact |
-| Guest borrower email (temporary keycards) | Stored in `guest_loans` while the card is out and shown on the NFC/QR tap page so a found card can be returned; erased on return. Public bootstrap and ledger export omit keycard events so those emails are not on `/ledger`. Stewards still see them. |
+| Guest borrower email (temporary keycards) | Asked at checkout and confirmed from the inbox before the card is out. Stored on the active loan and shown to stewards. Erased from the live loan on return. Sharing history (`/ledger` and its export) shows **Guest**, never the email. A private copy may remain on the loan event for the node manager. |
 | Raw GPS coordinates | Not retained; book returns may record verification method / rounded distance only |
 | Steward password | Env var only; never returned by the API |
 
 ## Defaults that affect privacy
 
-- **Borrower email required for all book checkouts.** Members must have an email
-  on their account (typed twice at checkout when adding). Required email is for
+- **A verified email is required for a library card and for book checkout.**
+  The member confirms the address from their inbox. Asking for a lost card
+  emails the number and a new PIN to that address only. Required email is for
   stewards / return contact — it is not the same as public profile contact opt-in.
-  Temporary keycards use a separate guest-email flow and are unchanged.
+  Temporary keycards use a separate guest-email flow: name plus email, then a
+  confirmation message before the card is checked out. No library card is created.
 - **Profiles are public by default**; members can set a profile private
   (`profile_public`), which shows as “Anonymous” in public views.
 - **Temporary keycard return** is NFC/QR-first: anyone with the physical card
-  can tap Return. The borrower email is shown on that tap page while the card
-  is out.
+  can tap Return. The tap page shows that the card is out, not the guest email.
 
 ## Operator responsibilities
 
@@ -45,5 +46,7 @@ off the public browse surfaces; their NFC URLs are for people who tap the tag.
 - Keep `.env.local` and Apple Wallet PEMs off git and out of screenshots.
 - Set a strong `STEWARD_PASSWORD` in production (never ship the local default).
 - When deleting a member, ledger history may remain with anonymized display names.
+
+The public notice for members and guests is at `/privacy`.
 
 For vulnerability reports, see [SECURITY.md](../SECURITY.md).

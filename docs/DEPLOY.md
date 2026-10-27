@@ -5,7 +5,10 @@ Deploy your own instance using **Vercel** (app hosting) and **Supabase** (Postgr
 The reference deployment for this repo is **[libraryofthings.vercel.app](https://libraryofthings.vercel.app)**.
 
 If you are running an independent community library, fork the repo first and see
-[FORKING.md](./FORKING.md) for setup and operating notes.
+[FORKING.md](./FORKING.md) for setup, AGPL obligations, and operating notes.
+
+To add a shelf to the existing Foresight deployment instead of self-hosting,
+email [bradley@foresight.org](mailto:bradley@foresight.org).
 
 ## 1. Supabase database
 
@@ -32,6 +35,15 @@ Optionally seed demo data with `pnpm db:provision` (destructive).
 | `DATABASE_URL` | Supabase Session Pooler URI (port 6543) | Production, Preview |
 | `STEWARD_PASSWORD` | A strong password for the steward dashboard | Production, Preview |
 | `DB_SSL` | Usually unset for Supabase; `strict` for self-hosted TLS | Production, Preview |
+| `RESEND_API_KEY` | Resend API key for guest-pass confirmation email | Production, Preview, Development |
+| `SMTP_FROM` | From address, e.g. `Library of Things <noreply@foresightmatchmaker.app>` | Production, Preview, Development |
+| `GUEST_PASS_REPLY_TO` | Where replies to the pass letter go, e.g. `bradley@foresight.org` | Production, Preview, Development |
+| `APP_URL` | Public origin used in email links, e.g. `https://libraryofthings.vercel.app` | Production, Preview |
+
+`noreply@foresight.org` can be the from-address only after Resend verifies that
+domain. Until then, send from a domain Resend has already verified. The DNS
+records Resend asks for have to live on the nameservers that actually serve
+the domain. For `foresight.org` those are Cloudflare, not the Vercel zone.
 
 Optional **Apple Wallet** passes for library cards: set the `APPLE_WALLET_*` variables from [WALLET.md](./WALLET.md) if you want the in-app “Add to Apple Wallet” button.
 

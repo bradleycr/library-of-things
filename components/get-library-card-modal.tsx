@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { LibraryCard } from "@/components/library-card"
 import { AddLibraryCardToWallet } from "@/components/add-library-card-to-wallet"
+import { EmailMyCardForm } from "@/components/email-my-card-form"
 import { useLibraryCard } from "@/hooks/use-library-card"
 import type { LibraryCard as LibraryCardType } from "@/lib/types"
 
@@ -33,14 +34,12 @@ interface GetLibraryCardModalProps {
  *   2. Preview → the card as an object, with credentials and optional wallet save
  *   3. Saved   → the same object, now persisted to this device, plus one "find a book" CTA
  *
- * Tone is deliberately understated: this is not an account flow. The card is
- * the artifact; the page is just where it lives for a moment.
+ * A card starts with an email the person can open. The number and PIN
+ * arrive in that inbox, and can be asked for again from the login page.
  */
 export function GetLibraryCardModal({ open, onOpenChange, mode }: GetLibraryCardModalProps) {
   const { card, saveCard } = useLibraryCard()
 
-  const [loading, setLoading] = useState(false)
-  const [generateError, setGenerateError] = useState<string | null>(null)
   const [newCard, setNewCard] = useState<LibraryCardType | null>(null)
   const [savedCard, setSavedCard] = useState<LibraryCardType | null>(null)
   const [copied, setCopied] = useState(false)
@@ -49,32 +48,8 @@ export function GetLibraryCardModal({ open, onOpenChange, mode }: GetLibraryCard
     if (open && mode === "generate") {
       setNewCard(null)
       setSavedCard(null)
-      setGenerateError(null)
     }
   }, [open, mode])
-
-  const handleGetCard = async () => {
-    setGenerateError(null)
-    setLoading(true)
-    try {
-      const res = await fetch("/api/library-card/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({}),
-      })
-      const data = await res.json()
-      if (data.success && data.card) {
-        setNewCard(data.card)
-      } else {
-        setGenerateError(data?.error ?? "Could not generate a card. Please try again.")
-      }
-    } catch {
-      setGenerateError("Something went wrong. Please try again.")
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const handleSave = () => {
     if (!newCard) return
@@ -105,7 +80,7 @@ export function GetLibraryCardModal({ open, onOpenChange, mode }: GetLibraryCard
       ? "Write these down or save a screenshot. They sign you in if you switch devices."
       : mode === "generate" && card
         ? "Creating a new card replaces the one on this device."
-        : "A pseudonymous card so you can borrow. No email, no account."
+        : "A card needs an email you can open. We’ll send the number and PIN there."
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -163,6 +138,9 @@ export function GetLibraryCardModal({ open, onOpenChange, mode }: GetLibraryCard
             />
 
             <AddLibraryCardToWallet card={visibleCard} />
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              If this device forgets the card, use Log in and ask for it by email. That sends a new PIN to the address on the card.
+            </p>
 
             {newCard && (
               <Button className="w-full" onClick={handleSave}>
@@ -171,24 +149,19 @@ export function GetLibraryCardModal({ open, onOpenChange, mode }: GetLibraryCard
             )}
           </div>
 
-        /* Empty — single button to ask for a card. */
+        /* Empty — the card is born in the inbox, not on this screen. */
         ) : (
           <div className="space-y-3">
             {mode === "generate" && card && (
               <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-                You already have a card on this device. Creating a new one will replace it.
+                An email that already has a card sends that card and a new PIN. A new email starts a new card.
               </p>
             )}
-            {generateError && (
-              <p className="text-sm text-destructive">{generateError}</p>
-            )}
-            <Button
-              className="w-full"
-              onClick={handleGetCard}
-              disabled={loading}
-            >
-              {loading ? "Generating…" : "Get a card"}
-            </Button>
+            <EmailMyCardForm
+              showName
+              submitLabel="Email me a confirmation"
+              intro="Use an email you can open. We’ll send a link to confirm it, then the card number and PIN. Borrowing a book needs that address."
+            />
           </div>
         )}
       </DialogContent>

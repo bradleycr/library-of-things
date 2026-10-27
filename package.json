@@ -2,6 +2,7 @@
   "name": "library-of-things",
   "version": "0.1.0",
   "private": true,
+  "license": "AGPL-3.0-only",
   "packageManager": "pnpm@10.23.0",
   "repository": {
     "type": "git",

@@ -303,7 +303,7 @@ export default function ProfilePage({
           </Card>
         </div>
 
-        {/* Contact — optional; only when user has opted in and added at least one method */}
+        {/* Contact — public display only when opted in and at least one method is set */}
         {contactItems.length > 0 && (
           <Card className="mt-8 border-border" id="contact">
             <CardHeader>
@@ -373,7 +373,7 @@ export default function ProfilePage({
                 ) : (
                   <div className="flex flex-col items-center gap-4 py-4">
                     <p className="text-center text-sm text-muted-foreground">
-                      Get a pseudonymous library card to browse and borrow. No email or identity required.
+                      Get a library card with an email you can open. We’ll send the number and PIN there, so a lost device doesn’t lose the card.
                     </p>
                     <Button onClick={() => setLibraryCardModalOpen(true)}>
                       Get Your Card
@@ -405,7 +405,7 @@ export default function ProfilePage({
                     className="flex items-center gap-3 rounded-lg p-2 transition-colors hover:bg-muted"
                   >
                     <div className="h-14 w-10 shrink-0 overflow-hidden rounded bg-muted">
-                      <BookCover {...getBookCoverSrcs(book)} title={book.title} />
+                      <BookCover {...getBookCoverSrcs(book, "M")} title={book.title} />
                     </div>
                     <div>
                       <p className="text-sm font-medium text-foreground">

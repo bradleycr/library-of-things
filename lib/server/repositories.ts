@@ -1,6 +1,7 @@
 import "server-only"
 
 import { createHash, randomBytes } from "crypto"
+import type { PoolClient } from "pg"
 import { MAX_BOOKS_CHECKED_OUT } from "@/lib/constants"
 import {
   DEFAULT_LOAN_PERIOD_DAYS,
@@ -654,9 +655,17 @@ export async function updateUserProfile(
     values.push(updates.contact_opt_in)
   }
   if (updates.contact_email !== undefined) {
+    const nextContact =
+      updates.contact_email && updates.contact_email.trim() ? updates.contact_email.trim() : null
     idx += 1
     setParts.push(`contact_email = $${idx}`)
-    values.push(updates.contact_email && updates.contact_email.trim() ? updates.contact_email.trim() : null)
+    values.push(nextContact)
+    // A changed address is not the one we already confirmed. Checkout stays closed until they open the new link.
+    idx += 1
+    setParts.push(
+      `email_verified_at = case when $${idx}::text is not null and lower($${idx}) = lower(email) then email_verified_at else null end`
+    )
+    values.push(nextContact)
   }
   if (updates.phone !== undefined) {
     idx += 1
@@ -1241,14 +1250,89 @@ function hashGuestToken(token: string): string {
   return createHash("sha256").update(token, "utf8").digest("hex")
 }
 
+const GUEST_CONFIRM_TTL_MS = 7 * 24 * 60 * 60 * 1000
+
+export interface GuestCheckoutPreview {
+  status: "pending" | "confirmed" | "expired" | "unavailable"
+  guestName: string
+  email: string
+  nodeName: string
+  cardLabel: string
+  validFromLabel: string
+  validUntilLabel: string
+  itemId: string
+}
+
+type GuestCheckoutRequestRow = {
+  id: string
+  book_id: string
+  borrower_email: string
+  borrower_name: string
+  node_name: string
+  card_label: string
+  valid_from_label: string
+  valid_until_label: string
+  valid_until: string | Date
+  expires_at: string | Date
+  consumed_at: string | Date | null
+  availability_status: string
+}
+
+/**
+ * The public ledger name is always Guest. The email stays on the loan row
+ * (steward panel) and in metadata, which the public API strips.
+ */
+async function insertGuestCheckout(
+  client: PoolClient,
+  item: DbBook,
+  params: { email: string; name?: string; expectedReturn?: Date }
+): Promise<string> {
+  const token = randomBytes(32).toString("base64url")
+  const loanId = crypto.randomUUID()
+  const days = resolveLoanPeriodDays(item.lending_terms?.loan_period_days, DEFAULT_LOAN_PERIOD_DAYS)
+  await client.query(
+    `insert into guest_loans
+      (id, book_id, borrower_email, session_token_hash, checked_out_at)
+     values ($1, $2, $3, $4, now())`,
+    [loanId, item.id, params.email, hashGuestToken(token)]
+  )
+  await client.query(
+    `update books
+        set availability_status = 'checked_out',
+            current_holder_id = null,
+            current_holder_name = $2,
+            expected_return_date = coalesce($4::timestamptz, now() + (($3::int || ' days')::interval))
+      where id = $1`,
+    [item.id, params.email.slice(0, LIMITS.displayName), days, params.expectedReturn ?? null]
+  )
+  await client.query(
+    `insert into loan_events
+      (id, event_type, book_id, book_title, user_display_name, timestamp, location_text, metadata)
+     values ($1, 'checkout', $2, $3, 'Guest', now(), $4, $5::jsonb)`,
+    [
+      crypto.randomUUID(),
+      item.id,
+      item.title,
+      item.current_location_text ?? null,
+      JSON.stringify({
+        item_type: item.item_type ?? "other",
+        guest: true,
+        borrower_email: params.email,
+        ...(params.name ? { borrower_name: params.name } : {}),
+      }),
+    ]
+  )
+  return token
+}
+
 export async function checkoutGuestItem(params: {
   itemId: string
   borrowerEmail: string
+  borrowerName?: string
+  expectedReturn?: Date
 }): Promise<{ token: string; loan: GuestLoan }> {
   const client = await resilientConnect()
-  const token = randomBytes(32).toString("base64url")
   const normalizedEmail = params.borrowerEmail.trim().toLowerCase()
-  const publicLabel = normalizedEmail.slice(0, LIMITS.displayName)
   try {
     await client.query("begin")
     const { rows } = await client.query<DbBook>("select * from books where id = $1 for update", [
@@ -1258,47 +1342,187 @@ export async function checkoutGuestItem(params: {
     if (!item || (item.item_type ?? "book") === "book") throw new Error("Item not found")
     if (item.availability_status !== "available") throw new Error("Item is not available")
 
-    const loanId = crypto.randomUUID()
-    await client.query(
-      `insert into guest_loans
-        (id, book_id, borrower_email, session_token_hash, checked_out_at)
-       values ($1, $2, $3, $4, now())`,
-      [loanId, params.itemId, normalizedEmail, hashGuestToken(token)]
-    )
-    await client.query(
-      `update books
-          set availability_status = 'checked_out',
-              current_holder_id = null,
-              current_holder_name = $2,
-              expected_return_date = now() + (($3::int || ' days')::interval)
-        where id = $1`,
-      [
-        params.itemId,
-        publicLabel,
-        resolveLoanPeriodDays(item.lending_terms?.loan_period_days, DEFAULT_LOAN_PERIOD_DAYS),
-      ]
-    )
-    await client.query(
-      `insert into loan_events
-        (id, event_type, book_id, book_title, user_display_name, timestamp, location_text, metadata)
-       values ($1, 'checkout', $2, $3, $4, now(), $5, $6::jsonb)`,
-      [
-        crypto.randomUUID(),
-        params.itemId,
-        item.title,
-        publicLabel,
-        item.current_location_text ?? null,
-        JSON.stringify({ item_type: item.item_type ?? "other", guest: true }),
-      ]
-    )
+    const token = await insertGuestCheckout(client, item, {
+      email: normalizedEmail,
+      name: params.borrowerName,
+      expectedReturn: params.expectedReturn,
+    })
     await client.query("commit")
     return {
       token,
       loan: {
-        id: loanId,
+        id: item.id,
         book_id: params.itemId,
         checked_out_at: new Date().toISOString(),
       },
+    }
+  } catch (error) {
+    await client.query("rollback")
+    throw error
+  } finally {
+    client.release()
+  }
+}
+
+function previewFromRow(row: GuestCheckoutRequestRow, now = Date.now()): GuestCheckoutPreview {
+  const expired = new Date(row.expires_at).getTime() <= now
+  const consumed = Boolean(row.consumed_at)
+  let status: GuestCheckoutPreview["status"] = "pending"
+  if (consumed) status = "confirmed"
+  else if (expired) status = "expired"
+  else if (row.availability_status !== "available") status = "unavailable"
+
+  return {
+    status,
+    guestName: row.borrower_name,
+    email: row.borrower_email,
+    nodeName: row.node_name,
+    cardLabel: row.card_label,
+    validFromLabel: row.valid_from_label,
+    validUntilLabel: row.valid_until_label,
+    itemId: row.book_id,
+  }
+}
+
+/** Drop unconfirmed requests that can no longer be used. */
+async function sweepGuestCheckoutRequests(client: PoolClient): Promise<void> {
+  await client.query(
+    `delete from guest_checkout_requests
+      where (consumed_at is null and expires_at < now())
+         or (consumed_at is not null and consumed_at < now() - interval '30 days')`
+  )
+}
+
+export async function createGuestCheckoutRequest(input: {
+  itemId: string
+  borrowerEmail: string
+  borrowerName: string
+  nodeName: string
+  cardLabel: string
+  validFromLabel: string
+  validUntilLabel: string
+  validUntil: Date
+  loanPeriodDays: number
+}): Promise<{ id: string; token: string }> {
+  const client = await resilientConnect()
+  const token = randomBytes(32).toString("base64url")
+  const id = crypto.randomUUID()
+  try {
+    await client.query("begin")
+    await sweepGuestCheckoutRequests(client)
+    const { rows } = await client.query<DbBook>("select id, item_type, availability_status from books where id = $1", [
+      input.itemId,
+    ])
+    const item = rows[0]
+    if (!item || (item.item_type ?? "book") === "book") throw new Error("Item not found")
+    if (item.availability_status !== "available") throw new Error("Item is not available")
+    await client.query(
+      `insert into guest_checkout_requests
+        (id, book_id, borrower_email, borrower_name, token_hash, node_name, card_label,
+         valid_from_label, valid_until_label, valid_until, loan_period_days, created_at, expires_at)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now(), $12)`,
+      [
+        id,
+        input.itemId,
+        input.borrowerEmail,
+        input.borrowerName,
+        hashGuestToken(token),
+        input.nodeName,
+        input.cardLabel,
+        input.validFromLabel,
+        input.validUntilLabel,
+        input.validUntil,
+        input.loanPeriodDays,
+        new Date(Date.now() + GUEST_CONFIRM_TTL_MS),
+      ]
+    )
+    await client.query("commit")
+    return { id, token }
+  } catch (error) {
+    await client.query("rollback")
+    throw error
+  } finally {
+    client.release()
+  }
+}
+
+export async function deleteGuestCheckoutRequest(id: string): Promise<void> {
+  await resilientQuery("delete from guest_checkout_requests where id = $1 and consumed_at is null", [id])
+}
+
+export async function previewGuestCheckout(rawToken: string): Promise<GuestCheckoutPreview | null> {
+  const token = rawToken.trim()
+  if (!token || token.length > 200) return null
+  const { rows } = await resilientQuery<GuestCheckoutRequestRow>(
+    `select r.id, r.book_id, r.borrower_email, r.borrower_name, r.node_name, r.card_label,
+            r.valid_from_label, r.valid_until_label, r.valid_until, r.expires_at, r.consumed_at,
+            b.availability_status
+       from guest_checkout_requests r
+       join books b on b.id = r.book_id
+      where r.token_hash = $1`,
+    [hashGuestToken(token)]
+  )
+  const row = rows[0]
+  return row ? previewFromRow(row) : null
+}
+
+/**
+ * Clicking the email link checks the card out. The link itself does not —
+ * scanners that prefetch URLs must not be able to take a physical pass.
+ */
+export async function confirmGuestCheckout(rawToken: string): Promise<
+  | { ok: true; already: boolean; token?: string; preview: GuestCheckoutPreview }
+  | { ok: false; error: string }
+> {
+  const token = rawToken.trim()
+  if (!token || token.length > 200) return { ok: false, error: "This confirmation link is not valid." }
+
+  const client = await resilientConnect()
+  try {
+    await client.query("begin")
+    const { rows } = await client.query<GuestCheckoutRequestRow>(
+      `select r.id, r.book_id, r.borrower_email, r.borrower_name, r.node_name, r.card_label,
+              r.valid_from_label, r.valid_until_label, r.valid_until, r.expires_at, r.consumed_at,
+              b.availability_status
+         from guest_checkout_requests r
+         join books b on b.id = r.book_id
+        where r.token_hash = $1
+        for update of r`,
+      [hashGuestToken(token)]
+    )
+    const row = rows[0]
+    if (!row) {
+      await client.query("rollback")
+      return { ok: false, error: "This confirmation link is not valid." }
+    }
+    if (row.consumed_at) {
+      await client.query("commit")
+      return { ok: true, already: true, preview: previewFromRow({ ...row, consumed_at: row.consumed_at }) }
+    }
+    if (new Date(row.expires_at).getTime() <= Date.now()) {
+      await client.query("rollback")
+      return { ok: false, error: "This confirmation link has expired. Tap the card and request a new email." }
+    }
+
+    const { rows: books } = await client.query<DbBook>("select * from books where id = $1 for update", [row.book_id])
+    const item = books[0]
+    if (!item || item.availability_status !== "available") {
+      await client.query("rollback")
+      return { ok: false, error: "This card was just checked out. Ask a steward if you still need a pass." }
+    }
+
+    const sessionToken = await insertGuestCheckout(client, item, {
+      email: row.borrower_email,
+      name: row.borrower_name,
+      expectedReturn: new Date(row.valid_until),
+    })
+    await client.query("update guest_checkout_requests set consumed_at = now() where id = $1", [row.id])
+    await client.query("commit")
+    return {
+      ok: true,
+      already: false,
+      token: sessionToken,
+      preview: previewFromRow({ ...row, consumed_at: new Date(), availability_status: "checked_out" }),
     }
   } catch (error) {
     await client.query("rollback")
@@ -1346,8 +1570,8 @@ export async function returnGuestItem(params: {
     const item = rows[0]
     if (!item || (item.item_type ?? "book") === "book") throw new Error("Item not found")
 
-    const { rows: loanRows } = await client.query<{ id: string }>(
-      `select id from guest_loans
+    const { rows: loanRows } = await client.query<{ id: string; borrower_email: string | null }>(
+      `select id, borrower_email from guest_loans
         where book_id = $1 and returned_at is null
         for update`,
       [params.itemId]
@@ -1357,7 +1581,9 @@ export async function returnGuestItem(params: {
       throw new Error("This keycard is not checked out.")
     }
 
-    const holderLabel = item.current_holder_name ?? "Guest"
+    const privateEmail =
+      loanRows[0]?.borrower_email?.trim().toLowerCase() ||
+      (item.current_holder_name?.includes("@") ? item.current_holder_name.trim().toLowerCase() : "")
 
     const nodeId = item.home_node_id ?? item.current_node_id
     const { rows: nodes } = nodeId
@@ -1387,16 +1613,16 @@ export async function returnGuestItem(params: {
     await client.query(
       `insert into loan_events
         (id, event_type, book_id, book_title, user_display_name, timestamp, location_text, metadata)
-       values ($1, 'return', $2, $3, $4, now(), $5, $6::jsonb)`,
+       values ($1, 'return', $2, $3, 'Guest', now(), $4, $5::jsonb)`,
       [
         crypto.randomUUID(),
         params.itemId,
         item.title,
-        holderLabel,
         node?.location_address ?? node?.name ?? item.current_location_text ?? null,
         JSON.stringify({
           item_type: item.item_type ?? "other",
           guest: true,
+          ...(privateEmail ? { borrower_email: privateEmail } : {}),
           location_verification: params.verification,
           distance_m: params.distanceM == null ? undefined : Math.round(params.distanceM),
         }),
@@ -1422,10 +1648,13 @@ export async function stewardReturnGuestItem(itemId: string): Promise<void> {
     if (item.availability_status !== "checked_out") {
       throw new Error("Item is not checked out")
     }
-    const { rows: loans } = await client.query<{ id: string }>(
-      "select id from guest_loans where book_id = $1 and returned_at is null for update",
+    const { rows: loans } = await client.query<{ id: string; borrower_email: string | null }>(
+      "select id, borrower_email from guest_loans where book_id = $1 and returned_at is null for update",
       [itemId]
     )
+    const privateEmail =
+      loans[0]?.borrower_email?.trim().toLowerCase() ||
+      (item.current_holder_name?.includes("@") ? item.current_holder_name.trim().toLowerCase() : "")
     if (loans[0]) {
       await client.query(
         `update guest_loans
@@ -1452,6 +1681,8 @@ export async function stewardReturnGuestItem(itemId: string): Promise<void> {
         item.current_location_text ?? null,
         JSON.stringify({
           item_type: item.item_type ?? "other",
+          guest: true,
+          ...(privateEmail ? { borrower_email: privateEmail } : {}),
           location_verification: "steward",
           orphan_recovery: !loans[0],
         }),
@@ -1509,15 +1740,25 @@ export async function createUserAndLibraryCard(params: {
   pseudonym: string
   cardNumber: string
   pinHash: string
+  /** When present, the card is born already verified — the member opened the email. */
+  email?: string | null
 }): Promise<{ user: User; cardId: string }> {
   const client = await resilientConnect()
+  const email = params.email?.trim().toLowerCase() || null
   try {
     await client.query("begin")
     const userId = crypto.randomUUID()
     await client.query(
-      `insert into public.users (id, display_name, auth_provider, trust_score, community_memberships, created_at)
-       values ($1, $2, 'library_card', 50, '{}', now())`,
-      [userId, params.pseudonym]
+      `insert into public.users (
+         id, display_name, email, contact_email, email_verified_at,
+         auth_provider, trust_score, community_memberships, created_at
+       )
+       values (
+         $1, $2, $3, $3,
+         case when $3::text is null then null else now() end,
+         'library_card', 50, '{}', now()
+       )`,
+      [userId, params.pseudonym, email]
     )
     const cardId = crypto.randomUUID()
     await client.query(
@@ -1536,6 +1777,9 @@ export async function createUserAndLibraryCard(params: {
       user: {
         id: userId,
         display_name: params.pseudonym,
+        email: email ?? undefined,
+        contact_email: email ?? undefined,
+        email_verified_at: email ? new Date().toISOString() : null,
         auth_provider: "library_card",
         trust_score: 50,
         community_memberships: [],

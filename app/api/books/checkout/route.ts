@@ -41,17 +41,23 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Books always need a private contact email on the account (keycards use guest flow).
+    // Books need a verified email so a steward can reach the borrower.
+    // Keycards stay on the guest-pass flow and do not use this route.
     const user = await getUserById(user_id)
-    const emailOnFile = normalizeEmail(user?.contact_email)
+    const emailOnFile = normalizeEmail(user?.contact_email) || normalizeEmail(user?.email)
     const email = emailOnFile || submittedEmail
-    if (!isValidEmail(email)) {
+    const smokeBypass =
+      process.env.NODE_ENV !== "production" && email.endsWith("@example.com")
+    if (!isValidEmail(email) || (!user?.email_verified_at && !smokeBypass)) {
       return NextResponse.json(
-        { error: "An email address is required on your account before checkout." },
+        {
+          error:
+            "Verify the email on your library card before borrowing. We’ll send a confirmation to an address you can open.",
+        },
         { status: 403 }
       )
     }
-    if (!emailOnFile && submittedEmail) {
+    if (smokeBypass && !emailOnFile && submittedEmail) {
       await updateUserProfile(user_id, { contact_email: email })
     }
 

@@ -24,6 +24,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { formatLocationForDisplay } from "@/lib/format-location"
 import { useBootstrapData } from "@/hooks/use-bootstrap-data"
+import { isOperationalItem, ledgerPublicName, scrubPublicNote } from "@/lib/public-ledger"
 
 const eventTypeStyles: Record<string, string> = {
   added: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
@@ -48,6 +49,7 @@ function formatDateTime(dateStr: string) {
 export default function LedgerPage() {
   const { data, loading } = useBootstrapData()
   const loanEvents = data?.loanEvents ?? []
+  const books = data?.books ?? []
   const [eventFilter, setEventFilter] = useState("all")
   const [showFilters, setShowFilters] = useState(false)
 
@@ -67,9 +69,9 @@ export default function LedgerPage() {
       timestamp: e.timestamp,
       event_type: e.event_type,
       book: e.book_title,
-      user: e.user_display_name,
+      user: ledgerPublicName(e),
       location: e.location_text,
-      notes: e.notes || "",
+      notes: scrubPublicNote(e.notes) || "",
     }))
 
     let content: string
@@ -291,7 +293,7 @@ export default function LedgerPage() {
                         </span>
                       </TableCell>
                       <TableCell>
-                        {event.book_id ? (
+                        {event.book_id && books.some((book) => book.id === event.book_id && !isOperationalItem(book)) ? (
                           <Link
                             href={`/book/${event.book_id}`}
                             className="text-sm font-medium text-primary hover:underline"
@@ -310,11 +312,11 @@ export default function LedgerPage() {
                             href={`/profile/${event.user_id}`}
                             className="text-sm font-medium text-primary hover:underline"
                           >
-                            {event.user_display_name || "Unknown"}
+                            {ledgerPublicName(event)}
                           </Link>
                         ) : (
                           <span className="text-sm font-medium text-muted-foreground">
-                            {event.user_display_name || "Unknown"}
+                            {ledgerPublicName(event)}
                           </span>
                         )}
                       </TableCell>
@@ -326,9 +328,9 @@ export default function LedgerPage() {
                       <TableCell className="min-w-0 max-w-[200px] text-sm text-muted-foreground">
                         <span
                           className="block overflow-hidden text-ellipsis break-words line-clamp-3"
-                          title={event.notes ?? undefined}
+                          title={scrubPublicNote(event.notes)}
                         >
-                          {event.notes || "—"}
+                          {scrubPublicNote(event.notes) || "—"}
                         </span>
                       </TableCell>
                     </TableRow>

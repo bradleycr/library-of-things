@@ -40,6 +40,7 @@ import { IsbnScannerDialog } from "@/components/isbn-scanner-dialog"
 import { isbnMatches } from "@/lib/isbn-checkout"
 import { ISBN_CHECKOUT_RETURN_ENABLED } from "@/lib/feature-flags"
 import { DEFAULT_LOAN_PERIOD_DAYS, resolveLoanPeriodDays } from "@/lib/loan-period"
+import { ledgerPublicName, scrubPublicNote } from "@/lib/public-ledger"
 
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("en-US", {
@@ -180,7 +181,7 @@ export default function BookDetailPage({
         <div className="grid gap-8 md:grid-cols-[280px_1fr]">
           {/* Cover */}
           <div className="aspect-[2/3] overflow-hidden rounded-lg bg-muted shadow-md">
-            <BookCover {...getBookCoverSrcs(book)} title={book.title} />
+            <BookCover {...getBookCoverSrcs(book)} title={book.title} priority />
           </div>
 
           {/* Details */}
@@ -507,11 +508,11 @@ export default function BookDetailPage({
                               href={`/profile/${event.user_id}`}
                               className="text-sm font-medium text-primary hover:underline"
                             >
-                              {event.user_display_name || "Unknown"}
-                            </Link>
-                          ) : (
-                            <span className="text-sm font-medium text-muted-foreground">
-                              {event.user_display_name || "Unknown"}
+                              {ledgerPublicName(event)}
+                          </Link>
+                        ) : (
+                          <span className="text-sm font-medium text-muted-foreground">
+                            {ledgerPublicName(event)}
                             </span>
                           )}
                         </TableCell>
@@ -521,7 +522,7 @@ export default function BookDetailPage({
                             : "—"}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
-                          {event.notes || "—"}
+                          {scrubPublicNote(event.notes) || "—"}
                         </TableCell>
                       </TableRow>
                     ))}

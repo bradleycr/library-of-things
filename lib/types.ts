@@ -80,9 +80,9 @@ export interface GuestLoan {
   return_distance_m?: number
 }
 
-/** Optional contact info shown on profile when contact_opt_in is true. */
+/** Contact methods; shown on profile only when contact_opt_in is true. */
 export interface UserContactInfo {
-  /** Public contact email (optional; may differ from auth email). */
+  /** Required for borrowing; public only when contact_opt_in is true. */
   contact_email?: string
   phone?: string
   twitter_url?: string
@@ -101,11 +101,16 @@ export interface User {
   created_at: string
   /** Optional seed for DiceBear avatar; when set, overrides default (id-based) so user can regenerate a new look. */
   avatar_seed?: string
-  /** When true, show contact section on profile if any contact method is set. */
+  /** When true, show contact methods on the public profile. */
   contact_opt_in?: boolean
   /** When false, this user's name appears as "Anonymous" across the app (ledger, added by, holder). They can still log in. */
   profile_public?: boolean
-  /** Optional; only shown when contact_opt_in is true. */
+  /**
+   * Set when the member opens the confirmation we send to `email`.
+   * Book checkout requires this. Absent on public profiles.
+   */
+  email_verified_at?: string | null
+  /** Required for borrowing; only shown publicly when contact_opt_in is true. */
   contact_email?: string
   phone?: string
   twitter_url?: string

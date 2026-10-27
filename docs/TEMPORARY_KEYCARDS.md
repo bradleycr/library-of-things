@@ -27,17 +27,29 @@ along the dashed line, and stick the label on the physical card.
 ## Borrowing
 
 A tap or QR scan opens a simple page: the card image, Available / Out, and
-either an email field + **Check out**, or a **Return** button. No extra
-promises or public-name fields.
+either a name and email plus **Email me a confirmation**, or a **Return**
+button. No library card is required. A visitor pass is not a membership.
 
-The email is stored in private `guest_loans` while the card is out, shown on
-the NFC/QR tap page (so a found card can be returned to the right person), and
-used as the steward holder label. It is erased on return. Temporary keycards
-stay off the public catalog.
+The card stays available until the guest opens the email and presses
+**Confirm checkout**. The message is the Foresight Berlin guest-pass letter
+(use the pass, write a short report, how to return it) and comes from
+`noreply@…` with replies going to the node manager. The confirm link lasts
+7 days. Opening the link does not check the card out. Mail scanners prefetch
+links, so only the button does.
 
-Anyone who taps the tag or scans the QR can return the card — possession of
+The email is stored in private `guest_loans` while the card is out and used as
+the steward holder label. It is erased from that live loan on return. Sharing
+history stays public and shows **Guest**, not the address. The tap page does
+not show the email either. Temporary keycards stay off the public catalog.
+
+Anyone who taps the tag or scans the QR can return the card. Possession of
 the physical card is enough. A steward can also record a return from the
 dashboard. The same email may hold multiple keycards.
+
+Mail uses Resend (`RESEND_API_KEY`, `SMTP_FROM`, `GUEST_PASS_REPLY_TO`,
+`APP_URL`). See [DEPLOY.md](./DEPLOY.md). Without a key, local development
+shows the confirm link on the card page. Production refuses to pretend the
+email was sent.
 
 ## Contact policy
 

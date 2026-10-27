@@ -34,8 +34,14 @@ email-only sign-out.
 ```
 
 Built for [Foresight Institute](https://foresight.org)'s office libraries in
-Berlin and San Francisco, but designed so any community can fork it, run its
-own database, create its own nodes, and curate its own collections.
+Berlin and San Francisco, and open for other communities to join or self-host.
+
+### Join this library, or run your own
+
+| Path | What to do |
+|------|------------|
+| **Add a node here** | Want a shelf on the live [Foresight Library of Things](https://libraryofthings.vercel.app)? Email **[bradley@foresight.org](mailto:bradley@foresight.org)** with your place, address, and who will steward it. |
+| **Run your own** | Fork this repo, deploy with your own database and steward password — see **[docs/FORKING.md](./docs/FORKING.md)**. Keep it open source under the same AGPL license, and please contribute useful improvements back upstream via pull request. |
 
 ## Quickstart
 
@@ -49,10 +55,8 @@ pnpm db:ensure-schema
 pnpm dev
 ```
 
-Open [localhost:3000](http://localhost:3000). The app is also currently hosted at [libraryofthings.vercel.app](https://libraryofthings.vercel.app).
-
-Want to run a separate community library from your own fork? Start with
-**[docs/FORKING.md](./docs/FORKING.md)**.
+Open [localhost:3000](http://localhost:3000). The reference deployment is
+[libraryofthings.vercel.app](https://libraryofthings.vercel.app).
 
 ### Database
 
@@ -91,7 +95,7 @@ Copy `env.example` → `.env.local`:
 
 - **Nodes** are physical locations — shelves, offices, reading rooms — where books live.
 - Each book gets a **QR code** (or NFC tag) linking to its checkout page.
-- Borrowers get a **pseudonymous library card**; email is private and required by default for return contact unless an item opts out.
+- Borrowers get a **pseudonymous library card**; a private contact email is required to borrow books (showing it on a public profile is optional).
 - **Temporary keycards and other operational items** can use email-only sign-out without creating a member account.
 - All activity is recorded on a **public sharing ledger**.
 - A **steward dashboard** lets node managers edit books, manage members, and track activity.
@@ -160,6 +164,18 @@ and guest data is exposed in the product, see [docs/PRIVACY.md](./docs/PRIVACY.m
 We'd love contributions — see **[CONTRIBUTING.md](./CONTRIBUTING.md)** for the
 project's values, what kinds of changes fit, and how to get started.
 
+If you run a fork in production, please open pull requests for fixes and
+features that would help other communities too. That keeps the commons healthy
+and satisfies the spirit of the license.
+
 ## License
 
-MIT — see [LICENSE](./LICENSE).
+**[AGPL-3.0](./LICENSE)** (GNU Affero General Public License v3).
+
+Copyright © 2025–2026 [Foresight Institute](https://foresight.org).
+
+You may use, modify, and run Library of Things, including as a hosted service,
+as long as you keep the software free and open under AGPL-3.0. If you modify
+it and offer it over a network, you must provide the complete corresponding
+source to users. Please also contribute meaningful improvements back to the
+[original repository](https://github.com/bradleycr/library-of-things) when you can.

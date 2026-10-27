@@ -5,7 +5,7 @@ it stays safe and welcoming for contributors.
 
 ## Repo hygiene (keep true)
 
-- [ ] MIT `LICENSE` present
+- [ ] AGPL-3.0 `LICENSE` present (copyleft; forks must stay open source)
 - [ ] `SECURITY.md` and private vulnerability reporting available
 - [ ] `CODE_OF_CONDUCT.md` with a clear reporting path
 - [ ] `CONTRIBUTING.md` matches current product defaults (email, keycards)

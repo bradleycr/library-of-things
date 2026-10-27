@@ -21,8 +21,18 @@ When proposing changes, ask: *does this make it easier to share physical things
 in a trusted community?* If yes, it probably fits.
 
 **Note on email:** Creating a library card does not require email. Borrowing a
-book usually does — borrower email is required by default for return contact
-unless an item opts out. That email is not shown on the public ledger.
+book does — a private contact email (and verification when configured) is
+required for return contact. Showing that email on a public profile is optional
+(`contact_opt_in`). Guest emails for temporary keycards stay off the public ledger.
+
+## Join the Foresight library vs run your own
+
+- **Add a physical node** to the live Foresight deployment: email
+  **[bradley@foresight.org](mailto:bradley@foresight.org)** with location and steward.
+- **Run an independent library:** fork and follow [docs/FORKING.md](./docs/FORKING.md).
+  The project is **AGPL-3.0** — keep forks open source, share modified source if
+  you host a service, and please open PRs upstream for improvements that others
+  can use.
 
 ## Good first contributions
 
@@ -37,15 +47,16 @@ unless an item opts out. That email is not shown on the public ledger.
 The system is designed for multiple independent nodes. The Foresight Berlin and
 SF nodes exist as seed data, but the architecture is node-agnostic.
 
-To add a real node for your community:
+**To join the existing Foresight Library of Things** (same catalog / app), email
+**bradley@foresight.org** — we can add your shelf as a node without you running
+servers.
+
+**To operate a separate instance**, fork the repo and seed your own nodes (see
+[docs/FORKING.md](./docs/FORKING.md)). On your fork:
 
 1. A node is a row in the `nodes` table (name, address, coordinates, steward).
 2. Books are assigned to nodes; the steward dashboard manages books at any node.
 3. See `scripts/provision-db.mjs` for the node schema and seed format.
-
-If you're deploying your own instance, seed your own nodes and skip the
-Foresight ones. The app works the same regardless of whose shelves the books
-sit on.
 
 ## Architecture overview
 
@@ -122,6 +133,12 @@ Before requesting review:
 - Include screenshots for visible UI changes, especially mobile states.
 - Keep changes scoped. Large refactors are easier to review when split up.
 
+## License
+
+Library of Things is **[AGPL-3.0](./LICENSE)**. Derivatives and hosted forks must
+remain open source under that license. Prefer contributing changes back to
+[bradleycr/library-of-things](https://github.com/bradleycr/library-of-things).
+
 ## Questions?
 
-Open an issue. Happy to help.
+Open an issue, or email **bradley@foresight.org** for node / community questions.

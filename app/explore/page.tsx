@@ -367,7 +367,7 @@ function ExplorePageContent() {
               >
                 <div className="h-16 w-12 shrink-0 overflow-hidden rounded bg-muted">
                   <BookCover
-                    {...getBookCoverSrcs(book)}
+                    {...getBookCoverSrcs(book, "M")}
                     title={book.title}
                     className="h-full w-full object-cover"
                   />

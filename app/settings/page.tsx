@@ -36,6 +36,7 @@ import { useBootstrapData } from "@/hooks/use-bootstrap-data"
 import { useLibraryCard } from "@/hooks/use-library-card"
 import { useToast } from "@/hooks/use-toast"
 import { getAvatarUrl, getInitials, getAvatarSeed } from "@/lib/avatar"
+import { isValidEmail } from "@/lib/email"
 
 export default function SettingsPage() {
   const router = useRouter()
@@ -238,6 +239,14 @@ export default function SettingsPage() {
 
   const handleSaveContact = async () => {
     if (!currentUser) return
+    if (!isValidEmail(contactEmail)) {
+      toast({
+        variant: "destructive",
+        title: "Email required",
+        description: "Add a contact email so the library can reach you about returns. Showing it on your profile stays optional.",
+      })
+      return
+    }
     setSavingContact(true)
     try {
       const res = await fetch(`/api/users/${currentUser.id}`, {
@@ -246,7 +255,7 @@ export default function SettingsPage() {
         credentials: "include",
         body: JSON.stringify({
           contact_opt_in: contactOptIn,
-          contact_email: contactEmail.trim() || null,
+          contact_email: contactEmail.trim(),
           phone: phone.trim() || null,
           twitter_url: twitterUrl.trim() || null,
           linkedin_url: linkedinUrl.trim() || null,
@@ -563,16 +572,16 @@ export default function SettingsPage() {
             <CardHeader>
               <CardTitle className="text-card-foreground">Contact</CardTitle>
               <CardDescription>
-                Optionally share how others can reach you. Shown on your profile only if you allow it.
-                Some books require borrowers to have contact info on file; adding at least one method here lets you borrow those titles (still trust-based).
+                A contact email is required to borrow books so the library can reach you about returns.
+                Showing any of this on your public profile is optional — use the switch below.
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-card-foreground">Allow contact</p>
+                  <p className="text-sm font-medium text-card-foreground">Show on public profile</p>
                   <p className="text-xs text-muted-foreground">
-                    Show contact options on your profile when you add at least one method below
+                    When on, others can see the contact methods you add below. Your email stays private to stewards when this is off.
                   </p>
                 </div>
                 <Switch
@@ -582,17 +591,20 @@ export default function SettingsPage() {
               </div>
               <Separator />
               <div>
-                <Label htmlFor="contact-email">Contact email (optional)</Label>
+                <Label htmlFor="contact-email">Contact email</Label>
                 <Input
                   id="contact-email"
                   type="email"
+                  autoComplete="email"
                   placeholder="you@example.com"
                   value={contactEmail}
                   onChange={(e) => setContactEmail(e.target.value)}
                   className="mt-1"
+                  required
+                  aria-required="true"
                 />
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Public contact email; can differ from your sign-in email
+                  Required for borrowing. Not shown publicly unless you turn on “Show on public profile.”
                 </p>
               </div>
               <div>

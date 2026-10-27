@@ -1,20 +1,16 @@
-import { cookies } from "next/headers"
 import { NextRequest, NextResponse } from "next/server"
 import type { LoanEvent } from "@/lib/types"
 import { publicLoanEvents } from "@/lib/public-ledger"
 import { listBooks, listLoanEvents } from "@/lib/server/repositories"
-import { getStewardCookieName, verifyStewardToken } from "@/lib/server/steward-auth"
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const format = searchParams.get("format") || "json"
 
-    const cookieStore = await cookies()
-    const stewardCookie = cookieStore.get(getStewardCookieName())?.value
-    const isSteward = !!stewardCookie && verifyStewardToken(stewardCookie)
     const [eventsAll, books] = await Promise.all([listLoanEvents(), listBooks()])
-    const events = isSteward ? eventsAll : publicLoanEvents(eventsAll, books)
+    // The download is the same public history as the page. No guest emails.
+    const events = publicLoanEvents(eventsAll, books)
     type ExportRow = {
       timestamp: string | undefined
       event_type: string

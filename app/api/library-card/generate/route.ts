@@ -55,6 +55,18 @@ function isTransientError(err: unknown): boolean {
 }
 
 export async function POST(request: NextRequest) {
+  // The public card flow confirms an email first. This route remains for the
+  // local API smoke test, which borrows with an @example.com address.
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json(
+      {
+        success: false,
+        error: "A library card needs an email you can open. Request it from the library card page.",
+      },
+      { status: 400 }
+    )
+  }
+
   const ip = getClientIp(request)
   const rl = checkRateLimit(`card-gen:${ip}`, 10, 60_000)
   if (!rl.allowed) {

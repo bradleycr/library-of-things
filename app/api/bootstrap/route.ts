@@ -12,7 +12,7 @@ import { DEFAULT_LOAN_PERIOD_DAYS } from "@/lib/loan-period"
 import type { Book, User } from "@/lib/types"
 import { isAppleWalletConfigured } from "@/lib/server/apple-wallet-pass"
 import { getSessionUserId } from "@/lib/server/session"
-import { publicLoanEvents } from "@/lib/public-ledger"
+import { publicLoanEvents, redactPublicHolderName } from "@/lib/public-ledger"
 
 /** Cache-Control so browsers (e.g. Safari) don't cache a partial or error response. */
 const NO_STORE_HEADERS = {
@@ -65,11 +65,11 @@ export async function GET() {
       ? books
       : books
           .filter((book) => book.catalog_visible !== false)
-          .map((b) =>
-            b.added_by_display_name === "Anonymous"
-              ? { ...b, added_by_user_id: undefined }
-              : b
-          )
+          .map((b) => {
+            const named =
+              b.added_by_display_name === "Anonymous" ? { ...b, added_by_user_id: undefined } : b
+            return { ...named, current_holder_name: redactPublicHolderName(named.current_holder_name) }
+          })
 
     // Contact data supports borrowing but is not public directory data. Only a
     // steward and the signed-in member receive the private fields.
@@ -78,6 +78,7 @@ export async function GET() {
       const {
         email: _email,
         real_name: _realName,
+        email_verified_at: _verified,
         ...publicUser
       } = user
       if (user.contact_opt_in) return publicUser
@@ -92,7 +93,9 @@ export async function GET() {
       return privateContactRemoved
     })
 
-    const loanEventsForClient = isSteward ? loanEvents : publicLoanEvents(loanEvents, books)
+    // Sharing history is public for everyone, including a signed-in steward.
+    // Guest emails stay on the steward keycard panel, not in this ledger.
+    const loanEventsForClient = publicLoanEvents(loanEvents, books)
 
     return NextResponse.json(
       {
