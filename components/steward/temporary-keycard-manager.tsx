@@ -8,11 +8,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import type { Book, Node } from "@/lib/types"
+import {
+  buildLoanStartedAtByBookId,
+  formatCheckoutDateTime,
+  formatOutFor,
+  isPastExpectedReturn,
+} from "@/lib/steward-loan-age"
+import type { Book, LoanEvent, Node } from "@/lib/types"
 
 interface TemporaryKeycardManagerProps {
   items: Book[]
   nodes: Node[]
+  loanEvents: LoanEvent[]
   defaultLoanDays: number
   onChanged: () => Promise<unknown> | unknown
 }
@@ -29,6 +36,7 @@ function keycardStatusLabel(status: Book["availability_status"]) {
 export function TemporaryKeycardManager({
   items,
   nodes,
+  loanEvents,
   defaultLoanDays,
   onChanged,
 }: TemporaryKeycardManagerProps) {
@@ -36,6 +44,21 @@ export function TemporaryKeycardManager({
     () => items.filter((item) => item.item_type === "keycard").sort((a, b) => (a.asset_number ?? 0) - (b.asset_number ?? 0)),
     [items]
   )
+  const loanStartedAt = useMemo(() => buildLoanStartedAtByBookId(loanEvents), [loanEvents])
+  const signedOut = useMemo(() => {
+    return keycards
+      .filter((item) => item.availability_status === "checked_out")
+      .map((item) => ({
+        item,
+        checkedOutAt: loanStartedAt.get(item.id) ?? null,
+      }))
+      .sort((a, b) => {
+        if (!a.checkedOutAt && !b.checkedOutAt) return 0
+        if (!a.checkedOutAt) return 1
+        if (!b.checkedOutAt) return -1
+        return a.checkedOutAt.getTime() - b.checkedOutAt.getTime()
+      })
+  }, [keycards, loanStartedAt])
   // Bootstrap loads after first paint — seed from nodes[0] only once they arrive.
   const [nodeId, setNodeId] = useState("")
   const [count, setCount] = useState(10)
@@ -125,10 +148,53 @@ export function TemporaryKeycardManager({
           Temporary keycards
         </CardTitle>
         <p className="text-sm text-muted-foreground">
-          Create numbered cards, copy NFC URLs, print cut-out QR labels, and recover a return from the dashboard.
+          Signed-out cards are longest-first (same idea as Hunt down). Create cards and print QR labels below.
         </p>
       </CardHeader>
       <CardContent className="space-y-5">
+        <div className="rounded-lg border border-border bg-muted/30 p-3">
+          <p className="text-sm font-medium text-foreground">
+            Signed out now ({signedOut.length})
+          </p>
+          {signedOut.length === 0 ? (
+            <p className="mt-1 text-sm text-muted-foreground">No guest cards are out.</p>
+          ) : (
+            <ul className="mt-3 flex flex-col gap-2">
+              {signedOut.map(({ item, checkedOutAt }) => {
+                const overdue = isPastExpectedReturn(item.expected_return_date)
+                return (
+                  <li
+                    key={item.id}
+                    className="flex flex-col gap-2 rounded-md border border-border bg-background p-3 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-medium text-foreground">
+                        {item.asset_number != null ? `Card ${item.asset_number}` : item.title}
+                        {overdue ? (
+                          <span className="ml-2 text-xs font-normal text-destructive">Overdue</span>
+                        ) : null}
+                      </p>
+                      <p className="truncate text-sm text-foreground">
+                        {item.current_holder_name || "Guest email not recorded"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {checkedOutAt
+                          ? `Out ${formatOutFor(checkedOutAt)} · since ${formatCheckoutDateTime(checkedOutAt)}`
+                          : "Out — checkout date unknown"}
+                        {item.current_node_name ? ` · ${item.current_node_name}` : ""}
+                      </p>
+                    </div>
+                    <Button variant="outline" size="sm" disabled={busy} onClick={() => stewardReturn(item)}>
+                      <RotateCcw className="mr-2 h-4 w-4" />
+                      Steward return
+                    </Button>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </div>
+
         <div className="grid gap-3 sm:grid-cols-4 sm:items-end">
           <div className="space-y-2 sm:col-span-2">
             <Label>Home node</Label>
@@ -180,26 +246,36 @@ export function TemporaryKeycardManager({
 
         {keycards.length > 0 && (
           <div className="divide-y rounded-lg border">
-            {keycards.map((item) => (
-              <div key={item.id} className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center">
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium">{item.title}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {item.current_node_name} · {keycardStatusLabel(item.availability_status)}
-                  </p>
-                </div>
-                <Button variant="outline" size="sm" onClick={() => copyUrl(item)}>
-                  {copiedId === item.id ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
-                  NFC URL
-                </Button>
-                {item.availability_status === "checked_out" && (
-                  <Button variant="outline" size="sm" disabled={busy} onClick={() => stewardReturn(item)}>
-                    <RotateCcw className="mr-2 h-4 w-4" />
-                    Steward return
+            {keycards.map((item) => {
+              const checkedOutAt =
+                item.availability_status === "checked_out"
+                  ? loanStartedAt.get(item.id) ?? null
+                  : null
+              return (
+                <div key={item.id} className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium">{item.title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {item.current_node_name} · {keycardStatusLabel(item.availability_status)}
+                      {item.availability_status === "checked_out" && item.current_holder_name
+                        ? ` · ${item.current_holder_name}`
+                        : ""}
+                      {checkedOutAt ? ` · out ${formatOutFor(checkedOutAt)}` : ""}
+                    </p>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => copyUrl(item)}>
+                    {copiedId === item.id ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
+                    NFC URL
                   </Button>
-                )}
-              </div>
-            ))}
+                  {item.availability_status === "checked_out" && (
+                    <Button variant="outline" size="sm" disabled={busy} onClick={() => stewardReturn(item)}>
+                      <RotateCcw className="mr-2 h-4 w-4" />
+                      Steward return
+                    </Button>
+                  )}
+                </div>
+              )
+            })}
           </div>
         )}
       </CardContent>
