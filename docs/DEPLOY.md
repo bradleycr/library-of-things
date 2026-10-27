@@ -39,6 +39,9 @@ Optionally seed demo data with `pnpm db:provision` (destructive).
 | `SMTP_FROM` | From address, e.g. `Library of Things <noreply@foresightmatchmaker.app>` | Production, Preview, Development |
 | `GUEST_PASS_REPLY_TO` | Where replies to the pass letter go, e.g. `bradley@foresight.org` | Production, Preview, Development |
 | `APP_URL` | Public origin used in email links, e.g. `https://libraryofthings.vercel.app` | Production, Preview |
+| `CRON_SECRET` | Random secret. Vercel sends it as `Authorization: Bearer …` when the daily return-reminder cron runs | Production |
+
+Return reminders run every day at 07:00 UTC (08:00 in Berlin during winter, 09:00 during summer) from `vercel.json`. The route is `GET /api/cron/return-reminders`.
 
 `noreply@foresight.org` can be the from-address only after Resend verifies that
 domain. Until then, send from a domain Resend has already verified. The DNS

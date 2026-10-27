@@ -200,6 +200,19 @@ async function main() {
       );
     `)
 
+    // Which due / week / month letters have already gone out, so a morning
+    // rerun does not ask for the same book twice.
+    await client.query(`
+      create table if not exists return_reminders (
+        id text primary key,
+        book_id text not null references books(id) on delete cascade,
+        stage text not null check (stage in ('due', 'week', 'month')),
+        sent_to text not null,
+        sent_at timestamptz not null default now(),
+        unique (book_id, stage)
+      );
+    `)
+
     await client.query(`
       create table if not exists loan_events (
         id text primary key,
@@ -400,7 +413,7 @@ async function main() {
     `)
 
     await client.query("commit")
-    console.log("Schema ensured. Tables: users, nodes, books, guest_loans, guest_checkout_requests, library_cards, library_card_challenges, loan_events, trust_events, app_config.")
+    console.log("Schema ensured. Tables: users, nodes, books, guest_loans, guest_checkout_requests, library_cards, library_card_challenges, return_reminders, loan_events, trust_events, app_config.")
   } catch (error) {
     await client.query("rollback")
     console.error("Schema ensure failed:", error.message)
