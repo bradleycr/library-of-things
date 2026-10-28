@@ -13,10 +13,12 @@ import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { CreditCard, Loader2, MapPin } from "lucide-react"
 import { BookCover } from "@/components/book-cover"
+import { ReturnDropoffPhoto } from "@/components/return-dropoff-photo"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { BERLIN_DROPOFF } from "@/lib/berlin-dropoff"
 import { getBookCoverSrcs } from "@/lib/book-cover-generator"
 import { isValidEmail, normalizeEmail } from "@/lib/email"
 import { isPlausibleGuestName } from "@/lib/guest-pass"
@@ -47,6 +49,7 @@ function ThingCheckoutInner({ params }: { params: Promise<{ uuid: string }> }) {
   const [email, setEmail] = useState("")
   const [until, setUntil] = useState("")
   const [reportAck, setReportAck] = useState(false)
+  const [dropoffPhoto, setDropoffPhoto] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [pendingEmail, setPendingEmail] = useState<string | null>(null)
   const [devConfirmUrl, setDevConfirmUrl] = useState<string | null>(null)
@@ -124,10 +127,16 @@ function ThingCheckoutInner({ params }: { params: Promise<{ uuid: string }> }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ item_id: uuid, token, report_ack: true }),
+        body: JSON.stringify({
+          item_id: uuid,
+          token,
+          report_ack: true,
+          ...(dropoffPhoto ? { dropoff_photo: dropoffPhoto } : {}),
+        }),
       })
       const body = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error((body as { error?: string }).error ?? "Return failed")
+      const hadPhoto = Boolean(dropoffPhoto)
       setPayload((current) =>
         current
           ? {
@@ -137,7 +146,13 @@ function ThingCheckoutInner({ params }: { params: Promise<{ uuid: string }> }) {
           : current
       )
       setPendingEmail(null)
-      setFlash("Returned")
+      setDropoffPhoto(null)
+      setReportAck(false)
+      setFlash(
+        hadPhoto
+          ? "Returned in the app. Leave the physical card with CIC reception, or in the locker if reception is closed."
+          : "Returned in the app. Now leave the physical card with CIC reception, or after hours in the return locker (bottom right)."
+      )
       await load().catch(() => undefined)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Return failed")
@@ -268,8 +283,13 @@ function ThingCheckoutInner({ params }: { params: Promise<{ uuid: string }> }) {
         ) : (
           <div className="space-y-3">
             <p className="text-center text-sm text-muted-foreground">
-              This card is out. If you have it in your hand, you can return it.
+              This card is out. If you have it in your hand, return it in the app, then leave the physical card at the node.
             </p>
+            <div className="space-y-2 rounded-xl border border-border bg-muted/20 px-3 py-3 text-sm leading-relaxed text-muted-foreground">
+              <p className="font-medium text-foreground">After you tap Return</p>
+              <p>{BERLIN_DROPOFF.reception}</p>
+              <p>{BERLIN_DROPOFF.locker}</p>
+            </div>
             <div className="flex items-start gap-3 rounded-xl border border-border bg-muted/30 px-3 py-3">
               <Checkbox
                 id="guest-report"
@@ -281,6 +301,7 @@ function ThingCheckoutInner({ params }: { params: Promise<{ uuid: string }> }) {
                 I will send {KEYCARD_REPORT_EMAIL} a short report on my time at the node.
               </label>
             </div>
+            <ReturnDropoffPhoto value={dropoffPhoto} onChange={setDropoffPhoto} disabled={busy} />
             <Button
               type="button"
               className="btn-pastel h-12 w-full text-base"

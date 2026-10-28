@@ -282,6 +282,27 @@ async function main() {
       END $$;
     `)
 
+    // Optional photo of a keycard left at reception or in the return locker.
+    // Stewards can see these for two weeks; the morning cron deletes older ones.
+    await client.query(`
+      create table if not exists return_dropoff_photos (
+        id text primary key,
+        book_id text not null references books(id) on delete cascade,
+        loan_event_id text references loan_events(id) on delete set null,
+        image_data text not null,
+        created_at timestamptz not null default now(),
+        expires_at timestamptz not null
+      );
+    `)
+    await client.query(`
+      create index if not exists idx_return_dropoff_photos_expires
+        on return_dropoff_photos (expires_at);
+    `)
+    await client.query(`
+      create index if not exists idx_return_dropoff_photos_created
+        on return_dropoff_photos (created_at desc);
+    `)
+
     await client.query(`
       create index if not exists idx_books_added_by_user_id on books(added_by_user_id)
     `)
@@ -413,7 +434,7 @@ async function main() {
     `)
 
     await client.query("commit")
-    console.log("Schema ensured. Tables: users, nodes, books, guest_loans, guest_checkout_requests, library_cards, library_card_challenges, return_reminders, loan_events, trust_events, app_config.")
+    console.log("Schema ensured. Tables: users, nodes, books, guest_loans, guest_checkout_requests, library_cards, library_card_challenges, return_reminders, return_dropoff_photos, loan_events, trust_events, app_config.")
   } catch (error) {
     await client.query("rollback")
     console.error("Schema ensure failed:", error.message)

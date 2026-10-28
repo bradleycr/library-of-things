@@ -29,7 +29,8 @@ off the public browse surfaces; their NFC URLs are for people who tap the tag.
 
 ## Defaults that affect privacy
 
-- **Return reminders** go to the email on the borrower’s account: the day a book is due, one week later, and one month after the due date. They are not written into the public sharing history.
+- **Return reminders** go to the email on the borrower’s account: the day a book is due, one week later, and one month after the due date. They explain leaving the book at CIC Berlin reception or in the after-hours return locker. They are not written into the public sharing history.
+- **Keycard drop-off photos** are optional. If a guest attaches one when returning a temporary keycard, only stewards can see it, and it is deleted after about two weeks.
 - **A verified email is required for a library card and for book checkout.**
   The member confirms the address from their inbox. Asking for a lost card
   emails the number and a new PIN to that address only. Required email is for

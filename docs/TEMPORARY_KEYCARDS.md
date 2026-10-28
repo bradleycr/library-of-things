@@ -31,9 +31,12 @@ either a name, email, and **until when** they plan to use the card, or a
 **Return** button. No library card is required. A visitor pass is not a membership.
 
 The morning of the chosen end date, the guest gets an email: scan the QR,
-select Return, and confirm they will email the node manager a short report.
-The steward gets a copy that morning so they can check in, and another email
-when the card is actually returned.
+select Return, confirm they will email the node manager a short report, then
+leave the physical card with CIC Berlin reception or, after hours, in the
+return locker in the node office (bottom right of the lockers). They may
+optionally attach a photo of the drop-off; stewards see those photos for two
+weeks on the Temporary keycards panel. The steward gets a copy that morning
+so they can check in, and another email when the card is actually returned.
 
 The card stays available until the guest opens the email and presses
 **Confirm checkout**. The message is the Foresight Berlin guest-pass letter
@@ -47,9 +50,10 @@ the steward holder label. It is erased from that live loan on return. Sharing
 history stays public and shows **Guest**, not the address. The tap page does
 not show the email either. Temporary keycards stay off the public catalog.
 
-Anyone who taps the tag or scans the QR can return the card. Possession of
-the physical card is enough. A steward can also record a return from the
-dashboard. The same email may hold multiple keycards.
+Anyone who taps the tag or scans the QR can return the card in the app.
+Possession of the physical card is enough for that step; they still need to
+leave the card at reception or in the locker afterward. A steward can also
+record a return from the dashboard. The same email may hold multiple keycards.
 
 Mail uses Resend (`RESEND_API_KEY`, `SMTP_FROM`, `GUEST_PASS_REPLY_TO`,
 `APP_URL`). See [DEPLOY.md](./DEPLOY.md). Without a key, local development

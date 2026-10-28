@@ -1564,6 +1564,7 @@ export type GuestReturnNotice = {
   cardTitle: string
   assetNumber: number | null
   nodeName: string | null
+  loanEventId: string | null
 }
 
 export async function returnGuestItem(params: {
@@ -1630,12 +1631,13 @@ export async function returnGuestItem(params: {
         where id = $1`,
       [params.itemId, node?.name ?? null, node?.location_address ?? node?.name ?? null]
     )
+    const loanEventId = crypto.randomUUID()
     await client.query(
       `insert into loan_events
         (id, event_type, book_id, book_title, user_display_name, timestamp, location_text, metadata)
        values ($1, 'return', $2, $3, 'Guest', now(), $4, $5::jsonb)`,
       [
-        crypto.randomUUID(),
+        loanEventId,
         params.itemId,
         item.title,
         node?.location_address ?? node?.name ?? item.current_location_text ?? null,
@@ -1657,6 +1659,7 @@ export async function returnGuestItem(params: {
       cardTitle: item.title,
       assetNumber: item.asset_number ?? null,
       nodeName: node?.name ?? item.current_node_name ?? null,
+      loanEventId,
     }
   } catch (error) {
     await client.query("rollback")
@@ -1708,12 +1711,13 @@ export async function stewardReturnGuestItem(itemId: string): Promise<GuestRetur
         where id = $1`,
       [itemId]
     )
+    const loanEventId = crypto.randomUUID()
     await client.query(
       `insert into loan_events
         (id, event_type, book_id, book_title, user_display_name, timestamp, location_text, metadata)
        values ($1, 'return', $2, $3, 'Steward', now(), $4, $5::jsonb)`,
       [
-        crypto.randomUUID(),
+        loanEventId,
         itemId,
         item.title,
         item.current_location_text ?? null,
@@ -1734,6 +1738,7 @@ export async function stewardReturnGuestItem(itemId: string): Promise<GuestRetur
       cardTitle: item.title,
       assetNumber: item.asset_number ?? null,
       nodeName: item.current_node_name ?? null,
+      loanEventId,
     }
   } catch (error) {
     await client.query("rollback")

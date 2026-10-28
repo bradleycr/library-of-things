@@ -5,6 +5,7 @@
  * and a month after that. The coworking line is part of every one of them.
  */
 
+import { berlinDropoffProse } from "@/lib/berlin-dropoff"
 import { RETURN_COWORKING, type ReminderStage } from "@/lib/return-reminders"
 
 const PAPER = "#f4faf8"
@@ -78,6 +79,10 @@ export function renderReturnReminderEmail(input: {
   const coworking = coworkingProse(input.stage)
   const support = `If you need a hand with how to bring ${books.length === 1 ? "it" : "them"} back, or when to come to the node, email ${input.supportEmail}.`
   const title = subject(input.stage, books.map((book) => book.title))
+  const hasNodeReturn = books.some((book) => !book.pocket)
+  const dropoff = hasNodeReturn
+    ? berlinDropoffProse(books.length === 1 ? "book" : "books")
+    : null
 
   const lines = books.map((book) => {
     const author = book.author?.trim() ? ` — ${book.author.trim()}` : ""
@@ -90,6 +95,7 @@ export function renderReturnReminderEmail(input: {
     lead,
     "",
     ...lines.flatMap((line) => [line, ""]),
+    ...(dropoff ? [dropoff, ""] : []),
     support,
     "",
     coworking,
@@ -146,6 +152,11 @@ export function renderReturnReminderEmail(input: {
           </tr>
           <tr>
             <td style="padding:22px 32px 0 32px;">
+              ${
+                dropoff
+                  ? `<p style="margin:0 0 14px 0;font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:${INK_SOFT};">${escapeHtml(dropoff)}</p>`
+                  : ""
+              }
               <p style="margin:0;font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:${INK_SOFT};">${escapeHtml(support)}</p>
               <p style="margin:14px 0 0 0;font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:${INK_SOFT};">${escapeHtml(coworking)}</p>
               <p style="margin:8px 0 0 0;font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:1.5;"><a href="${escapeHtml(RETURN_COWORKING.url)}" style="color:${SAGE_DEEP};">${escapeHtml(RETURN_COWORKING.url)}</a></p>

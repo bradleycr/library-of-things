@@ -16,6 +16,16 @@ import {
 } from "@/lib/steward-loan-age"
 import type { Book, LoanEvent, Node } from "@/lib/types"
 
+type DropoffPhoto = {
+  id: string
+  book_id: string
+  book_title: string | null
+  asset_number: number | null
+  image_data: string
+  created_at: string
+  expires_at: string
+}
+
 interface TemporaryKeycardManagerProps {
   items: Book[]
   nodes: Node[]
@@ -66,10 +76,32 @@ export function TemporaryKeycardManager({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [dropoffPhotos, setDropoffPhotos] = useState<DropoffPhoto[]>([])
+  const [photosLoading, setPhotosLoading] = useState(true)
 
   useEffect(() => {
     if (nodes.length > 0 && !nodeId) setNodeId(nodes[0].id)
   }, [nodes, nodeId])
+
+  useEffect(() => {
+    let cancelled = false
+    setPhotosLoading(true)
+    fetch("/api/steward/return-photos", { credentials: "include", cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) return
+        const body = (await response.json()) as { photos?: DropoffPhoto[] }
+        if (!cancelled) setDropoffPhotos(body.photos ?? [])
+      })
+      .catch(() => {
+        if (!cancelled) setDropoffPhotos([])
+      })
+      .finally(() => {
+        if (!cancelled) setPhotosLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [signedOut.length])
 
   const create = async () => {
     setBusy(true)
@@ -191,6 +223,55 @@ export function TemporaryKeycardManager({
                   </li>
                 )
               })}
+            </ul>
+          )}
+        </div>
+
+        <div className="rounded-lg border border-border bg-muted/30 p-3">
+          <p className="text-sm font-medium text-foreground">
+            Drop-off photos ({dropoffPhotos.length})
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Guests can attach a photo when they return a card in the app — usually of the card in the return locker. Kept for two weeks.
+          </p>
+          {photosLoading ? (
+            <p className="mt-2 text-sm text-muted-foreground">Loading…</p>
+          ) : dropoffPhotos.length === 0 ? (
+            <p className="mt-2 text-sm text-muted-foreground">No drop-off photos yet.</p>
+          ) : (
+            <ul className="mt-3 grid gap-3 sm:grid-cols-2">
+              {dropoffPhotos.map((photo) => (
+                <li
+                  key={photo.id}
+                  className="flex gap-3 rounded-md border border-border bg-background p-3"
+                >
+                  <a
+                    href={photo.image_data}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="shrink-0"
+                  >
+                    <img
+                      src={photo.image_data}
+                      alt=""
+                      className="h-20 w-20 rounded-md border border-border object-cover"
+                    />
+                  </a>
+                  <div className="min-w-0">
+                    <p className="font-medium text-foreground">
+                      {photo.asset_number != null
+                        ? `Card ${photo.asset_number}`
+                        : photo.book_title || "Keycard"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(photo.created_at).toLocaleString()}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Kept until {new Date(photo.expires_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                </li>
+              ))}
             </ul>
           )}
         </div>

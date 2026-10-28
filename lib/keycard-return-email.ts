@@ -26,9 +26,10 @@ export function renderKeycardDueEmail(input: {
   const name = input.guestName.trim() || "there"
   const subject = `Today is the day to return ${input.cardLabel}`
   const steps = [
-    "Scan the QR code on the card.",
-    "Select Return.",
+    "Scan the QR code on the card and select Return in the app.",
     `Confirm you will send ${KEYCARD_REPORT_EMAIL} a short report on your time at the node. There is a checkbox for that.`,
+    "Leave the physical card with reception at CIC Berlin. After reception hours, put it in the return locker in the node office (bottom right of the lockers).",
+    "Optional: take a photo of the card in the locker so a steward can see it was left.",
   ]
   const text = [
     `Hi ${name},`,

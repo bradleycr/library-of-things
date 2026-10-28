@@ -96,9 +96,10 @@ export function guestPassFacts(input: GuestPassFactsInput): GuestPassFacts {
     ],
     returningTitle: "Returning the card",
     returning: [
-      "Scan the QR code on the card and select Return.",
+      "Scan the QR code on the card and select Return in the app.",
       "Confirm you will email bradley@foresight.org a short report on your time at the node. There is a checkbox for that.",
-      "Hand the card in at CIC reception, give it to me directly, or after hours drop it in the card return locker inside the Node.",
+      "Then leave the physical card with reception at CIC Berlin. After reception hours, put it in the return locker in the node office (bottom right of the lockers).",
+      "Optional: take a photo of the card in the locker so a steward can see it was left.",
       "If the card gets lost, tell me the same day so we can deactivate it. A replacement costs €15.",
     ],
     guide: "House rules and practical info are in our Community Guide.",
