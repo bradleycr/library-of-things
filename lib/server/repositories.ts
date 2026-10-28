@@ -3,6 +3,8 @@ import "server-only"
 import { createHash, randomBytes } from "crypto"
 import type { PoolClient } from "pg"
 import { MAX_BOOKS_CHECKED_OUT } from "@/lib/constants"
+import { guestPassCardLabel } from "@/lib/guest-pass"
+import { addCalendarDays, berlinDayKey } from "@/lib/keycard-stay"
 import {
   DEFAULT_LOAN_PERIOD_DAYS,
   normalizeLoanPeriodDays,
@@ -1287,7 +1289,13 @@ type GuestCheckoutRequestRow = {
 async function insertGuestCheckout(
   client: PoolClient,
   item: DbBook,
-  params: { email: string; name?: string; expectedReturn?: Date }
+  params: {
+    email: string
+    name?: string
+    expectedReturn?: Date
+    nodeName?: string
+    cardLabel?: string
+  }
 ): Promise<string> {
   const token = randomBytes(32).toString("base64url")
   const loanId = crypto.randomUUID()
@@ -1300,6 +1308,7 @@ async function insertGuestCheckout(
   )
   // A new stay should be able to send its own morning reminder.
   await client.query(`delete from return_reminders where book_id = $1`, [item.id])
+  const expectedReturn = params.expectedReturn ?? null
   await client.query(
     `update books
         set availability_status = 'checked_out',
@@ -1307,7 +1316,7 @@ async function insertGuestCheckout(
             current_holder_name = $2,
             expected_return_date = coalesce($4::timestamptz, now() + (($3::int || ' days')::interval))
       where id = $1`,
-    [item.id, params.email.slice(0, LIMITS.displayName), days, params.expectedReturn ?? null]
+    [item.id, params.email.slice(0, LIMITS.displayName), days, expectedReturn]
   )
   await client.query(
     `insert into loan_events
@@ -1324,6 +1333,28 @@ async function insertGuestCheckout(
         borrower_email: params.email,
         ...(params.name ? { borrower_name: params.name } : {}),
       }),
+    ]
+  )
+
+  // Keep the inbox for the two-week report ask (email is cleared from guest_loans on return).
+  const leaveOn = berlinDayKey(expectedReturn ?? new Date(Date.now() + days * 86_400_000))
+  const reportDueOn = addCalendarDays(leaveOn, 14)
+  const cardLabel = params.cardLabel?.trim() || guestPassCardLabel(item)
+  const nodeName = params.nodeName?.trim() || item.current_node_name || "the Berlin Node"
+  await client.query(
+    `insert into guest_stay_followups
+      (id, book_id, borrower_email, borrower_name, card_label, node_name, leave_on, report_due_on)
+     values ($1, $2, $3, $4, $5, $6, $7::date, $8::date)
+     on conflict (book_id, borrower_email, leave_on) do nothing`,
+    [
+      crypto.randomUUID(),
+      item.id,
+      params.email,
+      (params.name?.trim() || "Guest").slice(0, LIMITS.displayName),
+      cardLabel.slice(0, 200),
+      nodeName.slice(0, 200),
+      leaveOn,
+      reportDueOn,
     ]
   )
   return token
@@ -1563,6 +1594,8 @@ export async function confirmGuestCheckout(rawToken: string): Promise<
       email: row.borrower_email,
       name: row.borrower_name,
       expectedReturn: new Date(row.valid_until),
+      nodeName: row.node_name,
+      cardLabel: row.card_label,
     })
     await client.query(
       `update guest_checkout_requests
@@ -1706,6 +1739,13 @@ export async function returnGuestItem(params: {
         }),
       ]
     )
+    await syncGuestStayFollowupOnReturn(client, {
+      bookId: params.itemId,
+      email: privateEmail,
+      name: guestName,
+      item,
+      nodeName: node?.name ?? item.current_node_name,
+    })
     await client.query("commit")
     return {
       guestName,
@@ -1721,6 +1761,49 @@ export async function returnGuestItem(params: {
   } finally {
     client.release()
   }
+}
+
+/** When they leave early, the report ask moves to two weeks after the real leave day. */
+async function syncGuestStayFollowupOnReturn(
+  client: PoolClient,
+  input: {
+    bookId: string
+    email: string
+    name: string | null
+    item: DbBook
+    nodeName?: string | null
+  }
+): Promise<void> {
+  if (!input.email) return
+  const leftOn = berlinDayKey(new Date())
+  const reportDueOn = addCalendarDays(leftOn, 14)
+  const cardLabel = guestPassCardLabel(input.item)
+  const nodeName = input.nodeName?.trim() || "the Berlin Node"
+  await client.query(
+    `update guest_stay_followups
+        set leave_on = least(leave_on, $2::date),
+            report_due_on = least(report_due_on, $3::date)
+      where book_id = $1
+        and lower(borrower_email) = lower($4)
+        and report_sent_at is null`,
+    [input.bookId, leftOn, reportDueOn, input.email]
+  )
+  await client.query(
+    `insert into guest_stay_followups
+      (id, book_id, borrower_email, borrower_name, card_label, node_name, leave_on, report_due_on)
+     values ($1, $2, $3, $4, $5, $6, $7::date, $8::date)
+     on conflict (book_id, borrower_email, leave_on) do nothing`,
+    [
+      crypto.randomUUID(),
+      input.bookId,
+      input.email,
+      (input.name || "Guest").slice(0, LIMITS.displayName),
+      cardLabel.slice(0, 200),
+      nodeName.slice(0, 200),
+      leftOn,
+      reportDueOn,
+    ]
+  )
 }
 
 /** Steward recovery path for lost browser sessions or orphaned checked-out state. */
@@ -1785,6 +1868,13 @@ export async function stewardReturnGuestItem(itemId: string): Promise<GuestRetur
         }),
       ]
     )
+    await syncGuestStayFollowupOnReturn(client, {
+      bookId: itemId,
+      email: privateEmail,
+      name: guestName,
+      item,
+      nodeName: item.current_node_name,
+    })
     await client.query("commit")
     return {
       guestName,

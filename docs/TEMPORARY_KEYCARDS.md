@@ -47,6 +47,12 @@ links, so only the button does. If they have not confirmed after about one
 hour, Resend delivers a short follow-up with the same **Finish checkout**
 button; that follow-up is cancelled when they confirm.
 
+About two weeks after the guest leaves (planned end date, or earlier if they
+return the card early), the morning cron emails them a thank-you and asks for
+the short stay report: 1–2 pages on what was most valuable, what could improve,
+photos, and whether Foresight may share excerpts, mention their name, and use
+the write-up on socials or only internally. Reply-To is the node manager.
+
 The email is stored in private `guest_loans` while the card is out and used as
 the steward holder label. It is erased from that live loan on return. Sharing
 history stays public and shows **Guest**, not the address. The tap page does

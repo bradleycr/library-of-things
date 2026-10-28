@@ -4,6 +4,7 @@ import crypto from "crypto"
 import { formatStayDate } from "@/lib/guest-pass-email"
 import { guestPassCardLabel } from "@/lib/guest-pass"
 import { berlinDayKey } from "@/lib/keycard-stay"
+import { renderKeycardReportReminderEmail } from "@/lib/keycard-report-email"
 import {
   renderKeycardDueEmail,
   renderKeycardDueStewardEmail,
@@ -102,6 +103,76 @@ export async function sendKeycardDueReminders(now = new Date()): Promise<{ sent:
       })
     }
     sent.push(row.title)
+  }
+
+  return { sent }
+}
+
+type ReportFollowupRow = {
+  id: string
+  borrower_email: string
+  borrower_name: string
+  card_label: string
+  node_name: string
+}
+
+/**
+ * Two Berlin weeks after the guest left (or planned to leave): ask for the stay report.
+ * Missed mornings still send once — report_due_on <= today and report_sent_at is null.
+ */
+export async function sendKeycardReportReminders(now = new Date()): Promise<{ sent: string[] }> {
+  const today = berlinDayKey(now)
+  const { rows } = await resilientQuery<ReportFollowupRow>(
+    `select id, borrower_email, borrower_name, card_label, node_name
+       from guest_stay_followups
+      where report_sent_at is null
+        and report_due_on <= $1::date
+      order by report_due_on asc
+      limit 80`,
+    [today]
+  )
+
+  const sent: string[] = []
+  const replyTo = guestPassReplyTo()
+
+  for (const row of rows) {
+    const email = normalizeEmail(row.borrower_email)
+    if (!isValidEmail(email)) {
+      await resilientQuery(
+        `update guest_stay_followups set report_sent_at = now() where id = $1 and report_sent_at is null`,
+        [row.id]
+      )
+      continue
+    }
+
+    const claimed = await resilientQuery(
+      `update guest_stay_followups
+          set report_sent_at = now()
+        where id = $1 and report_sent_at is null
+        returning id`,
+      [row.id]
+    )
+    if ((claimed.rowCount ?? 0) === 0) continue
+
+    const letter = renderKeycardReportReminderEmail({
+      guestName: row.borrower_name,
+      nodeName: row.node_name,
+      cardLabel: row.card_label,
+      reportEmail: replyTo,
+    })
+    const result = await sendMail({
+      to: email,
+      replyTo,
+      subject: letter.subject,
+      text: letter.text,
+      html: letter.html,
+      idempotencyKey: `keycard-report/${row.id}`,
+    })
+    if (!result.sent) {
+      await resilientQuery(`update guest_stay_followups set report_sent_at = null where id = $1`, [row.id])
+      continue
+    }
+    sent.push(row.card_label)
   }
 
   return { sent }

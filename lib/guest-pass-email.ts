@@ -94,7 +94,7 @@ export function guestPassFacts(input: GuestPassFactsInput): GuestPassFacts {
       },
       {
         title: "Write a short report.",
-        body: "Within a week of your last day, send me a short write-up of your time here. A page or two is plenty, the format is up to you, and a couple of photos are welcome. Things worth covering: what you worked on, a few highlights, who you met and any connections that came out of it, and what was most useful about the Node and what could be better. We may share excerpts, with credit, in Foresight posts or reports, so just say if you'd rather we didn't. If your photos include other people, please check they're OK with it.",
+        body: "Within two weeks of your last day, send me a short write-up of your time here. A page or two is plenty, the format is up to you, and a couple of photos are welcome. Things worth covering: what you found most valuable, what could be improved or what you’d like to see more of, and any relevant photos. Please say whether we may share excerpts, mention your name, and use it on socials or only internally (for example impact reporting). If your photos include other people, please check they're OK with it.",
       },
     ],
     returningTitle: "Returning the card",

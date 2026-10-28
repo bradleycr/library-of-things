@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "crypto"
 import { NextRequest, NextResponse } from "next/server"
-import { sendKeycardDueReminders } from "@/lib/server/keycard-mail"
+import { sendKeycardDueReminders, sendKeycardReportReminders } from "@/lib/server/keycard-mail"
 import { purgeExpiredDropoffPhotos } from "@/lib/server/return-dropoff-photos"
 import { sendReturnReminders } from "@/lib/server/return-reminders"
 
@@ -36,12 +36,14 @@ export async function GET(request: NextRequest) {
   try {
     const result = await sendReturnReminders()
     const keycards = await sendKeycardDueReminders()
+    const reports = await sendKeycardReportReminders()
     const purgedPhotos = await purgeExpiredDropoffPhotos()
     return NextResponse.json({
       ok: true,
       sent: result.sent,
       skipped: result.skipped,
       keycards_due: keycards.sent,
+      keycard_reports: reports.sent,
       dropoff_photos_purged: purgedPhotos,
     })
   } catch (error) {

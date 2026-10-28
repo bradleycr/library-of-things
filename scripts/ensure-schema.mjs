@@ -370,6 +370,36 @@ async function main() {
         add column if not exists nudge_cancelled_at timestamptz;
     `)
 
+    // Email kept for the two-week post-stay report ask (guest_loans clears email on return).
+    await client.query(`
+      create table if not exists guest_stay_followups (
+        id text primary key,
+        book_id text not null references books(id) on delete cascade,
+        borrower_email text not null,
+        borrower_name text not null,
+        card_label text not null,
+        node_name text not null,
+        leave_on date not null,
+        report_due_on date not null,
+        report_sent_at timestamptz,
+        created_at timestamptz not null default now(),
+        unique (book_id, borrower_email, leave_on)
+      );
+    `)
+    await client.query(`
+      do $$ begin
+        alter table guest_stay_followups
+          add constraint guest_stay_followups_book_email_leave_key
+          unique (book_id, borrower_email, leave_on);
+      exception when duplicate_object then null;
+      end $$;
+    `)
+    await client.query(`
+      create index if not exists idx_guest_stay_followups_due
+        on guest_stay_followups (report_due_on)
+        where report_sent_at is null;
+    `)
+
     // Sharing history is public. Move any guest address out of the name column
     // and into steward-only metadata. Safe to re-run: already-cleaned rows no
     // longer match the email pattern.
@@ -443,7 +473,7 @@ async function main() {
     `)
 
     await client.query("commit")
-    console.log("Schema ensured. Tables: users, nodes, books, guest_loans, guest_checkout_requests, library_cards, library_card_challenges, return_reminders, return_dropoff_photos, loan_events, trust_events, app_config.")
+    console.log("Schema ensured. Tables: users, nodes, books, guest_loans, guest_checkout_requests, guest_stay_followups, library_cards, library_card_challenges, return_reminders, return_dropoff_photos, loan_events, trust_events, app_config.")
   } catch (error) {
     await client.query("rollback")
     console.error("Schema ensure failed:", error.message)
