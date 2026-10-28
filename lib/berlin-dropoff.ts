@@ -39,6 +39,6 @@ export function berlinDropoffProse(item: DropoffItemWord = "book"): string {
   const thing = item === "books" || item === "cards" ? "them" : "it"
   return [
     `After you mark ${thing} returned in the app, leave ${thing} with reception at CIC Berlin.`,
-    "If reception is closed, put it in the return locker in the node office — bottom right of the lockers.",
+    "If reception is closed, put it in the return locker in the node office (bottom right of the lockers).",
   ].join(" ")
 }

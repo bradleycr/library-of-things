@@ -19,19 +19,16 @@ function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;")
 }
 
-const REPORT_ASKS = [
-  "A page or two about your time at the node.",
+const REPORT_POINTS = [
+  "A page or two about your time at the node (what you worked on, who you met, highlights).",
   "What you found most valuable.",
-  "What you feel could be improved, or what you’d like to see more of.",
-  "Any relevant photos (and a quick OK from anyone else who appears in them).",
-  "Whether we may share excerpts.",
-  "Whether we may mention your name.",
-  "Whether we may use the write-up on socials, or only internally (for example impact reporting).",
+  "What could be better, or what you’d like to see more of.",
+  "Any photos you’re happy to share (check with people who appear in them).",
 ] as const
 
 /**
  * Soft thank-you + report brief, two weeks after the stay ends.
- * Reply goes to the node manager.
+ * Full write-ups stay internal; we only ask about quotes and naming.
  */
 export function renderKeycardReportReminderEmail(input: {
   guestName: string
@@ -42,29 +39,33 @@ export function renderKeycardReportReminderEmail(input: {
   const name = input.guestName.trim() || "there"
   const reportTo = (input.reportEmail || KEYCARD_REPORT_EMAIL).trim()
   const node = input.nodeName.trim() || "the Berlin Node"
-  const subject = `A short report from your time at ${node}`
-  const thanks = `Thank you for joining us at the Berlin Node. We hope the stay was useful.`
-  const ask = `If you have not already, please send a short report to ${reportTo}. A page or two is plenty — and it helps us keep the node working for the next people who come through.`
-  const leadIn = "In the write-up, it helps to cover:"
+  const subject = `Thanks for hanging out at the Berlin Node`
+  const thanks = `Hey ${name}, thanks for hanging out with us at the Berlin Node. Hope it was a good one.`
+  const ask = `If you haven’t already, could you send a short write-up to ${reportTo}? A page or two is perfect. It helps us keep the place humming for the next folks who come through.`
+  const cover = "A few things worth covering:"
+  const privacy = [
+    "We never publish your full report. The whole thing stays for our internal reporting (impact notes, how the node is doing, that kind of thing).",
+    "Quick ask: if we spot a line we love, may we share a short quote? And is it okay to mention your name with it, or would you rather stay anonymous?",
+  ].join(" ")
 
   const text = [
-    `Hi ${name},`,
-    "",
     thanks,
     "",
     ask,
     "",
-    leadIn,
-    ...REPORT_ASKS.map((line, index) => `${index + 1}. ${line}`),
+    cover,
+    ...REPORT_POINTS.map((line, index) => `${index + 1}. ${line}`),
     "",
-    `You had ${input.cardLabel}. Reply to this email or write ${reportTo} directly.`,
+    privacy,
     "",
-    "Thank you again,",
-    "Bradley Clark Royes",
-    "Node Manager, The Foresight Institute",
+    `You had ${input.cardLabel}. Just reply to this email, or write ${reportTo}.`,
+    "",
+    "Thanks again,",
+    "Bradley",
+    "Node Manager, Berlin",
   ].join("\n")
 
-  const items = REPORT_ASKS.map(
+  const items = REPORT_POINTS.map(
     (line) =>
       `<li style="margin:0 0 10px 0;font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:1.5;color:${INK_SOFT};">${escapeHtml(line)}</li>`
   ).join("")
@@ -77,7 +78,7 @@ export function renderKeycardReportReminderEmail(input: {
 <title>${escapeHtml(subject)}</title>
 </head>
 <body style="margin:0;padding:0;background:${PAPER};color:${INK};">
-  <div style="display:none;max-height:0;overflow:hidden;opacity:0;">A short report from your stay would mean a lot.</div>
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;">Thanks for hanging out at the Berlin Node.</div>
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${PAPER};">
     <tr>
       <td align="center" style="padding:28px 16px;">
@@ -88,24 +89,24 @@ export function renderKeycardReportReminderEmail(input: {
           <tr>
             <td style="padding:28px 32px 0 32px;">
               <p style="margin:0;font-family:Helvetica,Arial,sans-serif;font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:${SAGE_DEEP};">Library of Things</p>
-              <h1 style="margin:10px 0 0 0;font-family:Georgia,'Times New Roman',serif;font-size:28px;line-height:1.15;font-weight:normal;color:${INK};">Thank you for joining us</h1>
+              <h1 style="margin:10px 0 0 0;font-family:Georgia,'Times New Roman',serif;font-size:28px;line-height:1.15;font-weight:normal;color:${INK};">Thanks for hanging out</h1>
             </td>
           </tr>
           <tr>
             <td style="padding:16px 32px 0 32px;">
-              <p style="margin:0;font-family:Helvetica,Arial,sans-serif;font-size:16px;line-height:1.55;color:${INK_SOFT};">Hi ${escapeHtml(name)},</p>
-              <p style="margin:12px 0 0 0;font-family:Helvetica,Arial,sans-serif;font-size:16px;line-height:1.55;color:${INK_SOFT};">${escapeHtml(thanks)}</p>
+              <p style="margin:0;font-family:Helvetica,Arial,sans-serif;font-size:16px;line-height:1.55;color:${INK_SOFT};">${escapeHtml(thanks)}</p>
               <p style="margin:12px 0 0 0;font-family:Helvetica,Arial,sans-serif;font-size:16px;line-height:1.55;color:${INK_SOFT};">${escapeHtml(ask)}</p>
-              <p style="margin:18px 0 8px 0;font-family:Georgia,'Times New Roman',serif;font-size:18px;line-height:1.3;color:${INK};">${escapeHtml(leadIn)}</p>
+              <p style="margin:18px 0 8px 0;font-family:Georgia,'Times New Roman',serif;font-size:18px;line-height:1.3;color:${INK};">${escapeHtml(cover)}</p>
               <ol style="margin:0;padding:0 0 0 20px;">${items}</ol>
-              <p style="margin:16px 0 0 0;font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:${INK_SOFT};">You had ${escapeHtml(input.cardLabel)}. Reply to this email or write <a href="mailto:${escapeHtml(reportTo)}" style="color:${SAGE_DEEP};">${escapeHtml(reportTo)}</a> directly.</p>
+              <p style="margin:16px 0 0 0;font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:${INK_SOFT};">${escapeHtml(privacy)}</p>
+              <p style="margin:14px 0 0 0;font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:${INK_SOFT};">You had ${escapeHtml(input.cardLabel)}. Just reply to this email, or write <a href="mailto:${escapeHtml(reportTo)}" style="color:${SAGE_DEEP};">${escapeHtml(reportTo)}</a>.</p>
             </td>
           </tr>
           <tr>
             <td style="padding:22px 32px 28px 32px;">
-              <p style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:16px;line-height:1.4;color:${INK};">Thank you again,</p>
-              <p style="margin:8px 0 0 0;font-family:Helvetica,Arial,sans-serif;font-size:14px;line-height:1.45;color:${INK};">Bradley Clark Royes</p>
-              <p style="margin:0;font-family:Helvetica,Arial,sans-serif;font-size:13px;line-height:1.45;color:${INK_SOFT};">Node Manager, The Foresight Institute</p>
+              <p style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:16px;line-height:1.4;color:${INK};">Thanks again,</p>
+              <p style="margin:8px 0 0 0;font-family:Helvetica,Arial,sans-serif;font-size:14px;line-height:1.45;color:${INK};">Bradley</p>
+              <p style="margin:0;font-family:Helvetica,Arial,sans-serif;font-size:13px;line-height:1.45;color:${INK_SOFT};">Node Manager, Berlin · ${escapeHtml(node)}</p>
             </td>
           </tr>
         </table>

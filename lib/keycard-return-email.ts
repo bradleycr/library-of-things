@@ -26,20 +26,20 @@ export function renderKeycardDueEmail(input: {
   const name = input.guestName.trim() || "there"
   const subject = `Today is the day to return ${input.cardLabel}`
   const steps = [
-    "Scan the QR code on the card and select Return in the app.",
-    `Confirm you will send ${KEYCARD_REPORT_EMAIL} a short report on your time at the node. There is a checkbox for that.`,
-    "Leave the physical card with reception at CIC Berlin. After reception hours, put it in the return locker in the node office (bottom right of the lockers).",
-    "Optional: take a photo of the card in the locker so a steward can see it was left.",
+    "Scan the QR on the card and tap Return in the app.",
+    `Tick the box that you’ll send ${KEYCARD_REPORT_EMAIL} a short report on your time here.`,
+    "Then leave the physical card with reception at CIC Berlin. After hours, drop it in the return locker in the node office (bottom right of the lockers).",
+    "Optional: snap a photo of it in the locker so a steward can see it landed.",
   ]
   const text = [
-    `Hi ${name},`,
+    `Hey ${name},`,
     "",
-    `Today (${input.untilLabel}) is the day you planned to return ${input.cardLabel} at ${input.nodeName}.`,
+    `Today (${input.untilLabel}) is your planned last day with ${input.cardLabel} at ${input.nodeName}. Time to bring it home.`,
     "",
     "How to return it:",
     ...steps.map((step, index) => `${index + 1}. ${step}`),
     "",
-    "Thank you,",
+    "Thanks for hanging out,",
     "Library of Things",
   ].join("\n")
 
@@ -48,11 +48,11 @@ export function renderKeycardDueEmail(input: {
     .join("")
   const html = `<!doctype html><html><body style="margin:0;background:${PAPER};">
     <div style="max-width:560px;margin:0 auto;padding:28px 20px;font-family:Georgia,serif;color:${INK};">
-      <p style="margin:0 0 12px 0;font-size:18px;">Hi ${escapeHtml(name)},</p>
-      <p style="margin:0 0 16px 0;font-size:16px;line-height:1.5;color:${INK_SOFT};">Today (${escapeHtml(input.untilLabel)}) is the day you planned to return <strong style="color:${INK};">${escapeHtml(input.cardLabel)}</strong> at ${escapeHtml(input.nodeName)}.</p>
+      <p style="margin:0 0 12px 0;font-size:18px;">Hey ${escapeHtml(name)},</p>
+      <p style="margin:0 0 16px 0;font-size:16px;line-height:1.5;color:${INK_SOFT};">Today (${escapeHtml(input.untilLabel)}) is your planned last day with <strong style="color:${INK};">${escapeHtml(input.cardLabel)}</strong> at ${escapeHtml(input.nodeName)}. Time to bring it home.</p>
       <p style="margin:0 0 8px 0;font-size:15px;color:${SAGE_DEEP};">How to return it</p>
       <ol style="margin:0 0 16px 20px;padding:0;font-size:16px;line-height:1.5;color:${INK_SOFT};">${items}</ol>
-      <p style="margin:0;font-size:15px;">Thank you,<br/>Library of Things</p>
+      <p style="margin:0;font-size:15px;">Thanks for hanging out,<br/>Library of Things</p>
     </div>
   </body></html>`
   return { subject, text, html }
@@ -65,16 +65,16 @@ export function renderKeycardDueStewardEmail(input: {
   nodeName: string
   untilLabel: string
 }): { subject: string; text: string; html: string } {
-  const subject = `${input.cardLabel} is due back today — ${input.guestName}`
+  const subject = `${input.cardLabel} is due back today (${input.guestName})`
   const text = [
     `${input.guestName} (${input.guestEmail}) planned to return ${input.cardLabel} today (${input.untilLabel}) at ${input.nodeName}.`,
     "",
-    "They also get a reminder this morning with the return steps. You can check in if you want.",
+    "They get a reminder this morning with the return steps. Ping them if you want.",
   ].join("\n")
   const html = `<!doctype html><html><body style="margin:0;background:${PAPER};">
     <div style="max-width:560px;margin:0 auto;padding:28px 20px;font-family:Georgia,serif;color:${INK};">
       <p style="margin:0 0 12px 0;font-size:18px;">${escapeHtml(input.cardLabel)} is due back today</p>
-      <p style="margin:0;font-size:16px;line-height:1.5;color:${INK_SOFT};"><strong style="color:${INK};">${escapeHtml(input.guestName)}</strong> (${escapeHtml(input.guestEmail)}) planned to return it on ${escapeHtml(input.untilLabel)} at ${escapeHtml(input.nodeName)}. They get the same morning reminder. You can check in if you want.</p>
+      <p style="margin:0;font-size:16px;line-height:1.5;color:${INK_SOFT};"><strong style="color:${INK};">${escapeHtml(input.guestName)}</strong> (${escapeHtml(input.guestEmail)}) planned to return it on ${escapeHtml(input.untilLabel)} at ${escapeHtml(input.nodeName)}. They get the same morning reminder. Ping them if you want.</p>
     </div>
   </body></html>`
   return { subject, text, html }
@@ -89,11 +89,11 @@ export function renderKeycardReturnedStewardEmail(input: {
   bySteward: boolean
 }): { subject: string; text: string; html: string } {
   const who = input.guestEmail ? `${input.guestName} (${input.guestEmail})` : input.guestName
-  const subject = `${input.cardLabel} was returned — ${input.guestName}`
+  const subject = `${input.cardLabel} was returned (${input.guestName})`
   const how = input.bySteward
     ? "A steward marked it returned."
     : input.reportPromised
-      ? `They checked the box that they will email ${KEYCARD_REPORT_EMAIL} a short report on their time at the node.`
+      ? `They checked the box that they will email ${KEYCARD_REPORT_EMAIL} a short report.`
       : "They returned it from the card."
   const where = input.nodeName ? ` Node: ${input.nodeName}.` : ""
   const text = `${who} returned ${input.cardLabel}.${where} ${how}`

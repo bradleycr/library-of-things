@@ -2,8 +2,8 @@
  * The Foresight Berlin guest-pass letter.
  *
  * This is the note a visitor receives before a temporary keycard is actually
- * checked out. The button is the confirmation — a reply cannot be verified
- * by the app — and Reply-To still lands with the node manager.
+ * checked out. The button is the confirmation (a reply cannot be verified
+ * by the app), and Reply-To still lands with the node manager.
  *
  * Dates are written in Europe/Berlin because that is where the pass is used.
  * Forks with a different house letter should edit this module.
@@ -82,33 +82,33 @@ export function guestPassFacts(input: GuestPassFactsInput): GuestPassFacts {
   return {
     subject,
     preheader: `Confirm your email to check out ${input.cardLabel}.`,
-    greeting: `Hi ${input.guestName},`,
-    welcome: `Welcome to the ${input.nodeName}! Here's everything you need for your stay.`,
+    greeting: `Hey ${input.guestName},`,
+    welcome: `Welcome to the ${input.nodeName}! Here’s the short version of how this works.`,
     passLine: `Your pass: ${input.cardLabel}`,
     validLine: `Valid: ${input.validFromLabel} to ${input.validUntilLabel}`,
     askIntro: "Two things we ask in return",
     asks: [
       {
         title: "Use it.",
-        body: "We only have a handful of passes, so we ask that you're at the Node at least half of the working days of your stay (roughly every other working day). Thursdays are Residents Day, the best day to meet the rest of the community, so please join us then. If your plans change and you can't make it in, let me know. If you finish early, return the card so someone else can use it.",
+        body: "We only have a handful of passes, so please be at the Node at least half of the working days of your stay (roughly every other working day). Thursdays are Residents Day, the best day to meet people, so come hang then if you can. Plans change? Just tell me. Finish early? Return the card so someone else can use it.",
       },
       {
         title: "Write a short report.",
-        body: "Within two weeks of your last day, send me a short write-up of your time here. A page or two is plenty, the format is up to you, and a couple of photos are welcome. Things worth covering: what you found most valuable, what could be improved or what you’d like to see more of, and any relevant photos. Please say whether we may share excerpts, mention your name, and use it on socials or only internally (for example impact reporting). If your photos include other people, please check they're OK with it.",
+        body: "Within two weeks of your last day, send me a short write-up. A page or two is plenty, any format you like, photos welcome. Cover what you found most valuable, and what could be better or what you’d like more of. We never publish the full report (it’s for our internal notes). If we love a line, may we share a short quote, and is it okay to mention your name? If photos include other people, check they’re cool with it.",
       },
     ],
     returningTitle: "Returning the card",
     returning: [
-      "Scan the QR code on the card and select Return in the app.",
-      "Confirm you will email bradley@foresight.org a short report on your time at the node. There is a checkbox for that.",
-      "Then leave the physical card with reception at CIC Berlin. After reception hours, put it in the return locker in the node office (bottom right of the lockers).",
-      "Optional: take a photo of the card in the locker so a steward can see it was left.",
-      "If the card gets lost, tell me the same day so we can deactivate it. A replacement costs €15.",
+      "Scan the QR on the card and tap Return in the app.",
+      "Tick the box that you’ll email bradley@foresight.org a short report.",
+      "Then leave the physical card with reception at CIC Berlin. After hours, drop it in the return locker in the node office (bottom right of the lockers).",
+      "Optional: snap a photo of it in the locker so a steward can see it landed.",
+      "Lost the card? Tell me the same day so we can deactivate it. A replacement costs €15.",
     ],
-    guide: "House rules and practical info are in our Community Guide.",
+    guide: "House rules and practical info live in our Community Guide.",
     confirmPrompt:
-      "Tap the button to confirm your email and check out the card. That confirms you're good with the above. If your plans change, reply to this email.",
-    closing: "Looking forward to having you here,",
+      "Tap the button to confirm your email and check out the card. That means you’re good with the above. Plans change? Just reply to this email.",
+    closing: "Looking forward to having you around,",
   }
 }
 
@@ -137,7 +137,7 @@ function escapeHtml(value: string): string {
 /**
  * Stationery for the letter: sage bar, serif greeting, the pass set apart,
  * then the two asks and one confirm button. Email clients get tables, not
- * our web fonts — Georgia stands in for the library's serif.
+ * our web fonts. Georgia stands in for the library's serif.
  */
 export function renderGuestPassEmail(input: GuestPassFactsInput & {
   confirmUrl: string
@@ -303,10 +303,10 @@ export function renderGuestCheckoutNudgeEmail(input: {
 }): RenderedGuestPass {
   const name = input.guestName.trim() || "there"
   const subject = `Finish checking out ${input.cardLabel}`
-  const lead = `You started a guest pass for ${input.cardLabel} at ${input.nodeName}, but checkout is not finished yet. The card stays available until you confirm.`
-  const prompt = "Tap the button below to finish checkout. If you no longer need the card, you can ignore this email."
+  const lead = `Quick nudge: you started a guest pass for ${input.cardLabel} at ${input.nodeName}, but checkout isn’t done yet. The card stays on the shelf until you confirm.`
+  const prompt = "Tap the button below to finish. Don’t need the card anymore? Just ignore this email."
   const text = [
-    `Hi ${name},`,
+    `Hey ${name},`,
     "",
     lead,
     "",
@@ -338,12 +338,12 @@ export function renderGuestCheckoutNudgeEmail(input: {
             <td style="padding:28px 32px 0 32px;">
               <img src="${escapeHtml(input.logoUrl)}" alt="Foresight Institute" width="132" style="display:block;width:132px;height:auto;border:0;" />
               <p style="margin:18px 0 0 0;font-family:Helvetica,Arial,sans-serif;font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:${SAGE_DEEP};">Library of Things</p>
-              <h1 style="margin:10px 0 0 0;font-family:Georgia,'Times New Roman',serif;font-size:28px;line-height:1.15;font-weight:normal;color:${INK};">Checkout isn’t finished</h1>
+              <h1 style="margin:10px 0 0 0;font-family:Georgia,'Times New Roman',serif;font-size:28px;line-height:1.15;font-weight:normal;color:${INK};">Almost there</h1>
             </td>
           </tr>
           <tr>
             <td style="padding:16px 32px 0 32px;">
-              <p style="margin:0;font-family:Helvetica,Arial,sans-serif;font-size:16px;line-height:1.55;color:${INK_SOFT};">Hi ${escapeHtml(name)},</p>
+              <p style="margin:0;font-family:Helvetica,Arial,sans-serif;font-size:16px;line-height:1.55;color:${INK_SOFT};">Hey ${escapeHtml(name)},</p>
               <p style="margin:12px 0 0 0;font-family:Helvetica,Arial,sans-serif;font-size:16px;line-height:1.55;color:${INK_SOFT};">${escapeHtml(lead)}</p>
               <p style="margin:12px 0 0 0;font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:${INK_SOFT};">${escapeHtml(prompt)}</p>
             </td>

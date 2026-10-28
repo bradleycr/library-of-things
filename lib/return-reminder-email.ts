@@ -34,37 +34,38 @@ function escapeHtml(value: string): string {
 }
 
 function intro(stage: ReminderStage, count: number): string {
-  const books = count === 1 ? "a book" : `${count} books`
   if (stage === "due") {
     return count === 1
-      ? "A book you borrowed is due back today."
-      : `${count} books you borrowed are due back today.`
+      ? "Friendly nudge: a book you borrowed is due back today."
+      : `Friendly nudge: ${count} books you borrowed are due back today.`
   }
   if (stage === "week") {
     return count === 1
-      ? "A book you borrowed was due a week ago. Please bring it back when you can."
-      : `${count} books you borrowed were due a week ago. Please bring them back when you can.`
+      ? "Hey, a book you borrowed was due a week ago. Bring it back when you can?"
+      : `Hey, ${count} books you borrowed were due a week ago. Bring them back when you can?`
   }
-  return `This is a reminder about ${books} still out past the month we hope for. Please bring ${count === 1 ? "it" : "them"} back.`
+  return count === 1
+    ? "This one’s been out a while past the month we hope for. Mind bringing it back when you next swing by?"
+    : `These have been out a while past the month we hope for. Mind bringing them back when you next swing by?`
 }
 
 function subject(stage: ReminderStage, titles: string[]): string {
   const one = titles.length === 1 ? titles[0] : null
   if (stage === "due") return one ? `${one} is due back today` : "Library books are due back today"
   if (stage === "week") return one ? `${one} is a week overdue` : "A few library books are a week overdue"
-  return one ? `Please bring back ${one}` : "Please bring back your library books"
+  return one ? `Time to bring back ${one}` : "Time to bring back your library books"
 }
 
 function coworkingProse(stage: ReminderStage): string {
   const moment =
     stage === "due"
-      ? "It is a good time to bring a book back."
-      : "It is a perfect time to return an overdue book."
-  return `We cohost an open coworking ${RETURN_COWORKING.when} with ${RETURN_COWORKING.partner}. You can register at the link below. ${moment}`
+      ? "Great moment to drop a book off while you’re there."
+      : "Perfect excuse to return an overdue book and say hi."
+  return `We cohost an open coworking ${RETURN_COWORKING.when} with ${RETURN_COWORKING.partner}. Grab a spot here: ${RETURN_COWORKING.url}. ${moment}`
 }
 
 function whereLine(book: ReminderBookLine): string {
-  if (book.pocket) return "Pocket Library — back to the person you borrowed it from"
+  if (book.pocket) return "Pocket Library (back to the person you borrowed it from)"
   return book.nodeName?.trim() || "the node where you picked it up"
 }
 
@@ -77,7 +78,7 @@ export function renderReturnReminderEmail(input: {
   const books = input.books
   const lead = intro(input.stage, books.length)
   const coworking = coworkingProse(input.stage)
-  const support = `If you need a hand with how to bring ${books.length === 1 ? "it" : "them"} back, or when to come to the node, email ${input.supportEmail}.`
+  const support = `Stuck on how to bring ${books.length === 1 ? "it" : "them"} back, or when to come by the node? Email ${input.supportEmail} and we’ll sort it out.`
   const title = subject(input.stage, books.map((book) => book.title))
   const hasNodeReturn = books.some((book) => !book.pocket)
   const dropoff = hasNodeReturn
@@ -85,12 +86,12 @@ export function renderReturnReminderEmail(input: {
     : null
 
   const lines = books.map((book) => {
-    const author = book.author?.trim() ? ` — ${book.author.trim()}` : ""
+    const author = book.author?.trim() ? ` by ${book.author.trim()}` : ""
     return `${book.title}${author}\nDue ${book.dueLabel} · ${book.lateLabel}\nBring it to ${whereLine(book)}`
   })
 
   const text = [
-    `Hello ${input.displayName},`,
+    `Hey ${input.displayName},`,
     "",
     lead,
     "",
@@ -99,9 +100,8 @@ export function renderReturnReminderEmail(input: {
     support,
     "",
     coworking,
-    RETURN_COWORKING.url,
     "",
-    "Thank you,",
+    "Thanks,",
     "Library of Things",
   ].join("\n")
 
@@ -140,12 +140,12 @@ export function renderReturnReminderEmail(input: {
           <tr>
             <td style="padding:28px 32px 0 32px;">
               <p style="margin:0;font-family:Helvetica,Arial,sans-serif;font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:${SAGE_DEEP};">Library of Things</p>
-              <h1 style="margin:10px 0 0 0;font-family:Georgia,'Times New Roman',serif;font-size:30px;line-height:1.15;font-weight:normal;color:${INK};">Please bring ${books.length === 1 ? "this book" : "these books"} back</h1>
+              <h1 style="margin:10px 0 0 0;font-family:Georgia,'Times New Roman',serif;font-size:30px;line-height:1.15;font-weight:normal;color:${INK};">Bring ${books.length === 1 ? "this book" : "these books"} back?</h1>
             </td>
           </tr>
           <tr>
             <td style="padding:16px 32px 0 32px;">
-              <p style="margin:0;font-family:Helvetica,Arial,sans-serif;font-size:16px;line-height:1.55;color:${INK_SOFT};">Hello ${escapeHtml(input.displayName)},</p>
+              <p style="margin:0;font-family:Helvetica,Arial,sans-serif;font-size:16px;line-height:1.55;color:${INK_SOFT};">Hey ${escapeHtml(input.displayName)},</p>
               <p style="margin:12px 0 0 0;font-family:Helvetica,Arial,sans-serif;font-size:16px;line-height:1.55;color:${INK_SOFT};">${escapeHtml(lead)}</p>
               ${bookHtml}
             </td>
@@ -159,12 +159,11 @@ export function renderReturnReminderEmail(input: {
               }
               <p style="margin:0;font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:${INK_SOFT};">${escapeHtml(support)}</p>
               <p style="margin:14px 0 0 0;font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:${INK_SOFT};">${escapeHtml(coworking)}</p>
-              <p style="margin:8px 0 0 0;font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:1.5;"><a href="${escapeHtml(RETURN_COWORKING.url)}" style="color:${SAGE_DEEP};">${escapeHtml(RETURN_COWORKING.url)}</a></p>
             </td>
           </tr>
           <tr>
             <td style="padding:22px 32px 28px 32px;">
-              <p style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:16px;line-height:1.4;color:${INK};">Thank you,</p>
+              <p style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:16px;line-height:1.4;color:${INK};">Thanks,</p>
               <p style="margin:4px 0 0 0;font-family:Helvetica,Arial,sans-serif;font-size:14px;line-height:1.45;color:${INK_SOFT};">Library of Things</p>
             </td>
           </tr>

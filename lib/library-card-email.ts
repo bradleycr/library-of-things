@@ -2,8 +2,8 @@
  * Letters for a library card.
  *
  * One asks the person to confirm an address before a card exists.
- * The other carries the card number and PIN — the only copy of that PIN
- * we are willing to show, and only to the inbox they proved they can open.
+ * The other carries the card number and PIN (the only copy we show),
+ * and only to the inbox they proved they can open.
  */
 
 const PAPER = "#f4faf8"
@@ -136,7 +136,7 @@ export function renderLibraryCardEmail(input: {
     input.saveUrl,
     "",
     "That save link works for 24 hours. The card number and PIN above keep working after that.",
-    "If you didn’t ask for this, the PIN has already changed — log in with the one in this email, and don’t forward it.",
+    "If you didn’t ask for this, the PIN has already changed. Log in with the one in this email, and don’t forward it.",
     "",
     `Privacy: ${input.privacyUrl}`,
   ].join("\n")
