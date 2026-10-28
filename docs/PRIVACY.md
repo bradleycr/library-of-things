@@ -23,7 +23,7 @@ off the public browse surfaces; their NFC URLs are for people who tap the tag.
 |------|--------|
 | Library card PIN | Salted hash in the database. Asking for the card emails a new PIN and retires the old one. The plaintext lives only in that email and, for up to 24 hours, on the one-time link. |
 | Auth / account email and phone | Not public unless the member opts into public contact |
-| Guest borrower email (temporary keycards) | Asked at checkout and confirmed from the inbox before the card is out. Stored on the active loan and shown to stewards. Erased from the live loan on return. Sharing history (`/ledger` and its export) shows **Guest**, never the email. A private copy may remain on the loan event for the node manager. |
+| Guest borrower email (temporary keycards) | Asked at checkout and confirmed from the inbox before the card is out. Stored on the active loan and shown to stewards. Erased from the live loan on return. Sharing history (`/ledger` and its export) shows **Guest**, never the email. A private copy may remain on the loan event for the node manager. Guest-pass and return-reminder messages are also CC’d to the steward archive address (`STEWARD_MAIL_CC` / `GUEST_PASS_REPLY_TO`) so the node manager has them on file. Library-card PIN emails are never CC’d. |
 | Raw GPS coordinates | Not retained; book returns may record verification method / rounded distance only |
 | Steward password | Env var only; never returned by the API |
 

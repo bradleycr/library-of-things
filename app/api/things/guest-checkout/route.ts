@@ -12,7 +12,7 @@ import {
   listNodes,
 } from "@/lib/server/repositories"
 import { itemTokenMatches } from "@/lib/server/item-token"
-import { guestPassReplyTo, mailConfigured, sendMail } from "@/lib/server/mail"
+import { guestPassReplyTo, mailConfigured, sendMail, stewardMailCc } from "@/lib/server/mail"
 import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
 import { isUuid, parseJsonBody } from "@/lib/server/validate"
 
@@ -99,6 +99,7 @@ export async function POST(request: NextRequest) {
     if (mailConfigured()) {
       const result = await sendMail({
         to: email,
+        cc: stewardMailCc(),
         replyTo: guestPassReplyTo(),
         subject: letter.subject,
         text: letter.text,

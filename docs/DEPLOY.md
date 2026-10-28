@@ -38,6 +38,7 @@ Optionally seed demo data with `pnpm db:provision` (destructive).
 | `RESEND_API_KEY` | Resend API key for guest-pass confirmation email | Production, Preview, Development |
 | `SMTP_FROM` | From address, e.g. `Library of Things <noreply@foresightmatchmaker.app>` | Production, Preview, Development |
 | `GUEST_PASS_REPLY_TO` | Where replies to the pass letter go, e.g. `bradley@foresight.org` | Production, Preview, Development |
+| `STEWARD_MAIL_CC` | Optional. CC on guest-pass and return-reminder mail (default = `GUEST_PASS_REPLY_TO`). Set empty to disable. Never used for PIN delivery. | Production, Preview, Development |
 | `APP_URL` | Public origin used in email links, e.g. `https://libraryofthings.vercel.app` | Production, Preview |
 | `CRON_SECRET` | Random secret. Vercel sends it as `Authorization: Bearer …` when the daily return-reminder cron runs | Production |
 

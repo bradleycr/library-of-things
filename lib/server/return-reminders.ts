@@ -20,7 +20,7 @@ import {
   type ReminderStage,
 } from "@/lib/return-reminders"
 import { resilientConnect, resilientQuery } from "@/lib/server/db"
-import { guestPassReplyTo, sendMail } from "@/lib/server/mail"
+import { guestPassReplyTo, sendMail, stewardMailCc } from "@/lib/server/mail"
 
 const BLOCKED_DOMAINS = new Set([
   "example.com",
@@ -153,6 +153,7 @@ export async function sendReturnReminders(now = new Date()): Promise<ReminderRun
     })
     const result = await sendMail({
       to: email,
+      cc: stewardMailCc(),
       replyTo: guestPassReplyTo(),
       subject: letter.subject,
       text: letter.text,

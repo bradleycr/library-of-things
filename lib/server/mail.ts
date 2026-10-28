@@ -29,6 +29,19 @@ export function guestPassReplyTo(): string {
   return process.env.GUEST_PASS_REPLY_TO?.trim() || DEFAULT_GUEST_PASS_REPLY_TO
 }
 
+/**
+ * Steward archive copy for checkout / return mail (not PIN delivery).
+ * Defaults to the same address as guest-pass Reply-To.
+ * Override with STEWARD_MAIL_CC; set empty to disable.
+ */
+export function stewardMailCc(): string | null {
+  if (process.env.STEWARD_MAIL_CC !== undefined) {
+    const raw = process.env.STEWARD_MAIL_CC.trim()
+    return raw || null
+  }
+  return guestPassReplyTo()
+}
+
 export type MailResult = { sent: true } | { sent: false; reason: "no_smtp" | "smtp_error" | "quota" }
 
 function asList(value: string | string[] | undefined): string[] | undefined {
@@ -36,8 +49,22 @@ function asList(value: string | string[] | undefined): string[] | undefined {
   return Array.isArray(value) ? value : [value]
 }
 
+function normalizeAddr(value: string): string {
+  return value.trim().toLowerCase()
+}
+
+/** CC list for a message, skipping the primary recipient so Resend isn’t sent a self-CC. */
+function ccList(to: string, cc?: string | string[] | null): string[] | undefined {
+  const toKey = normalizeAddr(to)
+  const raw = asList(cc ?? undefined) ?? []
+  const unique = [...new Set(raw.map((a) => a.trim()).filter(Boolean))]
+  const filtered = unique.filter((a) => normalizeAddr(a) !== toKey)
+  return filtered.length ? filtered : undefined
+}
+
 export async function sendMail(opts: {
   to: string
+  cc?: string | string[] | null
   replyTo?: string
   subject: string
   text: string
@@ -47,9 +74,11 @@ export async function sendMail(opts: {
   const key = process.env.RESEND_API_KEY?.trim()
   if (!key) return { sent: false, reason: "no_smtp" }
 
+  const cc = ccList(opts.to, opts.cc)
   const payload = JSON.stringify({
     from: mailFrom(),
     to: asList(opts.to),
+    ...(cc ? { cc } : {}),
     reply_to: opts.replyTo,
     subject: opts.subject,
     text: opts.text,
