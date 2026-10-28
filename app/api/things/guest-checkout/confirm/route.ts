@@ -2,6 +2,7 @@ import { cookies } from "next/headers"
 import { NextRequest, NextResponse } from "next/server"
 import { maskEmail } from "@/lib/guest-pass"
 import { GUEST_SESSION_COOKIE_OPTIONS, guestSessionCookieName } from "@/lib/server/guest-session"
+import { cancelScheduledMail } from "@/lib/server/mail"
 import { confirmGuestCheckout, previewGuestCheckout } from "@/lib/server/repositories"
 import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
 
@@ -55,6 +56,10 @@ export async function POST(request: NextRequest) {
     const result = await confirmGuestCheckout(token)
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: 400, headers: NO_STORE })
+    }
+
+    if (result.nudgeResendId) {
+      await cancelScheduledMail(result.nudgeResendId).catch(() => false)
     }
 
     if (result.token) {

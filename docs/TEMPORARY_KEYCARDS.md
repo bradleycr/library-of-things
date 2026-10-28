@@ -43,7 +43,9 @@ The card stays available until the guest opens the email and presses
 (use the pass, write a short report, how to return it) and comes from
 `noreply@…` with replies going to the node manager. The confirm link lasts
 7 days. Opening the link does not check the card out. Mail scanners prefetch
-links, so only the button does.
+links, so only the button does. If they have not confirmed after about one
+hour, Resend delivers a short follow-up with the same **Finish checkout**
+button; that follow-up is cancelled when they confirm.
 
 The email is stored in private `guest_loans` while the card is out and used as
 the steward holder label. It is erased from that live loan on return. Sharing

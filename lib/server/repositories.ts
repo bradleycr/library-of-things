@@ -1276,6 +1276,8 @@ type GuestCheckoutRequestRow = {
   expires_at: string | Date
   consumed_at: string | Date | null
   availability_status: string
+  nudge_resend_id?: string | null
+  nudge_cancelled_at?: string | Date | null
 }
 
 /**
@@ -1452,6 +1454,27 @@ export async function deleteGuestCheckoutRequest(id: string): Promise<void> {
   await resilientQuery("delete from guest_checkout_requests where id = $1 and consumed_at is null", [id])
 }
 
+export async function setGuestCheckoutNudgeResendId(id: string, resendId: string): Promise<void> {
+  await resilientQuery(
+    `update guest_checkout_requests
+        set nudge_resend_id = $2
+      where id = $1 and consumed_at is null`,
+    [id, resendId]
+  )
+}
+
+/** Cancel a scheduled finish-checkout nudge after the guest confirms (or abandons). */
+export async function takeGuestCheckoutNudgeResendId(id: string): Promise<string | null> {
+  const { rows } = await resilientQuery<{ nudge_resend_id: string | null }>(
+    `update guest_checkout_requests
+        set nudge_cancelled_at = coalesce(nudge_cancelled_at, now())
+      where id = $1 and nudge_resend_id is not null and nudge_cancelled_at is null
+      returning nudge_resend_id`,
+    [id]
+  )
+  return rows[0]?.nudge_resend_id ?? null
+}
+
 export async function previewGuestCheckout(rawToken: string): Promise<GuestCheckoutPreview | null> {
   const token = rawToken.trim()
   if (!token || token.length > 200) return null
@@ -1473,7 +1496,14 @@ export async function previewGuestCheckout(rawToken: string): Promise<GuestCheck
  * scanners that prefetch URLs must not be able to take a physical pass.
  */
 export async function confirmGuestCheckout(rawToken: string): Promise<
-  | { ok: true; already: boolean; token?: string; preview: GuestCheckoutPreview }
+  | {
+      ok: true
+      already: boolean
+      token?: string
+      preview: GuestCheckoutPreview
+      requestId: string
+      nudgeResendId: string | null
+    }
   | { ok: false; error: string }
 > {
   const token = rawToken.trim()
@@ -1485,7 +1515,7 @@ export async function confirmGuestCheckout(rawToken: string): Promise<
     const { rows } = await client.query<GuestCheckoutRequestRow>(
       `select r.id, r.book_id, r.borrower_email, r.borrower_name, r.node_name, r.card_label,
               r.valid_from_label, r.valid_until_label, r.valid_until, r.expires_at, r.consumed_at,
-              b.availability_status
+              r.nudge_resend_id, r.nudge_cancelled_at, b.availability_status
          from guest_checkout_requests r
          join books b on b.id = r.book_id
         where r.token_hash = $1
@@ -1497,9 +1527,25 @@ export async function confirmGuestCheckout(rawToken: string): Promise<
       await client.query("rollback")
       return { ok: false, error: "This confirmation link is not valid." }
     }
+    const nudgeResendId =
+      row.nudge_resend_id && !row.nudge_cancelled_at ? row.nudge_resend_id : null
     if (row.consumed_at) {
+      if (nudgeResendId) {
+        await client.query(
+          `update guest_checkout_requests
+              set nudge_cancelled_at = coalesce(nudge_cancelled_at, now())
+            where id = $1`,
+          [row.id]
+        )
+      }
       await client.query("commit")
-      return { ok: true, already: true, preview: previewFromRow({ ...row, consumed_at: row.consumed_at }) }
+      return {
+        ok: true,
+        already: true,
+        requestId: row.id,
+        nudgeResendId,
+        preview: previewFromRow({ ...row, consumed_at: row.consumed_at }),
+      }
     }
     if (new Date(row.expires_at).getTime() <= Date.now()) {
       await client.query("rollback")
@@ -1518,12 +1564,20 @@ export async function confirmGuestCheckout(rawToken: string): Promise<
       name: row.borrower_name,
       expectedReturn: new Date(row.valid_until),
     })
-    await client.query("update guest_checkout_requests set consumed_at = now() where id = $1", [row.id])
+    await client.query(
+      `update guest_checkout_requests
+          set consumed_at = now(),
+              nudge_cancelled_at = coalesce(nudge_cancelled_at, now())
+        where id = $1`,
+      [row.id]
+    )
     await client.query("commit")
     return {
       ok: true,
       already: false,
       token: sessionToken,
+      requestId: row.id,
+      nudgeResendId,
       preview: previewFromRow({ ...row, consumed_at: new Date(), availability_status: "checked_out" }),
     }
   } catch (error) {

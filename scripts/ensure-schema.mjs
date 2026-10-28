@@ -360,6 +360,15 @@ async function main() {
       create index if not exists idx_guest_checkout_requests_book
         on guest_checkout_requests(book_id, created_at desc);
     `)
+    // Resend id for the one-hour “finish checkout” nudge; cancelled when they confirm.
+    await client.query(`
+      alter table guest_checkout_requests
+        add column if not exists nudge_resend_id text;
+    `)
+    await client.query(`
+      alter table guest_checkout_requests
+        add column if not exists nudge_cancelled_at timestamptz;
+    `)
 
     // Sharing history is public. Move any guest address out of the name column
     // and into steward-only metadata. Safe to re-run: already-cleaned rows no

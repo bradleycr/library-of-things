@@ -13,6 +13,9 @@ export const GUEST_PASS_TIME_ZONE = "Europe/Berlin"
 
 export const GUEST_CONFIRM_TTL_DAYS = 7
 
+/** How long we wait before nudging someone who never opened the confirm link. */
+export const GUEST_CONFIRM_NUDGE_MS = 60 * 60 * 1000
+
 export const GUEST_PASS_SIGNATORY = {
   name: "Bradley Clark Royes",
   role: "Node Manager",
@@ -284,4 +287,90 @@ export function renderGuestPassEmail(input: GuestPassFactsInput & {
 </html>`
 
   return { subject: facts.subject, text, html }
+}
+
+/**
+ * One hour after a guest asked for a pass but never confirmed: same link,
+ * shorter letter, clear “finish checkout” button.
+ */
+export function renderGuestCheckoutNudgeEmail(input: {
+  guestName: string
+  nodeName: string
+  cardLabel: string
+  confirmUrl: string
+  logoUrl: string
+  privacyUrl: string
+}): RenderedGuestPass {
+  const name = input.guestName.trim() || "there"
+  const subject = `Finish checking out ${input.cardLabel}`
+  const lead = `You started a guest pass for ${input.cardLabel} at ${input.nodeName}, but checkout is not finished yet. The card stays available until you confirm.`
+  const prompt = "Tap the button below to finish checkout. If you no longer need the card, you can ignore this email."
+  const text = [
+    `Hi ${name},`,
+    "",
+    lead,
+    "",
+    prompt,
+    "",
+    input.confirmUrl,
+    "",
+    `Privacy: ${input.privacyUrl}`,
+  ].join("\n")
+
+  const href = escapeHtml(input.confirmUrl)
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>${escapeHtml(subject)}</title>
+</head>
+<body style="margin:0;padding:0;background:${PAPER};color:${INK};">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;">Finish checking out ${escapeHtml(input.cardLabel)}.</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${PAPER};">
+    <tr>
+      <td align="center" style="padding:28px 16px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:${WHITE};border-radius:18px;overflow:hidden;">
+          <tr>
+            <td style="height:8px;line-height:8px;background:${SAGE};font-size:0;">&nbsp;</td>
+          </tr>
+          <tr>
+            <td style="padding:28px 32px 0 32px;">
+              <img src="${escapeHtml(input.logoUrl)}" alt="Foresight Institute" width="132" style="display:block;width:132px;height:auto;border:0;" />
+              <p style="margin:18px 0 0 0;font-family:Helvetica,Arial,sans-serif;font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:${SAGE_DEEP};">Library of Things</p>
+              <h1 style="margin:10px 0 0 0;font-family:Georgia,'Times New Roman',serif;font-size:28px;line-height:1.15;font-weight:normal;color:${INK};">Checkout isn’t finished</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:16px 32px 0 32px;">
+              <p style="margin:0;font-family:Helvetica,Arial,sans-serif;font-size:16px;line-height:1.55;color:${INK_SOFT};">Hi ${escapeHtml(name)},</p>
+              <p style="margin:12px 0 0 0;font-family:Helvetica,Arial,sans-serif;font-size:16px;line-height:1.55;color:${INK_SOFT};">${escapeHtml(lead)}</p>
+              <p style="margin:12px 0 0 0;font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:${INK_SOFT};">${escapeHtml(prompt)}</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:22px 32px 28px 32px;">
+              <table role="presentation" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="background:${SAGE};border-radius:999px;">
+                    <a href="${href}" style="display:inline-block;padding:14px 22px;font-family:Helvetica,Arial,sans-serif;font-size:15px;font-weight:bold;text-decoration:none;color:${INK};">Finish checkout</a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:14px 0 0 0;font-family:Helvetica,Arial,sans-serif;font-size:12px;line-height:1.45;word-break:break-all;">
+                <a href="${href}" style="color:${SAGE_DEEP};">${href}</a>
+              </p>
+              <p style="margin:16px 0 0 0;font-family:Helvetica,Arial,sans-serif;font-size:12px;line-height:1.45;">
+                <a href="${escapeHtml(input.privacyUrl)}" style="color:${SAGE_DEEP};">Privacy notice</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`
+
+  return { subject, text, html }
 }

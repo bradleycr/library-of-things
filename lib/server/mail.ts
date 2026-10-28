@@ -42,7 +42,9 @@ export function stewardMailCc(): string | null {
   return guestPassReplyTo()
 }
 
-export type MailResult = { sent: true } | { sent: false; reason: "no_smtp" | "smtp_error" | "quota" }
+export type MailResult =
+  | { sent: true; id: string | null }
+  | { sent: false; reason: "no_smtp" | "smtp_error" | "quota" }
 
 function asList(value: string | string[] | undefined): string[] | undefined {
   if (!value) return undefined
@@ -70,11 +72,17 @@ export async function sendMail(opts: {
   text: string
   html: string
   idempotencyKey?: string
+  /** When set, Resend holds the message until this instant (ISO / Date). */
+  scheduledAt?: Date | string
 }): Promise<MailResult> {
   const key = process.env.RESEND_API_KEY?.trim()
   if (!key) return { sent: false, reason: "no_smtp" }
 
   const cc = ccList(opts.to, opts.cc)
+  const scheduledAt =
+    opts.scheduledAt instanceof Date
+      ? opts.scheduledAt.toISOString()
+      : opts.scheduledAt?.trim() || undefined
   const payload = JSON.stringify({
     from: mailFrom(),
     to: asList(opts.to),
@@ -83,6 +91,7 @@ export async function sendMail(opts: {
     subject: opts.subject,
     text: opts.text,
     html: opts.html,
+    ...(scheduledAt ? { scheduled_at: scheduledAt } : {}),
   })
 
   try {
@@ -97,7 +106,10 @@ export async function sendMail(opts: {
       body: payload,
       signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
     })
-    if (res.ok) return { sent: true }
+    if (res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { id?: string }
+      return { sent: true, id: typeof body.id === "string" ? body.id : null }
+    }
     const detail = await res.text().catch(() => "")
     console.error("[mail] Resend rejected:", res.status, detail.slice(0, 300))
     if (res.status === 429) return { sent: false, reason: "quota" }
@@ -105,5 +117,31 @@ export async function sendMail(opts: {
   } catch (error) {
     console.error("[mail] Resend send failed:", error)
     return { sent: false, reason: "smtp_error" }
+  }
+}
+
+/** Cancel a Resend message that is still scheduled (e.g. unfinished checkout nudge). */
+export async function cancelScheduledMail(emailId: string): Promise<boolean> {
+  const key = process.env.RESEND_API_KEY?.trim()
+  const id = emailId.trim()
+  if (!key || !id) return false
+  try {
+    const res = await fetch(`${RESEND_API}/${encodeURIComponent(id)}/cancel`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "User-Agent": "library-of-things/mail",
+      },
+      signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
+    })
+    if (res.ok) return true
+    const detail = await res.text().catch(() => "")
+    // Already sent or already cancelled — treat as done so we do not retry forever.
+    if (res.status === 404 || res.status === 422) return true
+    console.error("[mail] Resend cancel rejected:", res.status, detail.slice(0, 200))
+    return false
+  } catch (error) {
+    console.error("[mail] Resend cancel failed:", error)
+    return false
   }
 }

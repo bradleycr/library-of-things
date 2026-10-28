@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
 import { guestPassCardLabel, isPlausibleGuestName, normalizeGuestName } from "@/lib/guest-pass"
-import { GUEST_CONFIRM_TTL_DAYS, formatStayDate, renderGuestPassEmail } from "@/lib/guest-pass-email"
+import {
+  GUEST_CONFIRM_NUDGE_MS,
+  GUEST_CONFIRM_TTL_DAYS,
+  formatStayDate,
+  renderGuestCheckoutNudgeEmail,
+  renderGuestPassEmail,
+} from "@/lib/guest-pass-email"
 import { parsePlannedEndDate } from "@/lib/keycard-stay"
 import { isValidEmail, normalizeEmail } from "@/lib/email"
 import { appOrigin } from "@/lib/server/app-origin"
@@ -9,6 +15,7 @@ import {
   deleteGuestCheckoutRequest,
   getBookById,
   listNodes,
+  setGuestCheckoutNudgeResendId,
 } from "@/lib/server/repositories"
 import { itemTokenMatches } from "@/lib/server/item-token"
 import { guestPassReplyTo, mailConfigured, sendMail, stewardMailCc } from "@/lib/server/mail"
@@ -111,6 +118,35 @@ export async function POST(request: NextRequest) {
             : "We couldn't send the confirmation email. Try again."
         return NextResponse.json({ error: message }, { status: 503, headers: NO_STORE })
       }
+
+      // One hour later: remind them checkout is unfinished, same confirm button.
+      // Cancelled when they confirm. No steward CC — this is a gentle nudge only.
+      const nudgeAt = new Date(Date.now() + GUEST_CONFIRM_NUDGE_MS)
+      const nudge = renderGuestCheckoutNudgeEmail({
+        guestName: name,
+        nodeName,
+        cardLabel,
+        confirmUrl,
+        logoUrl: `${origin}/foresight-logo.png`,
+        privacyUrl: `${origin}/privacy`,
+      })
+      const scheduled = await sendMail({
+        to: email,
+        replyTo: guestPassReplyTo(),
+        subject: nudge.subject,
+        text: nudge.text,
+        html: nudge.html,
+        scheduledAt: nudgeAt,
+        idempotencyKey: `${created.id}:nudge`,
+      })
+      if (scheduled.sent && scheduled.id) {
+        await setGuestCheckoutNudgeResendId(created.id, scheduled.id).catch((error) => {
+          console.error("[guest-checkout] could not store nudge id:", error)
+        })
+      } else if (!scheduled.sent) {
+        console.error("[guest-checkout] finish-checkout nudge was not scheduled:", scheduled.reason)
+      }
+
       return NextResponse.json(
         { pending: true, sent: true, ttl_days: GUEST_CONFIRM_TTL_DAYS },
         { headers: NO_STORE }
