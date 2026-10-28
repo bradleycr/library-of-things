@@ -1296,6 +1296,8 @@ async function insertGuestCheckout(
      values ($1, $2, $3, $4, now())`,
     [loanId, item.id, params.email, hashGuestToken(token)]
   )
+  // A new stay should be able to send its own morning reminder.
+  await client.query(`delete from return_reminders where book_id = $1`, [item.id])
   await client.query(
     `update books
         set availability_status = 'checked_out',
@@ -1556,11 +1558,20 @@ export async function hasActiveGuestSession(itemId: string, token: string | unde
   return rows[0]?.present === true
 }
 
+export type GuestReturnNotice = {
+  guestName: string | null
+  guestEmail: string | null
+  cardTitle: string
+  assetNumber: number | null
+  nodeName: string | null
+}
+
 export async function returnGuestItem(params: {
   itemId: string
   verification: "geofence" | "manual" | "steward"
   distanceM?: number
-}): Promise<void> {
+  reportPromised?: boolean
+}): Promise<GuestReturnNotice> {
   const client = await resilientConnect()
   try {
     await client.query("begin")
@@ -1584,6 +1595,15 @@ export async function returnGuestItem(params: {
     const privateEmail =
       loanRows[0]?.borrower_email?.trim().toLowerCase() ||
       (item.current_holder_name?.includes("@") ? item.current_holder_name.trim().toLowerCase() : "")
+    const { rows: nameRows } = await client.query<{ borrower_name: string | null }>(
+      `select metadata->>'borrower_name' as borrower_name
+         from loan_events
+        where book_id = $1 and event_type = 'checkout'
+        order by timestamp desc
+        limit 1`,
+      [params.itemId]
+    )
+    const guestName = nameRows[0]?.borrower_name?.trim() || null
 
     const nodeId = item.home_node_id ?? item.current_node_id
     const { rows: nodes } = nodeId
@@ -1623,12 +1643,21 @@ export async function returnGuestItem(params: {
           item_type: item.item_type ?? "other",
           guest: true,
           ...(privateEmail ? { borrower_email: privateEmail } : {}),
+          ...(guestName ? { borrower_name: guestName } : {}),
+          report_promised: params.reportPromised === true,
           location_verification: params.verification,
           distance_m: params.distanceM == null ? undefined : Math.round(params.distanceM),
         }),
       ]
     )
     await client.query("commit")
+    return {
+      guestName,
+      guestEmail: privateEmail || null,
+      cardTitle: item.title,
+      assetNumber: item.asset_number ?? null,
+      nodeName: node?.name ?? item.current_node_name ?? null,
+    }
   } catch (error) {
     await client.query("rollback")
     throw error
@@ -1638,7 +1667,7 @@ export async function returnGuestItem(params: {
 }
 
 /** Steward recovery path for lost browser sessions or orphaned checked-out state. */
-export async function stewardReturnGuestItem(itemId: string): Promise<void> {
+export async function stewardReturnGuestItem(itemId: string): Promise<GuestReturnNotice> {
   const client = await resilientConnect()
   try {
     await client.query("begin")
@@ -1655,6 +1684,15 @@ export async function stewardReturnGuestItem(itemId: string): Promise<void> {
     const privateEmail =
       loans[0]?.borrower_email?.trim().toLowerCase() ||
       (item.current_holder_name?.includes("@") ? item.current_holder_name.trim().toLowerCase() : "")
+    const { rows: nameRows } = await client.query<{ borrower_name: string | null }>(
+      `select metadata->>'borrower_name' as borrower_name
+         from loan_events
+        where book_id = $1 and event_type = 'checkout'
+        order by timestamp desc
+        limit 1`,
+      [itemId]
+    )
+    const guestName = nameRows[0]?.borrower_name?.trim() || null
     if (loans[0]) {
       await client.query(
         `update guest_loans
@@ -1683,12 +1721,20 @@ export async function stewardReturnGuestItem(itemId: string): Promise<void> {
           item_type: item.item_type ?? "other",
           guest: true,
           ...(privateEmail ? { borrower_email: privateEmail } : {}),
+          ...(guestName ? { borrower_name: guestName } : {}),
           location_verification: "steward",
           orphan_recovery: !loans[0],
         }),
       ]
     )
     await client.query("commit")
+    return {
+      guestName,
+      guestEmail: privateEmail || null,
+      cardTitle: item.title,
+      assetNumber: item.asset_number ?? null,
+      nodeName: item.current_node_name ?? null,
+    }
   } catch (error) {
     await client.query("rollback")
     throw error

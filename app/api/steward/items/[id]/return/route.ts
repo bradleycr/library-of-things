@@ -1,6 +1,7 @@
 import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
 import { stewardReturnGuestItem } from "@/lib/server/repositories"
+import { notifyKeycardReturned } from "@/lib/server/keycard-mail"
 import { getStewardCookieName, verifyStewardToken } from "@/lib/server/steward-auth"
 import { isUuid } from "@/lib/server/validate"
 
@@ -15,7 +16,10 @@ export async function POST(
   const { id } = await params
   if (!isUuid(id)) return NextResponse.json({ error: "Invalid item" }, { status: 400 })
   try {
-    await stewardReturnGuestItem(id)
+    const notice = await stewardReturnGuestItem(id)
+    await notifyKeycardReturned({ ...notice, reportPromised: false, bySteward: true }).catch((error) => {
+      console.error("[keycard] steward return notice failed:", error)
+    })
     return NextResponse.json({ success: true })
   } catch (error) {
     return NextResponse.json(

@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "crypto"
 import { NextRequest, NextResponse } from "next/server"
 import { sendReturnReminders } from "@/lib/server/return-reminders"
+import { sendKeycardDueReminders } from "@/lib/server/keycard-mail"
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 60
@@ -33,10 +34,12 @@ export async function GET(request: NextRequest) {
 
   try {
     const result = await sendReturnReminders()
+    const keycards = await sendKeycardDueReminders()
     return NextResponse.json({
       ok: true,
       sent: result.sent,
       skipped: result.skipped,
+      keycards_due: keycards.sent,
     })
   } catch (error) {
     console.error("[return-reminders]", error)

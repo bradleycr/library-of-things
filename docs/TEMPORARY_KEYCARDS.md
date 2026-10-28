@@ -27,8 +27,13 @@ along the dashed line, and stick the label on the physical card.
 ## Borrowing
 
 A tap or QR scan opens a simple page: the card image, Available / Out, and
-either a name and email plus **Email me a confirmation**, or a **Return**
-button. No library card is required. A visitor pass is not a membership.
+either a name, email, and **until when** they plan to use the card, or a
+**Return** button. No library card is required. A visitor pass is not a membership.
+
+The morning of the chosen end date, the guest gets an email: scan the QR,
+select Return, and confirm they will email the node manager a short report.
+The steward gets a copy that morning so they can check in, and another email
+when the card is actually returned.
 
 The card stays available until the guest opens the email and presses
 **Confirm checkout**. The message is the Foresight Berlin guest-pass letter

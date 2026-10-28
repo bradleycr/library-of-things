@@ -1,6 +1,7 @@
 import { cookies } from "next/headers"
 import { NextRequest, NextResponse } from "next/server"
 import { getBookById, returnGuestItem } from "@/lib/server/repositories"
+import { notifyKeycardReturned } from "@/lib/server/keycard-mail"
 import {
   GUEST_SESSION_COOKIE_LEGACY,
   guestSessionCookieName,
@@ -12,6 +13,7 @@ import { isUuid, parseJsonBody } from "@/lib/server/validate"
 type ReturnBody = {
   item_id?: string
   token?: string
+  report_ack?: boolean
 }
 
 /**
@@ -40,9 +42,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Open this page from the item's NFC tag." }, { status: 403 })
     }
 
-    await returnGuestItem({
+    if (parsed.data.report_ack !== true) {
+      return NextResponse.json(
+        { error: "Confirm you will email a short report before returning the card." },
+        { status: 400 }
+      )
+    }
+
+    const notice = await returnGuestItem({
       itemId,
       verification: "manual",
+      reportPromised: true,
+    })
+    await notifyKeycardReturned({ ...notice, reportPromised: true, bySteward: false }).catch((error) => {
+      console.error("[keycard] return notice failed:", error)
     })
 
     const cookieStore = await cookies()

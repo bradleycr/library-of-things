@@ -14,11 +14,14 @@ import { useSearchParams } from "next/navigation"
 import { CreditCard, Loader2, MapPin } from "lucide-react"
 import { BookCover } from "@/components/book-cover"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { getBookCoverSrcs } from "@/lib/book-cover-generator"
 import { isValidEmail, normalizeEmail } from "@/lib/email"
 import { isPlausibleGuestName } from "@/lib/guest-pass"
+import { KEYCARD_REPORT_EMAIL } from "@/lib/keycard-return-email"
+import { KEYCARD_STAY_MAX_DAYS, addCalendarDays, berlinDayKey, parsePlannedEndDate } from "@/lib/keycard-stay"
 import { cn } from "@/lib/utils"
 import type { Book, Node } from "@/lib/types"
 
@@ -42,6 +45,8 @@ function ThingCheckoutInner({ params }: { params: Promise<{ uuid: string }> }) {
   const [error, setError] = useState<string | null>(null)
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
+  const [until, setUntil] = useState("")
+  const [reportAck, setReportAck] = useState(false)
   const [busy, setBusy] = useState(false)
   const [pendingEmail, setPendingEmail] = useState<string | null>(null)
   const [devConfirmUrl, setDevConfirmUrl] = useState<string | null>(null)
@@ -74,9 +79,12 @@ function ThingCheckoutInner({ params }: { params: Promise<{ uuid: string }> }) {
   const normalizedEmail = normalizeEmail(email)
   const nameOk = isPlausibleGuestName(name)
   const emailOk = isValidEmail(normalizedEmail)
+  const today = berlinDayKey(new Date())
+  const latest = addCalendarDays(today, KEYCARD_STAY_MAX_DAYS)
+  const untilOk = parsePlannedEndDate(until) != null
 
   const requestCheckout = async () => {
-    if (!nameOk || !emailOk || busy) return
+    if (!nameOk || !emailOk || !untilOk || busy) return
     setBusy(true)
     setError(null)
     try {
@@ -84,7 +92,13 @@ function ThingCheckoutInner({ params }: { params: Promise<{ uuid: string }> }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ item_id: uuid, email: normalizedEmail, name: name.trim(), token }),
+        body: JSON.stringify({
+          item_id: uuid,
+          email: normalizedEmail,
+          name: name.trim(),
+          until,
+          token,
+        }),
       })
       const body = (await response.json().catch(() => ({}))) as {
         error?: string
@@ -102,7 +116,7 @@ function ThingCheckoutInner({ params }: { params: Promise<{ uuid: string }> }) {
   }
 
   const returnItem = async () => {
-    if (busy) return
+    if (busy || !reportAck) return
     setBusy(true)
     setError(null)
     try {
@@ -110,7 +124,7 @@ function ThingCheckoutInner({ params }: { params: Promise<{ uuid: string }> }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ item_id: uuid, token }),
+        body: JSON.stringify({ item_id: uuid, token, report_ack: true }),
       })
       const body = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error((body as { error?: string }).error ?? "Return failed")
@@ -224,7 +238,23 @@ function ThingCheckoutInner({ params }: { params: Promise<{ uuid: string }> }) {
                 className="h-12 text-base"
               />
             </div>
-            <Button type="submit" className="btn-pastel h-12 w-full text-base" disabled={!nameOk || !emailOk || busy}>
+            <div className="space-y-1.5">
+              <Label htmlFor="guest-until">Until when</Label>
+              <Input
+                id="guest-until"
+                type="date"
+                required
+                min={today}
+                max={latest}
+                value={until}
+                onChange={(event) => setUntil(event.target.value)}
+                className="h-12 text-base"
+              />
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                The morning of this day you’ll get an email reminding you to return the card.
+              </p>
+            </div>
+            <Button type="submit" className="btn-pastel h-12 w-full text-base" disabled={!nameOk || !emailOk || !untilOk || busy}>
               {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Email me a confirmation
             </Button>
@@ -240,7 +270,23 @@ function ThingCheckoutInner({ params }: { params: Promise<{ uuid: string }> }) {
             <p className="text-center text-sm text-muted-foreground">
               This card is out. If you have it in your hand, you can return it.
             </p>
-            <Button type="button" className="btn-pastel h-12 w-full text-base" disabled={busy} onClick={returnItem}>
+            <div className="flex items-start gap-3 rounded-xl border border-border bg-muted/30 px-3 py-3">
+              <Checkbox
+                id="guest-report"
+                checked={reportAck}
+                onCheckedChange={(checked) => setReportAck(checked === true)}
+                className="mt-0.5"
+              />
+              <label htmlFor="guest-report" className="cursor-pointer text-sm leading-relaxed text-foreground">
+                I will send {KEYCARD_REPORT_EMAIL} a short report on my time at the node.
+              </label>
+            </div>
+            <Button
+              type="button"
+              className="btn-pastel h-12 w-full text-base"
+              disabled={busy || !reportAck}
+              onClick={returnItem}
+            >
               {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Return
             </Button>
